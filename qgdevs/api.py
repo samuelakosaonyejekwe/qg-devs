@@ -166,6 +166,13 @@ def _native():
         return {"available": False, "reason": str(e)}
 
 
+@app.get("/api/release")
+def release():
+    """Current version and release notes (newest first) for the in-app "What's new" dialog."""
+    notes = json.loads((Path(__file__).parent / "release_notes.json").read_text())
+    return J({"version": __version__, **notes})
+
+
 @app.get("/api/suites")
 def suites():
     from .suites import SUITES
