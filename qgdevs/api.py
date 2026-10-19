@@ -293,11 +293,14 @@ def bmv_sweep1d(sc: ScenarioIn, param: str = "separation", start: float = 2e-4, 
 
 
 @app.post("/api/decoherence/budget")
-def decoherence_budget(sc: ScenarioIn, include_dp: bool = True):
+def decoherence_budget(sc: ScenarioIn, include_dp: bool = False, include_csl: bool = False,
+                       csl_log10_lambda: float = Query(-16.0, ge=-30, le=-6)):
+    """Environmental decoherence budget; collapse models (hypotheses) only when explicitly requested."""
     d, e = sc.design.to(), sc.environment
     cm = materials.get(e.material).clausius_mossotti()
     return J(dec.budget(d.mass_A, d.radius_A, d.dx_A, pressure=e.pressure, T_gas=e.T_gas, T_env=e.T_env,
-                        T_int=e.T_int, cm=cm, t=d.time, include_dp=include_dp))
+                        T_int=e.T_int, cm=cm, t=d.time, include_dp=include_dp, include_csl=include_csl,
+                        csl_lambda=10.0 ** csl_log10_lambda))
 
 
 @app.post("/api/gravity/orbit")

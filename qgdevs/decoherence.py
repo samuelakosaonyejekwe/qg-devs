@@ -89,22 +89,31 @@ def diosi_penrose_rate(m: float, R: float, dx: float, convention_factor: float =
 
 def budget(m: float, R: float, dx: float, *, pressure: float, T_gas: float, T_env: float, T_int: float,
            cm: complex, t: float, include_dp: bool = False, dp_convention: float = 1.0,
-           m_gas: float = M_N2) -> dict:
-    """Total decoherence budget for one superposed mass over interaction time t."""
+           m_gas: float = M_N2, include_csl: bool = False, csl_lambda: float = 1e-16) -> dict:
+    """Total decoherence budget for one superposed mass over interaction time t.
+
+    Established environmental mechanisms only by default; hypothetical collapse models (Diósi–Penrose, CSL)
+    are opt-in and flagged with "hypothetical": True so they are never mixed silently into the total."""
     items = {}
     g = gas_collision_rate(R, pressure, T_gas, m_gas)
     items["gas_collisions"] = g
     for k, v in blackbody_rates(R, dx, T_env, T_int, cm).items():
         items[f"blackbody_{k}"] = v
     if include_dp:
-        items["diosi_penrose_collapse"] = diosi_penrose_rate(m, R, dx, dp_convention)
+        items["diosi_penrose_collapse"] = {**diosi_penrose_rate(m, R, dx, dp_convention), "hypothetical": True}
+    if include_csl:
+        items["csl_collapse"] = {**csl_rate(m, R, dx, csl_lambda), "hypothetical": True}
+    env_total = sum(v["rate"] for v in items.values() if not v.get("hypothetical"))
     total = sum(v["rate"] for v in items.values())
     for v in items.values():
         v["gamma_t"] = v["rate"] * t
         v["coherence_factor"] = float(np.exp(-v["rate"] * t))
     dominant = max(items, key=lambda k: items[k]["rate"]) if items else None
+    fastest = max((v["rate"] for v in items.values()), default=0.0)
     return {"mechanisms": items, "total_rate": total, "total_gamma_t": total * t,
-            "coherence_factor": float(np.exp(-total * t)), "dominant": dominant}
+            "coherence_factor": float(np.exp(-total * t)), "dominant": dominant,
+            "environmental_total_rate": env_total, "includes_hypothetical": env_total != total,
+            "suggested_display_window_s": float(min(t, 5.0 / fastest)) if fastest > 0 else t}
 
 
 def max_pressure_for(R: float, T_gas: float, rate_target: float, m_gas: float = M_N2) -> float:
