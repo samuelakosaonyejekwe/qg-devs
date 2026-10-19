@@ -1,3 +1,4 @@
+import { RunBar } from '../components/Reset';
 /**
  * Thought-Experiment Lab: prompt → interpretation → reviewable configuration → explicit approval →
  * deterministic computation → results, with the pipeline towards virtual laboratory and preregistration.
@@ -174,7 +175,7 @@ export default function Page(_props: any) {
           {pErr && prompt && <div class="field-error">{pErr}</div>}
         </div>
         <div class="row small" style={{ marginBottom: '8px' }}>Examples: {EXAMPLES.map(([t, p]) => <button type="button" class="btn-sm" onClick={() => { setPrompt(p); setCfg(null); setRes(null); }}>{t}</button>)}</div>
-        <Btn kind="primary" busy={busy === 'interp'} disabled={!!pErr} onClick={interpret}>Interpret</Btn>
+        <RunBar label="Interpret" busy={busy === 'interp'} disabled={!!pErr} onRun={interpret} />
         <ErrorBox error={busy === null && !cfg ? err : null} what="interpreting the prompt" />
       </Card>
 
@@ -225,7 +226,7 @@ export default function Page(_props: any) {
           </div>
           {edited && <p class="small muted">The configuration was edited; the server re-validates it (fills defaults, checks the domain) when you run it.</p>}
           <div class="row" style={{ marginTop: '10px' }}>
-            <Btn kind="primary" busy={busy === 'exec'} disabled={!cfgOk} onClick={execute}>I have reviewed these assumptions — run</Btn>
+            <RunBar label="I have reviewed these assumptions — run" busy={busy === 'exec'} disabled={!cfgOk} onRun={execute} />
             <span class="small muted">Approval is required: the server refuses unapproved configurations.</span>
           </div>
           <ErrorBox error={busy === null && cfg && !res ? err : null} what="running the approved configuration" />

@@ -1,3 +1,4 @@
+import { RunBar, useAfterReset } from '../../components/Reset';
 /** Suite 9 — Virtual Laboratory: experiment dossier (protocol + engineering specification), exports, 3-D model, instruments. */
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
@@ -60,7 +61,9 @@ export default function Page(_props: { suite?: number }) {
   const v = useValidity();
   const [tab, setTab] = useState('protocol');
   const r = useRun(() => apiPost<any>('/api/lab/dossier', body(sc)));
-  useEffect(() => { r.run(); }, []);
+  const afterReset = useAfterReset();
+  // auto-run once on arrival, but never right after a Reset (the user asked for a clean page)
+  useEffect(() => { if (afterReset) return; r.run(); }, []);
   const d = r.data;
   return (
     <div>
@@ -69,7 +72,7 @@ export default function Page(_props: { suite?: number }) {
         <div class="sticky-side card">
           <h2>Design</h2>
           <ScenarioForm value={sc} onChange={(s) => scenario.set(s)} report={v.report} />
-          <Btn kind="primary" busy={r.busy} disabled={!v.ok} onClick={r.run}>Generate dossier</Btn>
+          <RunBar label="Generate dossier" scenario busy={r.busy} disabled={!v.ok} onRun={r.run} />
           <Exports />
         </div>
         <div class="stack">

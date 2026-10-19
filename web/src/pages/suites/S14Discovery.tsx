@@ -1,3 +1,4 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 14 — Physical-law and hypothesis discovery (dimensionally constrained regression, hypothesis ledger). */
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
@@ -65,7 +66,7 @@ function ScalingView() {
         <SelectField label="Geometry" value={p.geometry} onChange={(geometry) => setP({ ...p, geometry })} options={[{ v: 'parallel', label: 'Parallel' }, { v: 'linear', label: 'Linear' }]} help="Split-axis orientation of the sampled designs." />
         <NumberField name="n" label="Samples" unit="1" integer value={p.n} min={8} max={512} report={v.report} onChange={(n) => setP({ ...p, n })} help="Number of Sobol samples (server limit 512)." />
         <NumberField name="seed" label="Seed" unit="1" integer value={p.seed} min={0} max={2 ** 31} report={v.report} onChange={(seed) => setP({ ...p, seed })} help="Seed of the scrambled Sobol sequence." />
-        <Btn kind="primary" busy={busy} disabled={!v.ok} onClick={run}>Discover law</Btn>
+        <RunBar label="Discover law" busy={busy} disabled={!v.ok} onRun={run} />
       </div>
       <div class="stack">
         <EvidenceBanner />

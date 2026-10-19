@@ -1,7 +1,8 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 12 — Competing gravity models and scientific falsification. */
 import { useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, ProvBadge, EvidenceBanner, ErrorBox, Loading, SourceChip, AssuranceBadge, DataTable, Btn, Tabs, TabPanel, InfoBanner, Tip, KV } from '../../components/ui';
+import { Card, ProvBadge, EvidenceBanner, ErrorBox, Loading, SourceChip, AssuranceBadge, DataTable, Tabs, TabPanel, InfoBanner, Tip, KV } from '../../components/ui';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { useValidity } from '../../components/fields';
 import { JobRunner } from '../../components/JobRunner';
@@ -75,7 +76,7 @@ function Predictions() {
       <div class="card sticky-side">
         <h2>Scenario</h2>
         <ScenarioForm value={sc} onChange={(x) => scenario.set(x)} report={v.report} />
-        <Btn kind="primary" busy={busy} disabled={!v.ok} onClick={run}>Compute predictions</Btn>
+        <RunBar label="Compute predictions" scenario busy={busy} disabled={!v.ok} onRun={run} />
         {!v.ok && <p class="field-error">Fix the highlighted inputs first.</p>}
       </div>
       <div class="stack">
@@ -152,7 +153,7 @@ function Discrimination() {
       <div class="stack">
         <EvidenceBanner />
         <Card title="Robust discrimination matrix">
-          <JobRunner type="discrimination_matrix" label="Run discrimination job" disabled={!v.ok || sel.length < 2}
+          <JobRunner scenario type="discrimination_matrix" label="Run discrimination job" disabled={!v.ok || sel.length < 2}
             note={`Server job (nuisance-robust KL optimisation, ${sel.length * (sel.length - 1)} ordered pairs); typically tens of seconds. Readout error from the environment applies to both masses.`}
             params={() => ({ design: sc.design, environment: sc.environment, hypotheses: IMPLEMENTED_IDS.filter((i) => sel.includes(i)) })}>
             {(r: DiscResult) => <><ProvBadge kind="COMPUTED" /><DiscMatrix r={r} /></>}

@@ -1,7 +1,8 @@
+import { RunBar, useAfterReset } from '../../components/Reset';
 /** Suite 8 — electromagnetic backgrounds (non-gravitational branch phases) and the gravity-dominance distance. */
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, Out, ProvBadge, EvidenceBanner, ErrorBox, Btn, DataTable, Json, Level, InfoBanner } from '../../components/ui';
+import { Card, Out, ProvBadge, EvidenceBanner, ErrorBox, DataTable, Json, Level, InfoBanner } from '../../components/ui';
 import { NumberField, useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { LinePlot } from '../../plot/Chart';
@@ -19,7 +20,9 @@ export default function Page(_props: { suite?: number }) {
   const st = useStore(settings);
   const v = useValidity();
   const r = useRun(() => apiPost<PredictResult | { admissibility_issues: string[] }>('/api/bmv/predict', body(sc), { n_times: 10 }));
-  useEffect(() => { r.run(); }, []);
+  const afterReset = useAfterReset();
+  // auto-run once on arrival, but never right after a Reset (the user asked for a clean page)
+  useEffect(() => { if (afterReset) return; r.run(); }, []);
   const p = r.data && 'branch_distances_m' in r.data ? (r.data as PredictResult) : null;
   const issues = r.data && !p ? r.data.admissibility_issues : null;
 
@@ -30,7 +33,7 @@ export default function Page(_props: { suite?: number }) {
         <div class="sticky-side card">
           <h2>Configuration</h2>
           <ScenarioForm value={sc} onChange={(s) => scenario.set(s)} report={v.report} />
-          <Btn kind="primary" busy={r.busy} disabled={!v.ok} onClick={r.run}>Compute channels</Btn>
+          <RunBar label="Compute channels" scenario busy={r.busy} disabled={!v.ok} onRun={r.run} />
         </div>
         <div class="stack">
           <EvidenceBanner />

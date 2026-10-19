@@ -1,3 +1,4 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 13 — Experimental design and optimisation. */
 import { useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
@@ -69,7 +70,7 @@ function Optimiser() {
         <EvidenceBanner />
         <Card title="Constrained design search">
           <p class="small muted">Objective: minimise log₁₀(3 settings × shots for a 5σ witness violation × (t + 1 s overhead)) under QG-COH with all decoherence and readout effects; constraint violations are reported, never silently dropped.</p>
-          <JobRunner type="design_optimise" label="Run optimisation job" disabled={!v.ok || !ordered}
+          <JobRunner scenario type="design_optimise" label="Run optimisation job" disabled={!v.ok || !ordered}
             params={() => ({ environment: sc.environment, bounds: { mass: [b.m0, b.m1], separation: [b.d0, b.d1], dx: [b.x0, b.x1], time: [b.t0, b.t1], min_surface_gap: b.gap, max_casimir_fraction: b.frac, geometry: b.geometry }, seed: o.seed, maxiter: o.maxiter, popsize: o.popsize, top_k: o.top_k, robust_check: o.robust })}>
             {(r: OptResult) => (
               <div class="stack">
@@ -156,7 +157,7 @@ function Sweep2DView() {
         <SelectField label="Hypothesis" value={hyp} onChange={setHyp} options={IMPLEMENTED_IDS.map((i) => ({ v: i, label: `${i} — ${hypStyle(i).short}` }))} help="Model whose negativity and witness are mapped." />
         <p class={cells > 2500 ? 'field-error' : 'small muted'}>{cells} grid cells (interactive limit 2500 = 50 × 50; larger grids must be run as jobs).</p>
         <details><summary class="small">Base scenario (other parameters)</summary><ScenarioForm value={sc} onChange={(x) => scenario.set(x)} report={v.report} /></details>
-        <Btn kind="primary" busy={busy} disabled={!ok} onClick={run}>Run 2-D sweep</Btn>
+        <RunBar label="Run 2-D sweep" scenario busy={busy} disabled={!ok} onRun={run} />
       </div>
       <div class="stack">
         <EvidenceBanner />
@@ -213,7 +214,7 @@ function Sweep1DView() {
           {!(ax.a < ax.b) && <p class="field-error">Start must be below stop.</p>}
         </fieldset>
         <details><summary class="small">Base scenario (other parameters)</summary><ScenarioForm value={sc} onChange={(x) => scenario.set(x)} report={v.report} /></details>
-        <Btn kind="primary" busy={busy} disabled={!v.ok || !(ax.a < ax.b)} onClick={run}>Run 1-D sweep</Btn>
+        <RunBar label="Run 1-D sweep" scenario busy={busy} disabled={!v.ok || !(ax.a < ax.b)} onRun={run} />
       </div>
       <div class="stack">
         <EvidenceBanner />

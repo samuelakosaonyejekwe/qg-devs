@@ -1,3 +1,4 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 15 — High-performance numerical simulation: job queue, native kernel, opt-in browser compute. */
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
@@ -126,7 +127,7 @@ function BrowserCompute() {
         </div>
         <p class={cells > s.computeMaxCells ? 'field-error' : 'small muted'}>{cells} cells (limit {s.computeMaxCells}). Other design and environment parameters come from the working scenario.</p>
         <div class="row">
-          <Btn kind="primary" disabled={!ok || !!running} onClick={start}>Start local sweep</Btn>
+          <RunBar label="Start local sweep" scenario disabled={!ok || !!running} onRun={start} />
           <Btn kind="danger" disabled={!running} onClick={() => ctl.current?.stop()}>Stop</Btn>
         </div>
       </>)}

@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: qgdevs
-Version: 0.1.0
+Version: 0.2.0
 Summary: Quantum Gravity Discovery and Experimental Verification System — scientific core
 Requires-Python: >=3.11
 Requires-Dist: numpy>=2.1
@@ -12,6 +12,8 @@ Requires-Dist: fastapi>=0.110
 Requires-Dist: uvicorn>=0.29
 Requires-Dist: pydantic>=2.6
 Requires-Dist: httpx>=0.27
-Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: python-multipart>=0.0.9
 Provides-Extra: test
 Requires-Dist: pytest>=8; extra == "test"
+Provides-Extra: llm
+Requires-Dist: anthropic>=1.0; extra == "llm"

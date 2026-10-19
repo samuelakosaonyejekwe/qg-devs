@@ -1,3 +1,4 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 10 — synthetic measurement records, witness estimation, tomography and injection–recovery. Everything here is SYNTHETIC. */
 import { useEffect, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
@@ -50,7 +51,7 @@ export default function Page(_props: { suite?: number }) {
             {sel.length === 0 && <p class="field-error">Select at least one setting.</p>}
           </fieldset>
           <ScenarioForm value={sc} onChange={(s) => scenario.set(s)} report={v.report} />
-          <Btn kind="primary" busy={sim.busy} disabled={!v.ok || sel.length === 0} onClick={sim.run}>Simulate measurement</Btn>
+          <RunBar label="Simulate measurement" scenario busy={sim.busy} disabled={!v.ok || sel.length === 0} onRun={sim.run} />
         </div>
         <div class="stack">
           <ErrorBox error={sim.error} what="simulating the measurement" />
@@ -145,7 +146,7 @@ function Injection() {
         <NumberField name="thr" label="Detection threshold" unit="SNR" value={thr} min={0} minExclusive max={100} report={v.report} onChange={setThr} help="Matched-filter signal-to-noise ratio above which an injection counts as detected. Higher thresholds lower false positives at the cost of efficiency." />
         <NumberField name="trials" label="Trials per amplitude" unit="1" integer value={trials} min={1} max={300} report={v.report} onChange={setTrials} help="Monte-Carlo repetitions per amplitude (the server caps this at 300). Efficiency uncertainty ≈ √(p(1−p)/trials)." />
       </div>
-      <Btn kind="primary" busy={r.busy} disabled={!v.ok} onClick={r.run}>Run injection–recovery</Btn>
+      <RunBar label="Run injection–recovery" scenario busy={r.busy} disabled={!v.ok} onRun={r.run} />
       <ErrorBox error={r.error} what="running injection–recovery" />
       {r.offline && <p class="small muted">No fresh data was fetched.</p>}
       {d && (

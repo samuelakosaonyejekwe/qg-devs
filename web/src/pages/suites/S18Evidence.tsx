@@ -1,3 +1,4 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 18 — Discovery evidence and independent replication. */
 import { useEffect, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
@@ -142,7 +143,7 @@ function Preregister({ onDone }: { onDone: () => void }) {
           help="Planned number of repetitions per Pauli setting (9 settings). Fixed in advance so optional stopping cannot inflate significance. Suite 9/13 report the shots needed for 5σ." />
         <TextField label="Actor" value={actor} onChange={setActor} required help="Name recorded in the ledger as the author of this entry." />
       </div>
-      <Btn kind="primary" busy={busy} disabled={!ok} onClick={submit}>Record preregistration</Btn>
+      <RunBar label="Record preregistration" scenario busy={busy} disabled={!ok} onRun={submit} />
       {!ok && <span class="small muted"> Complete the required fields.</span>}
       <ErrorBox error={err} what="recording the preregistration" />
       {queued && <InfoBanner>Offline: the preregistration was queued on this device and will be submitted when the server is reachable. It is <strong>not</strong> recorded in the ledger until then (see Jobs → Offline queue).</InfoBanner>}
@@ -188,7 +189,7 @@ function Datasets({ onDone }: { onDone: () => void }) {
       <TextField label="Source" value={source} onChange={setSource} required placeholder="instrument / lab / generator and run id" help="Where the data came from (recorded in the ledger)." />
       <TextField label="Description" value={desc} onChange={setDesc} help="Optional free text." />
       <TextField label="Preregistration id (optional)" value={prereg} onChange={setPrereg} help="Link the dataset to an existing preregistration." />
-      <Btn kind="primary" busy={busy} disabled={!file || !source.trim()} onClick={ingest}>Ingest dataset</Btn>
+      <RunBar label="Ingest dataset" scenario busy={busy} disabled={!file || !source.trim()} onRun={ingest} />
       <ErrorBox error={err} what="ingesting the dataset" />
       {rec && <div style={{ marginTop: '8px' }}><KV rows={[['Dataset id', <code>{rec.dataset_id}</code>], ['Label', rec.label], ['Role', rec.role], ['SHA-256', <code style={{ overflowWrap: 'anywhere' }}>{rec.sha256}</code>], ['Source', rec.source]]} /></div>}
     </Card>
@@ -212,7 +213,7 @@ function Unblind({ onDone }: { onDone: () => void }) {
       <TextField label="Dataset id" value={ds} onChange={setDs} required help="Id returned at ingestion." />
       <TextField label="Preregistration id" value={pr} onChange={setPr} required help="Id returned by the preregistration." />
       <TextField label="Actor" value={actor} onChange={setActor} required help="Name recorded in the ledger." />
-      <Btn kind="primary" busy={busy} disabled={!ds.trim() || !pr.trim() || !actor.trim()} onClick={go}>Record unblinding</Btn>
+      <RunBar label="Record unblinding" scenario busy={busy} disabled={!ds.trim() || !pr.trim() || !actor.trim()} onRun={go} />
       {err ? <div style={{ marginTop: '8px' }}><ErrorBox error={err} what="unblinding (the server refused; reason above)" /></div> : null}
       {res && <div class="banner ok" role="status"><div><strong>Unblinding recorded</strong> as ledger entry #{res.index} (<code>{shortHash(res.entry_hash, 16)}</code>).</div></div>}
     </Card>
@@ -238,7 +239,7 @@ function Gates({ onClass }: { onClass: (c: Classification | null) => void }) {
         <SelectField label="Hypothesis" value={hyp} onChange={setHyp} options={IMPLEMENTED_IDS.map((h) => ({ v: h, label: h }))} help="Model whose G1 (theory) record is assessed." />
         <span class="small muted">Scenario: current shared design (m = {fmtQ(sc.design.mass_A, 'kg')}, d = {fmtQ(sc.design.separation, 'm')}).</span>
       </div>
-      <Btn kind="primary" busy={busy} onClick={run}>Evaluate gates</Btn>
+      <RunBar label="Evaluate gates" scenario busy={busy} onRun={run} />
       <ErrorBox error={err} what="evaluating gates" />
       {res && (
         <div class="grid-2" style={{ marginTop: '12px' }}>
@@ -283,7 +284,7 @@ function Signoff({ onDone }: { onDone: () => void }) {
       </div>
       <TextField label="Statement" value={stmt} onChange={setStmt} multiline required help="What was reviewed and the conclusion (at least 10 characters)." />
       <label class="row small" style={{ marginBottom: '8px' }}><input type="checkbox" checked={confirm} onChange={(e: any) => setConfirm(e.currentTarget.checked)} /> I am the named reviewer and this statement reflects my own independent review.</label>
-      <Btn kind="primary" busy={busy} disabled={!ok} onClick={go}>Record sign-off</Btn>
+      <RunBar label="Record sign-off" scenario busy={busy} disabled={!ok} onRun={go} />
       <ErrorBox error={err} what="recording the sign-off" />
       {res && <div class="banner ok" role="status"><div><strong>Sign-off recorded</strong> for {gate} as ledger entry #{res.index}.</div></div>}
     </Card>
@@ -302,7 +303,7 @@ function Package() {
   return (
     <Card title="Reproduction package">
       <p class="small muted">A zip archive with the configuration, the server's prediction for the current shared scenario, the code hash, software environment, ledger and instructions to reproduce the computation independently.</p>
-      <Btn kind="primary" busy={busy} onClick={go}>Download reproduction package</Btn>
+      <RunBar label="Download reproduction package" scenario busy={busy} onRun={go} />
       {done && <span class="small muted"> {done}.</span>}
       <ErrorBox error={err} what="building the package" />
     </Card>

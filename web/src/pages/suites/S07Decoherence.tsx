@@ -1,7 +1,8 @@
+import { RunBar, useAfterReset } from '../../components/Reset';
 /** Suite 7 — decoherence budget of one superposed mass (POST /api/decoherence/budget). */
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, Out, ProvBadge, EvidenceBanner, ErrorBox, Btn, Switch, Tip, DataTable, Json, Level, InfoBanner } from '../../components/ui';
+import { Card, Out, ProvBadge, EvidenceBanner, ErrorBox, Switch, Tip, DataTable, Json, Level, InfoBanner } from '../../components/ui';
 import { NumberField, useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { BarChart, LinePlot } from '../../plot/Chart';
@@ -18,7 +19,9 @@ export default function Page(_props: { suite?: number }) {
   const v = useValidity();
   const [dp, setDp] = useState(true);
   const r = useRun(() => apiPost<DecoBudget>('/api/decoherence/budget', body(sc), { include_dp: dp }));
-  useEffect(() => { r.run(); }, []);
+  const afterReset = useAfterReset();
+  // auto-run once on arrival, but never right after a Reset (the user asked for a clean page)
+  useEffect(() => { if (afterReset) return; r.run(); }, []);
   const b = r.data;
 
   return (
@@ -32,7 +35,7 @@ export default function Page(_props: { suite?: number }) {
             <Switch checked={dp} onChange={setDp} label="Include Diósi–Penrose collapse" />
             <Tip text="Γ_DP = κ·E_Δ/ħ with E_Δ = U(Δx) − U(0) for a uniform sphere. The server uses κ = 1 (Diósi's mass-density convention); Penrose's convention differs by a factor 2. DP is a hypothesis (model DP-COLL), not established environmental physics — include it only to compare." />
           </div>
-          <Btn kind="primary" busy={r.busy} disabled={!v.ok} onClick={r.run}>Compute budget</Btn>
+          <RunBar label="Compute budget" scenario busy={r.busy} disabled={!v.ok} onRun={r.run} />
           {!v.ok && <p class="field-error">Fix the highlighted inputs first.</p>}
         </div>
         <div class="stack">

@@ -8,6 +8,7 @@ import { listQueue, onQueueChange, replayQueue, type QueuedRequest } from './lib
 import { apiUrl } from './lib/api';
 import { InstallButton } from './components/Install';
 import { ErrorBox } from './components/ui';
+import { ResetScope } from './components/Reset';
 
 const Arrow = ({ dir }: { dir: 'l' | 'r' }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -164,7 +165,7 @@ export function App() {
           {!def && <NotFound path={r.path} />}
           {loadErr ? <ErrorBox error={loadErr} what="loading this page (if you are offline, the page may not have been cached yet)" /> : null}
           {def && !Comp && !loadErr && <div class="row muted" role="status"><span class="spinner" /> Loading…</div>}
-          {def && Comp && <Comp key={r.path} {...(def.props ?? {})} />}
+          {def && Comp && <ResetScope key={r.path}><Comp {...(def.props ?? {})} /></ResetScope>}
         </main>
       </div>
     </>

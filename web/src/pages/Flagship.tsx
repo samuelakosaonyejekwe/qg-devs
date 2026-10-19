@@ -1,3 +1,4 @@
+import { RunBar, useAfterReset } from '../components/Reset';
 /**
  * Flagship workflow — Suite 4 (gravity-mediated entanglement) and the Experiment Builder.
  *
@@ -38,6 +39,7 @@ export default function Flagship({ variant = 'suite' }: { variant?: 'suite' | 'b
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [auto, setAuto] = useState(true);
+  const [armed, setArmed] = useState(false); // after a Reset, auto-run waits for the first input change
   const seq = useRef(0);
 
   const run = async (s: Scenario = scenario.get()) => {
@@ -61,9 +63,12 @@ export default function Flagship({ variant = 'suite' }: { variant?: 'suite' | 'b
   };
 
   // initial run + debounced auto-run while inputs are valid
-  useEffect(() => { run(); }, []);
+  const afterReset = useAfterReset();
+  // auto-run once on arrival, but never right after a Reset (the user asked for a clean page)
+  useEffect(() => { if (afterReset) return; run(); }, []);
   useEffect(() => {
     if (!auto || !v.ok) return;
+    if (afterReset && !armed) { setArmed(true); return; }
     if (res && same(res.inputs, sc)) return;
     const t = setTimeout(() => run(sc), 700);
     return () => clearTimeout(t);
@@ -91,7 +96,7 @@ export default function Flagship({ variant = 'suite' }: { variant?: 'suite' | 'b
             <div class="card-head"><h2>Design &amp; environment</h2></div>
             <ScenarioForm value={sc} onChange={(s) => scenario.set(s)} report={v.report} />
             <div class="row" style={{ marginTop: '10px' }}>
-              <Btn kind="primary" busy={busy} disabled={!v.ok} onClick={() => run(sc)}>Run prediction</Btn>
+              <RunBar label="Run prediction" scenario busy={busy} disabled={!v.ok} onRun={() => run(sc)} />
               <Switch checked={auto} onChange={setAuto} label="Auto-run on change" />
             </div>
             {!v.ok && <p class="field-error" role="alert">Fix {Object.keys(v.invalid).length} invalid input(s) to run.</p>}

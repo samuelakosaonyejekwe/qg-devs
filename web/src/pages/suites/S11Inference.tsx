@@ -1,7 +1,8 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 11 — inverse problem: posterior of the gravitational coupling λ from (synthetic) outcome counts via an `inference` job. */
 import { useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, Out, ProvBadge, SyntheticBanner, EvidenceBanner, ErrorBox, Btn, DataTable, Json, Level, InfoBanner, KV, StatusBadge } from '../../components/ui';
+import { Card, Out, ProvBadge, SyntheticBanner, EvidenceBanner, ErrorBox, DataTable, Json, Level, InfoBanner, KV, StatusBadge } from '../../components/ui';
 import { NumberField, SelectField, useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { JobRunner } from '../../components/JobRunner';
@@ -45,7 +46,7 @@ export default function Page(_props: { suite?: number }) {
             <NumberField name="seed" label="Simulation seed" unit="1" integer value={seed} min={0} max={2 ** 31 - 1} report={v.report} onChange={setSeed} help="Seed for the synthetic record." />
           </div>
           <ScenarioForm value={sc} onChange={(s) => scenario.set(s)} report={v.report} />
-          <Btn kind="primary" busy={sim.busy} disabled={!v.ok} onClick={sim.run}>Generate counts</Btn>
+          <RunBar label="Generate counts" scenario busy={sim.busy} disabled={!v.ok} onRun={sim.run} />
         </div>
         <div class="stack">
           <ErrorBox error={sim.error} what="simulating counts" />
@@ -63,7 +64,7 @@ export default function Page(_props: { suite?: number }) {
                     help="Length of the adaptive Metropolis chain. The first 2000 steps are discarded as burn-in by the server, so at least 3000 are required here." />
                   <NumberField name="mcseed" label="MCMC seed" unit="1" integer value={mcSeed} min={0} max={2 ** 31 - 1} report={v.report} onChange={setMcSeed} help="Seed of the sampler (reproducibility)." />
                 </div>
-                <JobRunner type="inference" label="Run inference job" storeKey="inference-s11" disabled={!v.ok}
+                <JobRunner scenario type="inference" label="Run inference job" storeKey="inference-s11" disabled={!v.ok}
                   note="Runs in the server's durable job queue (it may wait behind other jobs). The job uses the record's design and readout error."
                   params={() => ({ design: recDesign ?? sc.design, counts: rec.counts, readout_error: sc.environment.readout_error, n_steps: nSteps, seed: mcSeed })}>
                   {(res) => <Result res={res} />}

@@ -1,3 +1,4 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 17 — Scientific data, visualisation and research management. */
 import { useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
@@ -116,7 +117,7 @@ function Upload() {
       <div class="row">
         <label class="field-label" for="s17-file">File <Tip text="The file is sent to the server for parsing only; its SHA-256 identifies it exactly. Validation never changes any catalogue or ledger." /></label>
         <input id="s17-file" type="file" onChange={(e: any) => { setFile(e.currentTarget.files?.[0] ?? null); setRes(null); }} />
-        <Btn kind="primary" busy={busy} disabled={!file} onClick={run}>Validate</Btn>
+        <RunBar label="Validate" busy={busy} disabled={!file} onRun={run} />
       </div>
       <ErrorBox error={err} what="validating the file" />
       {res && (

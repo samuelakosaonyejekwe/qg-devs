@@ -1,3 +1,4 @@
+import { useResultFlag } from '../../components/Reset';
 /** Small helpers shared by the Suite 1/2/3/5/6 pages. */
 import { useState } from 'preact/hooks';
 
@@ -13,6 +14,7 @@ export function useRun<T>() {
     catch (e) { setErr(e); return null; }
     finally { setBusy(false); }
   };
+  useResultFlag(data != null);
   return { data, err, busy, at, run, setData };
 }
 

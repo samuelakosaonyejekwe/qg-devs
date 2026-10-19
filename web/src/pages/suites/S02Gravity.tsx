@@ -1,7 +1,8 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 2 — Schwarzschild perihelion precession / light deflection and symplectic N-body integration. */
 import { useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, Out, EvidenceBanner, ErrorBox, Json, Btn, Level, Seg, InfoBanner, ProvBadge } from '../../components/ui';
+import { Card, Out, EvidenceBanner, ErrorBox, Json, Level, Seg, InfoBanner, ProvBadge } from '../../components/ui';
 import { NumberField, SelectField, useValidity } from '../../components/fields';
 import { LinePlot } from '../../plot/Chart';
 import { View3D } from '../../components/View3D';
@@ -92,7 +93,7 @@ function Orbit() {
             help="Orbit size (default: Mercury, 5.7909×10¹⁰ m). The light ray is evaluated at impact parameter b = a(1−e), the perihelion distance." />
           <NumberField name="e" label="Eccentricity e" unit="1" value={e} min={0} max={0.95} maxExclusive report={v.report} onChange={setE}
             help="Orbital eccentricity, 0 ≤ e < 0.95 (server limit)." />
-          <Btn kind="primary" busy={r.busy} disabled={!v.ok} onClick={() => r.run(async () => ({ ...(await apiPost<OrbitOut>('/api/gravity/orbit', undefined, { M, a, e })), M, a, e }))}>Compute</Btn>
+          <RunBar label="Compute" busy={r.busy} disabled={!v.ok} onRun={() => r.run(async () => ({ ...(await apiPost<OrbitOut>('/api/gravity/orbit', undefined, { M, a, e })), M, a, e }))} />
         </div>
         <div class="stack">
           <EvidenceBanner />
@@ -166,7 +167,7 @@ function NBody() {
               ))}
             </details>
           </Level>
-          <Btn kind="primary" busy={r.busy} disabled={!v.ok || tooMany} onClick={run}>Integrate</Btn>
+          <RunBar label="Integrate" busy={r.busy} disabled={!v.ok || tooMany} onRun={run} />
         </div>
         <div class="stack">
           <EvidenceBanner />

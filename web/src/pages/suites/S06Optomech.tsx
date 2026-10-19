@@ -1,7 +1,8 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 6 — Gravitationally coupled harmonic oscillators (Gaussian covariance dynamics), POST /api/optomech/evolve. */
 import { useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, Out, EvidenceBanner, ErrorBox, Json, Btn, Level, InfoBanner, ProvBadge } from '../../components/ui';
+import { Card, Out, EvidenceBanner, ErrorBox, Json, Level, InfoBanner, ProvBadge } from '../../components/ui';
 import { NumberField, useValidity } from '../../components/fields';
 import { LinePlot } from '../../plot/Chart';
 import { apiPost } from '../../lib/api';
@@ -50,7 +51,7 @@ export default function Page(_props: { suite?: number }) {
           <NumberField name="cs" label="Coupling scale" unit="1" value={p.coupling_scale} min={0} max={1e6} report={v.report} level="expert" onChange={set('coupling_scale')}
             help="Multiplier on the gravitational coupling: 1 = quantum-coherent Newtonian coupling, 0 = no coherent coupling (classical-mediator reference). Values ≠ 0, 1 are for sensitivity studies only." />
           <label class="row small"><input type="checkbox" checked={compare} onChange={(e: any) => setCompare(e.currentTarget.checked)} /> Also compute the coupling-off reference (coupling scale 0)</label>
-          <Btn kind="primary" busy={r.busy} disabled={!v.ok} onClick={run}>Evolve</Btn>
+          <RunBar label="Evolve" busy={r.busy} disabled={!v.ok} onRun={run} />
         </div>
         <div class="stack">
           <EvidenceBanner />

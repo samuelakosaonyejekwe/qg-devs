@@ -3,15 +3,16 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { submitJob, pollJob, cancelJob, getJob, ApiError, isOfflineError, type Job } from '../lib/api';
 import { enqueue } from '../lib/queue';
-import { Btn, ErrorBox, Progress, StatusBadge, InfoBanner } from './ui';
+import { ErrorBox, Progress, StatusBadge, InfoBanner } from './ui';
+import { RunBar, useResetKey, useResultFlag } from './Reset';
 import { fmtTime } from '../lib/format';
 
 function lastKey(k: string) { return `qg.lastJob.${k}`; }
 function loadLast(k: string): string | null { try { return localStorage.getItem(lastKey(k)); } catch { return null; } }
 function saveLast(k: string, id: string) { try { localStorage.setItem(lastKey(k), id); } catch { /* ignore */ } }
 
-export function JobRunner({ type, params, label, storeKey, children, disabled, note }: {
-  type: string; params: () => Record<string, unknown>; label: string; storeKey?: string; disabled?: boolean; note?: ComponentChildren;
+export function JobRunner({ type, params, label, storeKey, children, disabled, note, scenario: usesScenario }: {
+  type: string; params: () => Record<string, unknown>; label: string; storeKey?: string; disabled?: boolean; note?: ComponentChildren; scenario?: boolean;
   children: (result: any, job: Job) => ComponentChildren;
 }) {
   const key = storeKey ?? type;
@@ -20,6 +21,8 @@ export function JobRunner({ type, params, label, storeKey, children, disabled, n
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [queued, setQueued] = useState<string | null>(null);
+  useResetKey(lastKey(key));
+  useResultFlag(!!job && job.status === 'succeeded');
 
   useEffect(() => {
     if (!jobId) return;
@@ -52,9 +55,9 @@ export function JobRunner({ type, params, label, storeKey, children, disabled, n
   return (
     <div class="stack">
       <div class="row">
-        <Btn kind="primary" busy={busy} disabled={disabled || !!running} onClick={submit}>{label}</Btn>
-        {running && <Btn kind="danger" onClick={cancel}>Cancel job</Btn>}
-        {jobId && <span class="small muted">Job <code>{jobId}</code> {job && <StatusBadge status={job.status} />}</span>}
+        <RunBar label={label} busy={busy} disabled={disabled || !!running} onRun={submit} scenario={usesScenario} onCancel={running ? cancel : undefined} cancelLabel="Cancel job">
+          {jobId && <span class="small muted">Job <code>{jobId}</code> {job && <StatusBadge status={job.status} />}</span>}
+        </RunBar>
       </div>
       {note && <div class="small muted">{note}</div>}
       {queued && <InfoBanner>{queued}</InfoBanner>}

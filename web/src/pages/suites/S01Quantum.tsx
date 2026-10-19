@@ -1,3 +1,4 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 1 — Lindblad playground (POST /api/quantum/lindblad) with populations, purity, state checks and a Bloch sphere. */
 import { useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
@@ -176,7 +177,7 @@ export default function Page(_props: { suite?: number }) {
           {!hOk && <div class="field-error" role="alert">H is not Hermitian (max |H − H†| = {fmtNum(herr)}); fix it before running.</div>}
           {!rhoCheck.passed && <div class="field-error" role="alert">ρ₀ is not a valid density matrix.</div>}
           <div class="row" style={{ marginTop: '8px' }}>
-            <Btn kind="primary" busy={main.busy} disabled={!canRun} onClick={run}>Run Lindblad evolution</Btn>
+            <RunBar label="Run Lindblad evolution" busy={main.busy} disabled={!canRun} onRun={run} />
           </div>
         </div>
 

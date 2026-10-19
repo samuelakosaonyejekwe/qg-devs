@@ -1,3 +1,4 @@
+import { useResultFlag } from '../../components/Reset';
 /** Small helpers shared by suite pages 7–11. */
 import { useCallback, useRef, useState } from 'preact/hooks';
 import { isOfflineError, useApiGet } from '../../lib/api';
@@ -24,6 +25,7 @@ export function useRun<T>(fn: () => Promise<T>): RunState<T> {
       if (id === seq.current) setSt((s) => ({ ...s, error: e, busy: false }));
     }
   }, []);
+  useResultFlag(st.data != null);
   return { ...st, run, offline: isOfflineError(st.error) };
 }
 

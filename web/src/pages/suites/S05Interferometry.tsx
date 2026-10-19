@@ -1,7 +1,8 @@
+import { RunBar } from '../../components/Reset';
 /** Suite 5 — Stern–Gerlach BMV phases (time-dependent trajectories) and an animated 2-D split wave packet. */
 import { useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, Out, EvidenceBanner, ErrorBox, DataTable, Json, Btn, Level, Seg, InfoBanner, ProvBadge } from '../../components/ui';
+import { Card, Out, EvidenceBanner, ErrorBox, DataTable, Json, Level, Seg, InfoBanner, ProvBadge } from '../../components/ui';
 import { NumberField, useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { LinePlot, HeatMap } from '../../plot/Chart';
@@ -45,7 +46,7 @@ function SternGerlach() {
           <NumberField name="tau" label="Acceleration stage τ" unit="s" value={tau} min={0} max={1e3} minExclusive report={v.report} onChange={setTau}
             help="Duration of each of the four constant-acceleration stages that open (2τ) and close (2τ) the superposition. Branch separation reaches Δx after 2τ and is held for the interaction time t; total loop time 4τ + t. The required magnetic gradient grows as Δx/τ²." />
           <p class="small muted">The SG model uses equal branch separation Δx_A and point masses; angled geometry is treated as linear by the server.</p>
-          <Btn kind="primary" busy={r.busy} disabled={!v.ok} onClick={() => r.run(() => apiPost<SgOut>('/api/interferometry/sg', sc, { tau }))}>Compute SG phases</Btn>
+          <RunBar label="Compute SG phases" scenario busy={r.busy} disabled={!v.ok} onRun={() => r.run(() => apiPost<SgOut>('/api/interferometry/sg', sc, { tau }))} />
         </div>
         <div class="stack">
           <EvidenceBanner />
@@ -99,7 +100,7 @@ function WavePacket() {
           <NumberField name="frames" label="Frames" unit="1" value={p.frames} min={2} max={120} integer report={v.report} onChange={set('frames')} help="Number of stored snapshots (server limit ≤ 120)." />
           <NumberField name="n" label="Grid points per axis" unit="1" value={p.n} min={16} max={256} integer level="advanced" report={v.report} onChange={set('n')}
             help="Spatial grid resolution (server limit ≤ 256). Must resolve the fringe spacing π/k. Cost grows as n² log n: 128 points takes about 15 s on the reference server." />
-          <Btn kind="primary" busy={r.busy} disabled={!v.ok} onClick={() => r.run(() => apiPost<WpOut>('/api/interferometry/wavepacket2d', undefined, p))}>Simulate</Btn>
+          <RunBar label="Simulate" scenario busy={r.busy} disabled={!v.ok} onRun={() => r.run(() => apiPost<WpOut>('/api/interferometry/wavepacket2d', undefined, p))} />
         </div>
         <div class="stack">
           <EvidenceBanner />
