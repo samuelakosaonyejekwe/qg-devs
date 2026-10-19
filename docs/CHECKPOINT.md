@@ -32,6 +32,7 @@ _Last updated: 2026-10-19 (session in progress). If a session is interrupted, re
   - (7) S07: environmental-only default is live (commit 0b52566). UI work remaining: opt-in collapse toggles, time-window selector, trail, synced 2-D plot, legend colours.
   - (8) RESET = exact first-visit state per route: defaults, all outputs and caches cleared, auto-run pages show their original default result at t=0. Playwright snapshot-equality test on every route.
   - (9) Audits running: backend (separate agent, qgdevs/cpp/deploy) and a web hidden-issues audit (web agent). Server hardening DONE: HSTS, frame, permissions and COOP headers, CSP report-only (`deploy/Caddyfile`); root SSH disabled; off-site backups verified in the S3 bucket. TODO: enforce CSP after the web app is verified clean under it.
+  - (10) Backend audit DONE and LIVE (commit 8ff9bc7; pytest 194 passed, C++ tests pass, V&V 35/35). Open policy items (not changed): G6/G7 are unreachable even with sign-off; the ledger head hash is not externally anchored; actor/reviewer are free text; no retention policy for job results. The web TS engine must adopt "user γ adds to the environmental budget".
 - **Then:** verify (pytest, `cd web && npm run typecheck && npm test && npm run build`), add a 0.2.1 entry to `qgdevs/release_notes.json`, bump the version, commit with an explicit file list, and deploy. The server build uses the full Dockerfile: `sudo docker build -t qgdevs:<ver> .` then `run` (see Live system).
 
 ## Rules
