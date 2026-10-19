@@ -34,14 +34,7 @@ class Scenario:
         return {k: v * mass_scale**2 for k, v in E.items()}
 
 
-@dataclass
-class Nuisance:
-    name: str
-    low: float
-    high: float
-    nominal: float
-    unit: str
-    description: str
+from .nuisance import Nuisance  # noqa: E402  (re-exported)
 
 
 COMMON_NUISANCE = [
@@ -265,16 +258,11 @@ _reg(Hypothesis(
         "assurance": "NUMERICALLY VERIFIED", "status_note": "confounder control"},
     [], True, _no_branch_coupling))
 
+from . import model_ah  # noqa: E402  (bottom import: model_ah imports Nuisance from this module)
+
 _reg(Hypothesis(
-    "CG-QFT-AH", "Classical gravity coupled to quantum matter fields (Aziz–Howl mechanism)", "hybrid", {
-        "dynamics": "not implemented — requires the QFT matter-propagator derivation of the reference",
-        "assumptions": ["classical gravitational field", "quantum field theory of matter"],
-        "approximations": [], "admissible_domain": "unspecified in this platform",
-        "known_limits": [], "entangling_by_gravity": True, "references": REFS["AH"],
-        "assurance": "UNVERIFIED",
-        "status_note": "REGISTERED, NOT IMPLEMENTED: needed before any claim that observed entanglement "
-                       "excludes all classical-gravity models; interpretation disputed in the literature"},
-    [], False, None))
+    "CG-QFT-AH", "Classical gravity coupled to quantum matter fields (Aziz–Howl mechanism)", "hybrid",
+    model_ah.META, model_ah.EXTRA_NUISANCE, True, model_ah.ah_state))
 
 
 def get(hid: str) -> Hypothesis:

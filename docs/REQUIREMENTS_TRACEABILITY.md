@@ -11,7 +11,7 @@ Test references are pytest node IDs or V&V benchmark IDs (`qgdevs/vv.py`, run by
 |---|---|---|---|---|---|
 | A1 | Can gravity mediate entanglement between massive systems? | 4, 12 | `bmv.py`, `models.py` (QG-COH) | S4-concurrence-formula, S4-analytic-vs-lindblad, S4-parallel-closed-form | DONE (computational) / EXTERNAL (physical) |
 | A2 | Do measurable effects require quantum gravitational degrees of freedom (under stated assumptions)? | 12 | `models.py` (CC-KTM, SC-MF, NULL-NG), `discrimination.py` | test_classical_models_never_entangle_by_gravity, S12-known-distinguishable | DONE for implemented models |
-| A3 | Can classical gravity reproduce "quantum-gravity" observables? | 12 | CG-QFT-AH registered | — | OPEN (registered, not implemented) |
+| A3 | Can classical gravity reproduce "quantum-gravity" observables? | 12 | `model_ah.py` (CG-QFT-AH, from arXiv:2510.19714) | tests/test_model_ah.py (24) | DONE (PARTIALLY VERIFIED model) |
 | A4 | Do hybrid theories give distinguishable predictions? | 12, 13 | CC-KTM with κ nuisance; robust KL | calibration_tradeoff study; docs/FLAGSHIP_RESULTS.md | DONE |
 | A5 | Measurable corrections beyond classical gravity | 3 | `qg_eft.py` one-loop | S12-known-indistinguishable | PARTIAL (only EFT one-loop) |
 | A6 | Gravity's influence on phases, coherence, interference, statistics | 4, 5, 6 | `bmv.py`, `interferometry.py`, `optomech.py` | S5-*, S6-* | DONE |

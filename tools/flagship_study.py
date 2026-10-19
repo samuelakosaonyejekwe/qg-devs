@@ -161,7 +161,7 @@ L += ["## 6. Optimised design under explicit constraints\n",
       "requires an independent decoherence calibration tighter than s*, (ii) that Diósi–Penrose collapse would erase the "
       "signal at these parameters, and (iii) that the required masses, splittings, gradients and charge control lie far "
       "beyond demonstrated capability. No discovery about the nature of gravity is claimed. The classical-gravity + quantum-"
-      "matter mechanism of Aziz & Howl (2025) is registered but not implemented, so a positive witness could not yet be said "
-      "to exclude it."]
+      "matter mechanism of Aziz & Howl (2025) is now implemented (docs/AZIZ_HOWL_MODEL.md): at BMV parameters it predicts "
+      "entanglement ~29 orders of magnitude weaker than QG-COH, with different mass, time and constituent-mass scaling."]
 (ROOT / "docs" / "FLAGSHIP_RESULTS.md").write_text("\n".join(L) + "\n")
 print("done", R["runtime_s"], "s")

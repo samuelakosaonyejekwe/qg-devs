@@ -144,8 +144,9 @@ def generate_dossier(design: bmv.BMVDesign, env: Environment = Environment(), bo
             "question": "Does the gravitational interaction between two masses, each in a spatial superposition, "
                         "generate entanglement between their branch degrees of freedom?",
             "observable": "entanglement witness <W> = 1 - <XX> ∓ (<YZ> + <ZY>) and full two-qubit tomography",
-            "hypotheses_tested": ["QG-COH", "SC-MF", "CC-KTM", "DP-COLL", "NULL-NG"],
-            "registered_untested": ["CG-QFT-AH (classical gravity + quantum matter fields; not implemented)"]},
+            "hypotheses_tested": ["QG-COH", "SC-MF", "CC-KTM", "DP-COLL", "NULL-NG", "CG-QFT-AH"],
+            "note_CG-QFT-AH": "Aziz–Howl prediction is many orders of magnitude below QG-COH at BMV parameters and its "
+                              "closed form may be outside the paper's validity domain; see docs/AZIZ_HOWL_MODEL.md"},
         "2_background": {
             "established": ["Newtonian gravity between macroscopic masses (Westphal et al. 2021)",
                             "matter-wave interference of large molecules (Fein et al. 2019)"],
@@ -197,7 +198,8 @@ def generate_dossier(design: bmv.BMVDesign, env: Environment = Environment(), bo
         "9_decision_rules": {
             "entanglement_claim": "one-sided z ≥ 5 on the preregistered witness, readout-corrected, with all null controls consistent with zero",
             "excludes": "a passing witness excludes SC-MF, CC-KTM (κ ≥ 1) and NULL-NG *within their stated assumptions*; "
-                        "it does not exclude unregistered or unimplemented classical models (e.g. CG-QFT-AH)",
+                        "it does not exclude unregistered classical models; CG-QFT-AH predicts far weaker entanglement with a "
+                        "different mass/time/constituent-mass scaling, testable by varying t and isotopic composition",
             "disfavours_QG_COH": "witness consistent with ≥ 0 at 95% while independent decoherence calibration predicts W < 0 "
                                  "at ≥ 5σ under QG-COH",
             "inconclusive": "any other outcome, or failed calibration/null controls; must be reported as inconclusive"},
