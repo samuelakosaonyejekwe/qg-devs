@@ -230,7 +230,8 @@ _reg(Hypothesis(
         "known_limits": ["κ = 1 is the minimal decoherence compatible with no gravitational entanglement",
                          "mean dynamics equal to QG-COH (same Newtonian force)"],
         "entangling_by_gravity": False, "references": REFS["KTM"], "assurance": "NUMERICALLY VERIFIED",
-        "status_note": "threshold Γ* = |dΔφ/dt|/2 derived numerically in this platform (tests/test_bmv.py)"},
+        "status_note": "threshold Γ* = |dΔφ/dt|/2 is exact: separable for all t iff Γ ≥ |ω|/2 "
+                       "(Lean 4: QGDEVS.never_entangled_iff)"},
     [Nuisance("kappa_cc", 1.0, 3.0, 1.0, "1", "excess of classical-channel decoherence over its minimum")],
     True, _classical_channel))
 

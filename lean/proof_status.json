@@ -6,9 +6,9 @@
   "axiom_policy": "proved items depend only on [propext, Classical.choice, Quot.sound]; no sorry/admit/axiom in sources",
   "dashboard_rule": "FORMALLY VERIFIED may only be shown for status == 'proved'",
   "summary": {
-    "proved": 32,
+    "proved": 43,
     "partial": 0,
-    "open": 2
+    "open": 0
   },
   "theorems": [
     {
@@ -400,28 +400,126 @@
     },
     {
       "group": "DephasingThreshold",
-      "lean_name": null,
-      "file": "QGDEVS/DephasingThreshold.lean",
-      "informal_statement": "For two-qubit states, PPT implies separability (Peres 1996; Horodecki, Horodecki & Horodecki 1996). Needed to read 'PPT' as 'not entangled'.",
+      "lean_name": "QGDEVS.IsSeparable.ptB_posSemidef",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "Every separable two-qubit matrix (in the sense of IsSeparable) has positive semidefinite partial transpose (separable ⇒ PPT). IsSeparable ρ :≡ ∃ finite index set ι, weights w_k ≥ 0 with Σ w_k = 1, and 2×2 density matrices (PSD, trace 1) ρA_k, ρB_k with ρ = Σ_k w_k • (ρA_k ⊗ ρB_k).",
       "assumptions": [
-        "2×2 systems"
+        "IsSeparable ρ"
       ],
-      "status": "open",
-      "remaining_obligation": "Formalise the Peres–Horodecki theorem for 2⊗2 (requires the Størmer–Woronowicz decomposition of positive maps M2→M2); until then dephasing_threshold certifies PPT (no NPT entanglement, zero negativity), not separability.",
-      "label": "PPT ⇒ separable for 2 qubits"
+      "status": "proved"
     },
     {
       "group": "DephasingThreshold",
-      "lean_name": null,
-      "file": "QGDEVS/DephasingThreshold.lean",
-      "informal_statement": "For a constant rate dΔφ/dt = ω ≠ 0, any Γ < |ω|/2 makes ρ^{T_B} non-PSD for small t > 0 (the threshold is sharp).",
+      "lean_name": "QGDEVS.blochState_density",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "ρ(a) = ½(1 + a·σ) is a density matrix (PSD, trace 1) whenever a_x²+a_y²+a_z² ≤ 1.",
       "assumptions": [
-        "constant rate ω ≠ 0",
-        "Γ_A = Γ_B = Γ"
+        "‖a‖² ≤ 1"
       ],
-      "status": "open",
-      "remaining_obligation": "Using ptB_posSemidef_iff, show ∃ t > 0 with sinh(Γt) < |sin(ωt/2)| whenever 0 ≤ Γ < |ω|/2 (first-order asymptotics at t → 0⁺). Not yet formalised.",
-      "label": "minimality of Γ* = |dΔφ/dt|/2"
+      "status": "proved"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.ensemble_eq",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "Explicit 8-term product-state ensemble: Σ_{τ,ε,η=±1} (1+τc)/8 · ρ(τp, εA, ηA) ⊗ ρ(τp, ηB, εB) equals the phase-free core state with real part ¼p^{[i≠k]+[j≠l]}(1−n²+n²c) and imaginary part −n·A·B/4.",
+      "assumptions": [
+        "none (polynomial identity)"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.sepCore_separable",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "The phase-free core with parameters p > 0, c²+s² = 1 is separable whenever 2p|s| ≤ 1−p² (A = √((1−p²)/2), B = −ps/A).",
+      "assumptions": [
+        "p > 0",
+        "c² + s² = 1",
+        "2p|s| ≤ 1 − p²"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.dephasedState_eq_conj",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "dephasedState φ x x = (U_β ⊗ U_γ) · core(e^{−x}, cos(Δφ/2), e^{−x} sin(Δφ/2)) · (U_β ⊗ U_γ)† with local diagonal phase unitaries U_r = diag(e^{irz_i}).",
+      "assumptions": [
+        "φ = phaseModel α β γ δ"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.dephasedState_separable_iff",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "For any real phase table and any x (x_A = x_B = x): the dephased BMV state is separable ⇔ 2e^{−x}|sin(Δφ/2)| ≤ 1 − e^{−2x}. IsSeparable ρ :≡ ∃ finite index set ι, weights w_k ≥ 0 with Σ w_k = 1, and 2×2 density matrices (PSD, trace 1) ρA_k, ρB_k with ρ = Σ_k w_k • (ρA_k ⊗ ρB_k).",
+      "assumptions": [
+        "x_A = x_B = x",
+        "φ arbitrary real"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.joint_state"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.dephasedState_separable_iff_ppt",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "For the dephased BMV family (x_A = x_B = x, any phases): separable ⇔ ρ^{T_B} PSD (PPT ⇔ separable, proved directly for this family without general Peres–Horodecki).",
+      "assumptions": [
+        "x_A = x_B = x"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.dephasedState_separable_iff_sinh",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "Separable ⇔ |sin(Δφ/2)| ≤ sinh x.",
+      "assumptions": [
+        "x_A = x_B = x"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.dephasing_threshold_separable",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "If Δφ(0) = 0 and |dΔφ/dt| ≤ 2Γ on t ≥ 0 (Δφ differentiable there), then for every t ≥ 0 the state with x_A = x_B = Γt is separable.",
+      "assumptions": [
+        "Γ_A = Γ_B = Γ",
+        "Δφ(0) = 0",
+        "HasDerivAt Δφ on t ≥ 0",
+        "|dΔφ/dt| ≤ 2Γ on t ≥ 0",
+        "t ≥ 0"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.entanglement_dephasing_threshold"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.dephasing_threshold_sharp",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "If Δφ(t) = ωt for all t and Γ < |ω|/2 (any real ω, Γ), there exists t > 0 at which ρ^{T_B} (x = Γt) is not PSD and the state is not separable (entangled).",
+      "assumptions": [
+        "Δφ(t) = ω t",
+        "Γ < |ω|/2"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.entanglement_dephasing_threshold"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.never_entangled_iff",
+      "file": "QGDEVS/Separability.lean",
+      "informal_statement": "For Δφ(t) = ωt and constant Γ (x = Γt): the state is separable at every t ≥ 0 ⇔ Γ ≥ |ω|/2. The threshold Γ* = |ω|/2 is exact.",
+      "assumptions": [
+        "Δφ(t) = ω t",
+        "constant Γ"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.entanglement_dephasing_threshold"
     }
   ]
 }

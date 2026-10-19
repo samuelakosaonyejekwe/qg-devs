@@ -33,3 +33,14 @@ import QGDEVS
 #print axioms QGDEVS.ptB_posSemidef_iff
 #print axioms QGDEVS.ptB_posSemidef_of_abs_le
 #print axioms QGDEVS.dephasing_threshold
+#print axioms QGDEVS.IsSeparable.ptB_posSemidef
+#print axioms QGDEVS.blochState_density
+#print axioms QGDEVS.ensemble_eq
+#print axioms QGDEVS.sepCore_separable
+#print axioms QGDEVS.dephasedState_eq_conj
+#print axioms QGDEVS.dephasedState_separable_iff
+#print axioms QGDEVS.dephasedState_separable_iff_ppt
+#print axioms QGDEVS.dephasedState_separable_iff_sinh
+#print axioms QGDEVS.dephasing_threshold_separable
+#print axioms QGDEVS.dephasing_threshold_sharp
+#print axioms QGDEVS.never_entangled_iff

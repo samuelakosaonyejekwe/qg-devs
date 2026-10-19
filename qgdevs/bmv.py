@@ -323,7 +323,9 @@ def entanglement_dephasing_threshold(delta_phi_rate: float) -> float:
     """Minimal symmetric single-mass coherence-decay rate Γ* above which a ZZ-coupled qubit pair
     starting in |+>|+> never becomes entangled:  Γ* = |dΔφ/dt| / 2.
 
-    Derived numerically (see tests/test_bmv.py::test_dephasing_threshold) and consistent with the
+    Found numerically (V&V benchmark S4-dephasing-threshold) and machine-checked in Lean 4 as an exact
+    statement: for Δφ = ωt the state stays separable for all t ≥ 0 iff Γ ≥ |ω|/2
+    (lean/QGDEVS/Separability.lean: never_entangled_iff). Consistent with the
     decoherence–coupling trade-off of classical measurement-feedback channels (Kafri, Taylor & Milburn,
     NJP 16, 065020 (2014)). Used by the classical-channel competing model.
     """

@@ -19,7 +19,7 @@ Machine-checked theorems about the mathematics used by the QG-DEVS Python platfo
 `check.sh` does three things:
 1. It fails if the token `sorry`, `admit` or `axiom` appears in `QGDEVS.lean` or `QGDEVS/*.lean`.
 2. It runs `lake build`.
-3. It runs `#print axioms` on all 32 headline theorems and fails if any of them uses an axiom
+3. It runs `#print axioms` on all 43 headline theorems and fails if any of them uses an axiom
    other than the three standard ones (including `sorryAx`).
 
 ## Setup (reuses a prebuilt Mathlib)
@@ -36,7 +36,8 @@ lake build
 ```
 
 If that prebuilt tree is not available, use `lake exe cache get`, then `lake build`.
-Only the 8 QGDEVS modules get compiled. A clean build of them took 285 s (about 5 minutes) on this
+Only the 9 QGDEVS modules get compiled. A clean build of them took 482 s (about 8 minutes; the explicit 16-entry
+separable-decomposition identity in `Separability.lean` alone takes about 220 s) on this
 machine, and a no-op rebuild takes about 15 s.
 
 ## Theorems
@@ -50,7 +51,8 @@ machine, and a no-op rebuild takes about 15 s.
 | 5 PureConcurrence | `QGDEVS/Concurrence.lean` | `Concurrence.pure_concurrence` | proved |
 | 6 DPEnergyDifference | `QGDEVS/DiosiPenrose.lean` | `dpEnergy_bounds`, `dpEnergy_mono`, `dpRate_bounds` | proved |
 | 7 GravityDominance | `QGDEVS/GravityDominance.lean` | `cpRatio_strictAntiOn`, `cpRatio_le_iff`, `rmin_existsUnique` | proved |
-| 8 DephasingThreshold | `QGDEVS/DephasingThreshold.lean` | `ptCore_decomp`, `ptB_posSemidef_iff`, `ptB_posSemidef_of_abs_le`, `dephasing_threshold` | proved (as PPT) |
+| 8 DephasingThreshold | `QGDEVS/DephasingThreshold.lean` | `ptCore_decomp`, `ptB_posSemidef_iff`, `ptB_posSemidef_of_abs_le`, `dephasing_threshold` | proved |
+| 8 Separability and sharpness | `QGDEVS/Separability.lean` | `IsSeparable.ptB_posSemidef`, `blochState_density`, `ensemble_eq`, `sepCore_separable`, `dephasedState_eq_conj`, `dephasedState_separable_iff`, `dephasedState_separable_iff_ppt`, `dephasedState_separable_iff_sinh`, `dephasing_threshold_separable`, `dephasing_threshold_sharp`, `never_entangled_iff` | proved |
 
 All names are in namespace `QGDEVS`.
 
@@ -83,9 +85,23 @@ These are all deliberate. None of them weakens a target without saying so.
 - **(8)** This is fully proved, and it is stronger than the target: an exact *iff* criterion for
   positivity of the partial transpose (`ρ^{T_B} ⪰ 0 ⇔ |sin(Δφ/2)| ≤ sinh x`) holds for any phase
   table when `x_A = x_B = x`. The time-dependent threshold `|dΔφ/dt| ≤ 2Γ ⇒ PPT for all t ≥ 0`
-  follows from it via the mean-value inequality. Two things remain open, and both are listed in
-  `proof_status.json`:
-  - **PPT ⇒ separable** for two qubits (Peres–Horodecki) is not formalised. The verified claim is
-    therefore "PPT, i.e. no NPT entanglement and zero negativity", not "separable".
-  - **Sharpness** of `Γ* = |ω|/2` for constant rates (`Γ < |ω|/2` ⇒ NPT at small `t`) is not
-    formalised.
+  follows from it via the mean-value inequality.
+  - **Separability (not just PPT).** `Separability.lean` defines `IsSeparable ρ`: there is a
+    finite family of weights `w_k ≥ 0` with `Σ w_k = 1` and 2×2 density matrices `ρA_k, ρB_k`
+    such that `ρ = Σ w_k ρA_k ⊗ ρB_k`. Separable ⇒ PPT holds in general
+    (`IsSeparable.ptB_posSemidef`). For this family the converse is proved directly; general
+    Peres–Horodecki is not needed. Take the 8 product states with Bloch vectors
+    `a = (τp, εA, ηA)` and `b = (τp, ηB, εB)` (`τ, ε, η = ±1`), where `p = e^{−x}`,
+    `A = √((1−p²)/2)` and `B = −p sin(Δφ/2)/A`. Their weights are `(1+τ cos(Δφ/2))/8`.
+    `a` is pure, and `‖b‖ ≤ 1` is exactly the PPT condition. The local Z phases are restored by
+    a product unitary. Hence `dephasedState_separable_iff` (separable ⇔
+    `2e^{−x}|sin(Δφ/2)| ≤ 1 − e^{−2x}`), `dephasedState_separable_iff_ppt` and
+    `dephasing_threshold_separable`.
+  - **Sharpness.** `dephasing_threshold_sharp` covers `Δφ(t) = ωt` with `Γ < |ω|/2`: some
+    `t > 0` is NPT and therefore not separable. The proof takes the slope at 0 of
+    `sin(|ω|t/2) − sinh(Γt)`. Combining it with the separable form gives `never_entangled_iff`:
+    the state is separable at every `t ≥ 0` ⇔ `Γ ≥ |ω|/2`.
+  - `ensemble_eq` uses `set_option maxHeartbeats 4000000` because it is a large polynomial
+    identity. That raises a resource limit only and does not add an axiom.
+
+Nothing is currently open.

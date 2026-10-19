@@ -1,6 +1,6 @@
 # The 18 scientific suites — implementation maturity
 
-Generated 2026-10-19 12:43 UTC from `qgdevs/suites.py`.
+Generated 2026-10-19 13:50 UTC from `qgdevs/suites.py`.
 
 | # | Suite | Maturity | Modules | Documented gaps |
 |---|---|---|---|---|
@@ -15,7 +15,7 @@ Generated 2026-10-19 12:43 UTC from `qgdevs/suites.py`.
 | 9 | Virtual Laboratory and Experimental Apparatus | IMPLEMENTED | `qgdevs.lab`, `qgdevs.instruments` | no physical instrument connected (Environment B requires a partner laboratory); STEP export not implemented |
 | 10 | Precision Measurement and Signal Processing | IMPLEMENTED_VERIFIED | `qgdevs.sigproc` | instrument-native raw-format adapters (TDMS, vendor) pending partner data |
 | 11 | Inverse Physics and Statistical Inference | IMPLEMENTED_VERIFIED | `qgdevs.inference` | hierarchical multi-run models |
-| 12 | Competing Gravity Models and Scientific Falsification | IMPLEMENTED_VERIFIED | `qgdevs.models`, `qgdevs.discrimination` | Aziz–Howl classical-gravity–QFT mechanism registered, not implemented |
+| 12 | Competing Gravity Models and Scientific Falsification | IMPLEMENTED_VERIFIED | `qgdevs.models`, `qgdevs.discrimination` | Aziz–Howl model PARTIALLY VERIFIED (non-perturbative completion and long-time regime of the paper not implemented) |
 | 13 | Experimental Design and Optimisation | IMPLEMENTED | `qgdevs.design` | Bayesian-optimal adaptive design over sequential runs |
 | 14 | AI-Driven Physical Law and Hypothesis Discovery | IMPLEMENTED | `qgdevs.discovery` | neural surrogate models; literature-novelty assessment requires human review |
 | 15 | High-Performance Numerical Simulation | IMPLEMENTED_VERIFIED | `qgdevs.native`, `cpp/`, `qgdevs.jobs` | GPU kernels not implemented (no GPU in the development environment) |

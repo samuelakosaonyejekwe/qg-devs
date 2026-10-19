@@ -1,6 +1,6 @@
 # Scientific model registry
 
-Generated 2026-10-19 12:43 UTC from `qgdevs/models.py` (version 0.1.0). Each entry is the model's G1 (theory gate) record. No model is privileged; all are evaluated through the same measurement chain and nuisance treatment.
+Generated 2026-10-19 13:50 UTC from `qgdevs/models.py` (version 0.2.0). Each entry is the model's G1 (theory gate) record. No model is privileged; all are evaluated through the same measurement chain and nuisance treatment.
 
 ## QG-COH — Quantum-coherent gravitational interaction (linearised quantum gravity, Newtonian limit)
 
@@ -52,7 +52,7 @@ Generated 2026-10-19 12:43 UTC from `qgdevs/models.py` (version 0.1.0). Each ent
 * **Known limits:** κ = 1 is the minimal decoherence compatible with no gravitational entanglement; mean dynamics equal to QG-COH (same Newtonian force)
 * **Nuisance parameters:** `env_decoherence_scale` ∈ [0.5, 2.0] 1 — multiplier on independently calibrated environmental decoherence rates; `mass_scale` ∈ [0.99, 1.01] 1 — relative mass calibration (enters gravity as m_A m_B); `local_phase_A` ∈ [-0.05, 0.05] rad — residual local phase calibration error on A; `local_phase_B` ∈ [-0.05, 0.05] rad — residual local phase calibration error on B; `kappa_cc` ∈ [1.0, 3.0] 1 — excess of classical-channel decoherence over its minimum
 * **References:** Kafri, Taylor & Milburn, NJP 16, 065020 (2014), doi:10.1088/1367-2630/16/6/065020; Oppenheim, PRX 13, 041040 (2023), doi:10.1103/PhysRevX.13.041040
-* **Status note:** threshold Γ* = |dΔφ/dt|/2 derived numerically in this platform (tests/test_bmv.py)
+* **Status note:** threshold Γ* = |dΔφ/dt|/2 is exact: separable for all t iff Γ ≥ |ω|/2 (Lean 4: QGDEVS.never_entangled_iff)
 
 ## DP-COLL — Coherent gravity with Diósi–Penrose gravitational collapse
 
@@ -82,13 +82,13 @@ Generated 2026-10-19 12:43 UTC from `qgdevs/models.py` (version 0.1.0). Each ent
 
 ## CG-QFT-AH — Classical gravity coupled to quantum matter fields (Aziz–Howl mechanism)
 
-* **Family:** hybrid  ·  **Implemented:** NO (registered only)  ·  **Assurance:** UNVERIFIED
+* **Family:** hybrid  ·  **Implemented:** yes  ·  **Assurance:** PARTIALLY VERIFIED
 * **Gravity can entangle:** True
-* **Dynamics:** not implemented — requires the QFT matter-propagator derivation of the reference
-* **Assumptions:** classical gravitational field; quantum field theory of matter
-* **Approximations:** —
-* **Admissible domain:** unspecified in this platform
-* **Known limits:** —
-* **Nuisance parameters:** `env_decoherence_scale` ∈ [0.5, 2.0] 1 — multiplier on independently calibrated environmental decoherence rates; `mass_scale` ∈ [0.99, 1.01] 1 — relative mass calibration (enters gravity as m_A m_B); `local_phase_A` ∈ [-0.05, 0.05] rad — residual local phase calibration error on A; `local_phase_B` ∈ [-0.05, 0.05] rad — residual local phase calibration error on B
-* **References:** Aziz & Howl, Nature 646, 813–817 (2025), doi:10.1038/s41586-025-09595-7; Marletto, Oppenheim, Vedral & Wilson, arXiv:2511.07348 (preprint; disputes the interpretation)
-* **Status note:** REGISTERED, NOT IMPLEMENTED: needed before any claim that observed entanglement excludes all classical-gravity models; interpretation disputed in the literature
+* **Dynamics:** Mean-field (Møller–Rosenfeld) local phases plus the 4th-order virtual-matter amplitude β⁽⁴⁾_ij = −s[(6/25) G² m² (M_A M_B)^{3/2} (R_A R_B)^{1/2} t/(ħ³ d_ij)]² on each branch (Aziz–Howl eq:betaCG; m = mass of a matter-field quantum), state normalised as eq:stateAfterG
+* **Assumptions:** gravitational field classical: the same c-number Φ(x) in every branch; matter is a quantised (complex scalar) field; objects are N00N states of position-like wavepackets; Φ sourced by ⟨T_00⟩ (semiclassical Einstein / Møller–Rosenfeld), static during the interaction; free evolution H_0 contributes only a global phase (wavepackets stay fixed); gravity is the only interaction (non-gravitational branch energies added coherently, as for all models)
+* **Approximations:** non-relativistic matter, R ≫ ħ/(mc); Newtonian limit h_μν = −2Φδ_μν/c²; delta-function (long-time) approximation of the time integrals, eq:intkandk0 (ct ≫ d, t ≫ ħ/(mc²)); Δx ≫ R and d_ij ≫ R (monopole term only) in eq:betaCG; 4th-order Dyson truncation: valid only for |β⁽⁴⁾| ≪ 1; platform extension to unequal masses: M³R → (M_A M_B)^{3/2}(R_A R_B)^{1/2}; two-level branch encoding; constituent mass m = carbon-12 by default (diamond)
+* **Admissible domain:** R ≫ ħ/(mc); c t ≫ d_ij; t ≲ 2 m R²/ħ (wavepacket non-spreading, arXiv v3 footnotes); Δx ≫ R; d_ij ≫ R; |β⁽⁴⁾_ij| ≪ 1 — see ah_validity()
+* **Known limits:** s → 0 or m → 0 or G → 0: reduces exactly to SC-MF (no gravitational entanglement); √ϑ ∝ G² m² M³ R t ħ⁻³ d⁻¹  ⇒  ϑ ∝ G⁴ m⁴ M⁶ R² t² ħ⁻⁶ d⁻²  (QG-COH: φ ∝ G M² t ħ⁻¹ d⁻¹); d_RL = 10R: ϑ independent of the material density (Fig. 4 caption); κ⁽⁴⁾ = 16 β⁽⁴⁾ for an operator-valued Newtonian potential (paper's App.); leading-order concurrence = |β_LL + β_RR − β_LR − β_RL| / 2
+* **Nuisance parameters:** `env_decoherence_scale` ∈ [0.5, 2.0] 1 — multiplier on independently calibrated environmental decoherence rates; `mass_scale` ∈ [0.99, 1.01] 1 — relative mass calibration (enters gravity as m_A m_B); `local_phase_A` ∈ [-0.05, 0.05] rad — residual local phase calibration error on A; `local_phase_B` ∈ [-0.05, 0.05] rad — residual local phase calibration error on B; `ah_sourcing_factor` ∈ [1.0, 16.0] 1 — multiplier on β⁽⁴⁾: 1 = semiclassical-Einstein sourcing (Aziz–Howl eq:betaCG); 16 = operator-valued/stochastic (Diósi–Penrose-type) potential, κ⁽⁴⁾ = 16 β⁽⁴⁾ (paper's App.)
+* **References:** Aziz & Howl, Nature 646, 813–817 (2025), doi:10.1038/s41586-025-09595-7; arXiv:2510.19714; Marletto, Oppenheim, Vedral & Wilson, 'Classical gravity cannot mediate entanglement', arXiv:2511.07348 (2025) — disputes that the model entangles at all; Diósi, 'No, classical gravity does not entangle quantized matter fields', arXiv:2511.00852 (2025); Bose et al., PRL 119, 240401 (2017), doi:10.1103/PhysRevLett.119.240401 (benchmark design)
+* **Status note:** Implements the paper's closed form eq:betaCG (6/25 prefactor re-derived from eq:beta4ijFull and checked numerically; Fig. 4 ϑ=0.1 line reproduced). Gaps: (i) the non-perturbative completion (amplitude vs phase) is not fixed by the paper; (ii) the platform's benchmark designs violate the paper's own validity condition t ≲ 2mR²/ħ (arXiv v3), where the v3 Gaussian free-evolution appendix gives different, regime-dependent formulas not implemented here; (iii) the mechanism is disputed (arXiv:2511.07348, arXiv:2511.00852): it may be identically zero. For the Bose et al. benchmark the predicted effect (~1e-29) is observationally indistinguishable from SC-MF.
