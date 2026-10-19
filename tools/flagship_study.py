@@ -47,6 +47,10 @@ R["diosi_penrose"] = {"rate_s": dp["rate"], "coherence_after_t": float(np.exp(-d
 cm = materials.get("diamond").clausius_mossotti().real
 R["casimir_gravity_distance_10pct_m"] = em.min_distance_for_gravity_dominance(bose.mass_A, bose.radius_A, cm, 0.1)
 R["max_residual_charge_e"] = em.max_charge_for(bose, 0.05, cm)
+R["csl_rate_grw_s"] = dec.csl_rate(bose.mass_A, bose.radius_A, bose.dx_A, 1e-16)["rate"]
+R["max_electric_dipole_Cm"] = em.max_electric_dipole(bose, 0.05)
+R["max_bias_field_T"] = em.max_bias_field(bose, materials.get("diamond").magnetic_susceptibility, 0.05)
+R["sg_gradient_precision"] = itf.required_gradient_precision(bose.mass_A, bose.dx_A, 0.25, 2 * np.pi * 100, 10)
 R["eft_one_loop_relative"] = qg_eft.eft_potential_terms(bose.mass_A, bose.mass_B, bose.separation)["quantum_relative_size"]
 R["stern_gerlach"] = {k: v for k, v in itf.sg_bmv_phases(bose.mass_A, bose.mass_B, bose.separation, 0.25, bose.time,
                                                           bose.dx_A, "linear").items() if not k.startswith("trajectory")}
@@ -115,6 +119,12 @@ L = [f"# Flagship research results — gravity-mediated entanglement\n",
      f"* Diósi–Penrose collapse (uniform-sphere smearing): Γ_DP = **{f(R['diosi_penrose']['rate_s'])} s⁻¹**, leaving "
      f"coherence {f(R['diosi_penrose']['coherence_after_t'])} after t. If DP collapse is real at this smearing scale, "
      "the benchmark experiment cannot show entanglement — which makes the experiment a sharp test of DP.",
+     f"* CSL collapse with the standard GRW parameters (λ = 1e-16 s⁻¹, r_C = 100 nm): Γ_CSL = **{f(R['csl_rate_grw_s'])} s⁻¹**, "
+     "so entanglement could only appear if λ is many orders of magnitude below the GRW value — the experiment is a sharp CSL test.",
+     f"* Electric dipoles (from surface patch potentials or trapped charge) must stay below **{f(R['max_electric_dipole_Cm'])} C·m** "
+     f"per mass, and the magnetic field during the interaction below **{f(R['max_bias_field_T'] * 1e3)} mT** (induced diamagnetic dipoles).",
+     f"* Stern–Gerlach loop closure: the gradient pulses must be accurate to **{f(R['sg_gradient_precision']['max_relative_gradient_error'])}** "
+     "(relative) to keep 90 % recombination visibility (assumed 100 Hz trap, 10 thermal quanta).",
      f"* One-loop quantum-gravity EFT correction: relative size {f(R['eft_one_loop_relative'])}: unobservable; QG-COH and "
      "QG-EFT1 are reported as observationally indistinguishable.",
      f"* Closed-loop Stern–Gerlach realisation: time-integrated Δφ = {f(R['stern_gerlach']['delta_phi'], 4)} rad and a "
@@ -127,6 +137,10 @@ L += ["", "Robust discrimination (the alternative may adjust all admissible nuis
 L += [f"| {r['true']} | {r['alternative']} | {f(r['D_per_shot'])} | {f(r['shots_per_setting'])} | {r['verdict']} |"
       for r in R["benchmark_discrimination"] if r["true"] in ("QG-COH", "CC-KTM")]
 s = R["synthetic_loop"]
+L += ["", "*Reading the CSL rows:* CSL-COLL contains QG-COH as its λ → 0 limit (and with a suitable λ it can mimic the "
+      "extra dephasing of CC-KTM), so it is *nested* rather than excludable: an observed entanglement witness bounds the "
+      "collapse rate to λ ≲ 1e-25 s⁻¹ at r_C = 100 nm instead of falsifying CSL outright. 'Indistinguishable' here is "
+      "the correct verdict for nested models, not a failure of the experiment."]
 L += ["", "## 4. Closing the loop on synthetic data\n",
       f"2000 shots/setting of SYNTHETIC data (sha256 `{s['sha256'][:16]}…`) generated from QG-COH: witness "
       f"{f(s['witness']['witness'], 4)} ± {f(s['witness']['stderr'], 2)} (z = {f(s['witness']['z_score'], 3)}); inferred "

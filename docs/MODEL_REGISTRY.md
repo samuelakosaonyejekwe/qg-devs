@@ -1,6 +1,6 @@
 # Scientific model registry
 
-Generated 2026-10-19 13:50 UTC from `qgdevs/models.py` (version 0.2.0). Each entry is the model's G1 (theory gate) record. No model is privileged; all are evaluated through the same measurement chain and nuisance treatment.
+Generated 2026-10-19 14:42 UTC from `qgdevs/models.py` (version 0.2.0). Each entry is the model's G1 (theory gate) record. No model is privileged; all are evaluated through the same measurement chain and nuisance treatment.
 
 ## QG-COH — Quantum-coherent gravitational interaction (linearised quantum gravity, Newtonian limit)
 
@@ -79,6 +79,19 @@ Generated 2026-10-19 13:50 UTC from `qgdevs/models.py` (version 0.2.0). Each ent
 * **Nuisance parameters:** `env_decoherence_scale` ∈ [0.5, 2.0] 1 — multiplier on independently calibrated environmental decoherence rates; `mass_scale` ∈ [0.99, 1.01] 1 — relative mass calibration (enters gravity as m_A m_B); `local_phase_A` ∈ [-0.05, 0.05] rad — residual local phase calibration error on A; `local_phase_B` ∈ [-0.05, 0.05] rad — residual local phase calibration error on B
 * **References:** Casimir & Polder, Phys. Rev. 73, 360 (1948); van de Kamp et al., PRA 102, 062807 (2020)
 * **Status note:** confounder control
+
+## CSL-COLL — Coherent gravity with Continuous Spontaneous Localisation (CSL) collapse
+
+* **Family:** collapse  ·  **Implemented:** yes  ·  **Assurance:** NUMERICALLY VERIFIED
+* **Gravity can entangle:** True
+* **Dynamics:** QG-COH plus single-mass dephasing Γ_CSL = λ(m/m0)²(4πr_C²)^{3/2}∫d³k/(2π)³ e^{-k²r_C²}|f(kR)|²(1−cos k·Δx)
+* **Assumptions:** mass-proportional CSL with phenomenological λ and r_C; uniform-sphere mass density
+* **Approximations:** white-noise (Markovian) collapse field; rigid-body centre-of-mass dephasing
+* **Admissible domain:** non-relativistic; λ and r_C within experimentally unexcluded ranges
+* **Known limits:** R ≪ r_C: Γ = λ(m/m0)²(1 − e^{−Δx²/4r_C²}); λ → 0 recovers QG-COH
+* **Nuisance parameters:** `env_decoherence_scale` ∈ [0.5, 2.0] 1 — multiplier on independently calibrated environmental decoherence rates; `mass_scale` ∈ [0.99, 1.01] 1 — relative mass calibration (enters gravity as m_A m_B); `local_phase_A` ∈ [-0.05, 0.05] rad — residual local phase calibration error on A; `local_phase_B` ∈ [-0.05, 0.05] rad — residual local phase calibration error on B; `csl_log10_lambda` ∈ [-30.0, -10.0] log10(s⁻¹) — CSL collapse rate parameter λ (r_C fixed at the standard 100 nm)
+* **References:** Ghirardi, Pearle & Rimini, PRA 42, 78 (1990), doi:10.1103/PhysRevA.42.78; Bassi et al., Rev. Mod. Phys. 85, 471 (2013), doi:10.1103/RevModPhys.85.471
+* **Status note:** λ is a free parameter (default GRW 1e-16 s⁻¹); r_C fixed at 100 nm in this registry entry
 
 ## CG-QFT-AH — Classical gravity coupled to quantum matter fields (Aziz–Howl mechanism)
 

@@ -1,7 +1,7 @@
 {
- "generated_utc": "2026-10-19T12:40:47.949412+00:00",
- "version": "0.1.0",
- "code_sha256": "0e35432ec83abbab3a68b5718bebea6cddcbacbcbd8c9bc176e0a36e23170dcd",
+ "generated_utc": "2026-10-19T14:38:30.832603+00:00",
+ "version": "0.2.0",
+ "code_sha256": "2f3a87320415ef9c51e7dafd03bbff9059887ad70182f375ef2cc39467b61258",
  "benchmark_bose2017": {
   "design": {
    "mass_A": 1e-14,
@@ -31,7 +31,8 @@
    "material": "diamond",
    "residual_charge_e": 0.0,
    "include_casimir": true,
-   "readout_error": 0.01
+   "readout_error": 0.01,
+   "bias_field_T": 0.0
   },
   "decoherence": {
    "gas_collisions": {
@@ -52,7 +53,7 @@
    }
   },
   "total_rate_s": 0.012491887032976653,
-  "delta_phi_nongrav_rad": -0.018347373818695435
+  "delta_phi_nongrav_rad": -0.01834740444545275
  },
  "diosi_penrose": {
   "rate_s": 86.10619705867236,
@@ -61,6 +62,15 @@
  },
  "casimir_gravity_distance_10pct_m": 0.00015694180904273291,
  "max_residual_charge_e": 0.0,
+ "csl_rate_grw_s": 45885768.88725432,
+ "max_electric_dipole_Cm": 3.3275981426165995e-29,
+ "max_bias_field_T": 0.00020000731318315808,
+ "sg_gradient_precision": {
+  "max_relative_gradient_error": 4.642610245964914e-09,
+  "visibility_at_limit": 0.9000000000000007,
+  "visibility_min": 0.9,
+  "status": "CALCULATED_REQUIREMENT (uncompensated final-pulse error, thermal Gaussian motional state)"
+ },
  "eft_one_loop_relative": 1.6835605172782962e-63,
  "stern_gerlach": {
   "phases": {
@@ -77,39 +87,51 @@
  "benchmark_predictions": [
   {
    "id": "QG-COH",
-   "negativity": 0.06500918100678978,
-   "witness_cpk": -0.2599429530074645,
-   "coherence_A": 0.9559065835506414
+   "negativity": 0.06500918832586952,
+   "witness_cpk": -0.25994298202917976,
+   "coherence_A": 0.9559065810960173
   },
   {
    "id": "QG-EFT1",
-   "negativity": 0.06500918100678978,
-   "witness_cpk": -0.2599429530074645,
-   "coherence_A": 0.9559065835506414
+   "negativity": 0.06500918832586952,
+   "witness_cpk": -0.25994298202917976,
+   "coherence_A": 0.9559065810960173
   },
   {
    "id": "SC-MF",
    "negativity": 0.0,
-   "witness_cpk": 0.0428466949203877,
-   "coherence_A": 0.9692121088740823
+   "witness_cpk": 0.04284666545630464,
+   "coherence_A": 0.9692121087379233
   },
   {
    "id": "CC-KTM",
    "negativity": 0.0,
-   "witness_cpk": 0.03972354000329892,
-   "coherence_A": 0.8170439975971483
+   "witness_cpk": 0.03972351517063577,
+   "coherence_A": 0.8170439954991024
   },
   {
    "id": "DP-COLL",
    "negativity": 0.0,
    "witness_cpk": 1.0,
-   "coherence_A": 3.1031291577295135e-94
+   "coherence_A": 3.103129149761145e-94
   },
   {
    "id": "NULL-NG",
    "negativity": 0.0,
-   "witness_cpk": 0.11186982619572824,
-   "coherence_A": 0.9692121088740822
+   "witness_cpk": 0.11186979146199565,
+   "coherence_A": 0.9692121087379232
+  },
+  {
+   "id": "CSL-COLL",
+   "negativity": 0.0,
+   "witness_cpk": 1.0,
+   "coherence_A": 0.0
+  },
+  {
+   "id": "CG-QFT-AH",
+   "negativity": 0.0,
+   "witness_cpk": 0.042846665456304445,
+   "coherence_A": 0.9692121087379233
   }
  ],
  "benchmark_discrimination": [
@@ -124,16 +146,16 @@
   {
    "true": "QG-COH",
    "alternative": "SC-MF",
-   "D_per_shot": 0.003385776366254714,
-   "shots_per_setting": 164.43414882579407,
+   "D_per_shot": 0.003385776589502363,
+   "shots_per_setting": 164.4341379835143,
    "verdict": "distinguishable",
    "nuisance_at_bounds": []
   },
   {
    "true": "QG-COH",
    "alternative": "CC-KTM",
-   "D_per_shot": 0.019468757890758383,
-   "shots_per_setting": 28.596444520164347,
+   "D_per_shot": 0.019468757577622942,
+   "shots_per_setting": 28.596444980109478,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -144,8 +166,8 @@
   {
    "true": "QG-COH",
    "alternative": "DP-COLL",
-   "D_per_shot": 0.3722368359615014,
-   "shots_per_setting": 1.4956533075548828,
+   "D_per_shot": 0.37223683391234674,
+   "shots_per_setting": 1.4956533157884178,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "dp_convention"
@@ -153,14 +175,30 @@
   },
   {
    "true": "QG-COH",
+   "alternative": "CSL-COLL",
+   "D_per_shot": 1.0295541808687687e-17,
+   "shots_per_setting": Infinity,
+   "verdict": "indistinguishable",
+   "nuisance_at_bounds": []
+  },
+  {
+   "true": "QG-COH",
    "alternative": "NULL-NG",
-   "D_per_shot": 0.01341235225121782,
-   "shots_per_setting": 41.50929266333824,
+   "D_per_shot": 0.013412352371223733,
+   "shots_per_setting": 41.50929229193728,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "local_phase_A",
     "local_phase_B"
    ]
+  },
+  {
+   "true": "QG-COH",
+   "alternative": "CG-QFT-AH",
+   "D_per_shot": 0.0033857765895023363,
+   "shots_per_setting": 164.43413798351557,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": []
   },
   {
    "true": "QG-EFT1",
@@ -173,16 +211,16 @@
   {
    "true": "QG-EFT1",
    "alternative": "SC-MF",
-   "D_per_shot": 0.003385776366254714,
-   "shots_per_setting": 164.43414882579407,
+   "D_per_shot": 0.003385776589502363,
+   "shots_per_setting": 164.4341379835143,
    "verdict": "distinguishable",
    "nuisance_at_bounds": []
   },
   {
    "true": "QG-EFT1",
    "alternative": "CC-KTM",
-   "D_per_shot": 0.019468757890758383,
-   "shots_per_setting": 28.596444520164347,
+   "D_per_shot": 0.019468757577622942,
+   "shots_per_setting": 28.596444980109478,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -193,8 +231,8 @@
   {
    "true": "QG-EFT1",
    "alternative": "DP-COLL",
-   "D_per_shot": 0.3722368359615014,
-   "shots_per_setting": 1.4956533075548828,
+   "D_per_shot": 0.37223683391234674,
+   "shots_per_setting": 1.4956533157884178,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "dp_convention"
@@ -202,9 +240,17 @@
   },
   {
    "true": "QG-EFT1",
+   "alternative": "CSL-COLL",
+   "D_per_shot": 1.0295541808687687e-17,
+   "shots_per_setting": Infinity,
+   "verdict": "indistinguishable",
+   "nuisance_at_bounds": []
+  },
+  {
+   "true": "QG-EFT1",
    "alternative": "NULL-NG",
-   "D_per_shot": 0.01341235225121782,
-   "shots_per_setting": 41.50929266333824,
+   "D_per_shot": 0.013412352371223733,
+   "shots_per_setting": 41.50929229193728,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "local_phase_A",
@@ -212,10 +258,18 @@
    ]
   },
   {
+   "true": "QG-EFT1",
+   "alternative": "CG-QFT-AH",
+   "D_per_shot": 0.0033857765895023363,
+   "shots_per_setting": 164.43413798351557,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": []
+  },
+  {
    "true": "SC-MF",
    "alternative": "QG-COH",
-   "D_per_shot": 0.002960003092749239,
-   "shots_per_setting": 188.08671391707523,
+   "D_per_shot": 0.0029600032512373435,
+   "shots_per_setting": 188.08670384630696,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "mass_scale"
@@ -224,8 +278,8 @@
   {
    "true": "SC-MF",
    "alternative": "QG-EFT1",
-   "D_per_shot": 0.002960003092749239,
-   "shots_per_setting": 188.08671391707523,
+   "D_per_shot": 0.0029600032512373435,
+   "shots_per_setting": 188.08670384630696,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "mass_scale"
@@ -234,8 +288,8 @@
   {
    "true": "SC-MF",
    "alternative": "CC-KTM",
-   "D_per_shot": 0.025791656112441528,
-   "shots_per_setting": 21.585944402811023,
+   "D_per_shot": 0.02579165646134742,
+   "shots_per_setting": 21.58594411079941,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -246,8 +300,8 @@
   {
    "true": "SC-MF",
    "alternative": "DP-COLL",
-   "D_per_shot": 0.38393450093319986,
-   "shots_per_setting": 1.4500839428245333,
+   "D_per_shot": 0.38393450073358104,
+   "shots_per_setting": 1.4500839435784747,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "dp_convention"
@@ -255,9 +309,19 @@
   },
   {
    "true": "SC-MF",
+   "alternative": "CSL-COLL",
+   "D_per_shot": 0.0029600032512373713,
+   "shots_per_setting": 188.0867038463052,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale"
+   ]
+  },
+  {
+   "true": "SC-MF",
    "alternative": "NULL-NG",
-   "D_per_shot": 0.01032140687271598,
-   "shots_per_setting": 53.94005504920899,
+   "D_per_shot": 0.01032140681140806,
+   "shots_per_setting": 53.940055369606455,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "mass_scale",
@@ -266,10 +330,20 @@
    ]
   },
   {
+   "true": "SC-MF",
+   "alternative": "CG-QFT-AH",
+   "D_per_shot": 0.0,
+   "shots_per_setting": Infinity,
+   "verdict": "indistinguishable",
+   "nuisance_at_bounds": [
+    "ah_sourcing_factor"
+   ]
+  },
+  {
    "true": "CC-KTM",
    "alternative": "QG-COH",
-   "D_per_shot": 0.016597095857220256,
-   "shots_per_setting": 33.54425736219303,
+   "D_per_shot": 0.01659709551684984,
+   "shots_per_setting": 33.54425805011296,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -279,8 +353,8 @@
   {
    "true": "CC-KTM",
    "alternative": "QG-EFT1",
-   "D_per_shot": 0.016597095857220256,
-   "shots_per_setting": 33.54425736219303,
+   "D_per_shot": 0.01659709551684984,
+   "shots_per_setting": 33.54425805011296,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -290,8 +364,8 @@
   {
    "true": "CC-KTM",
    "alternative": "SC-MF",
-   "D_per_shot": 0.024181322445484616,
-   "shots_per_setting": 23.0234411767477,
+   "D_per_shot": 0.02418132278361726,
+   "shots_per_setting": 23.023440854805965,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale"
@@ -300,8 +374,8 @@
   {
    "true": "CC-KTM",
    "alternative": "DP-COLL",
-   "D_per_shot": 0.24794095027187188,
-   "shots_per_setting": 2.245442934251527,
+   "D_per_shot": 0.2479409491414952,
+   "shots_per_setting": 2.245442944488627,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "dp_convention"
@@ -309,9 +383,17 @@
   },
   {
    "true": "CC-KTM",
+   "alternative": "CSL-COLL",
+   "D_per_shot": 0.0,
+   "shots_per_setting": Infinity,
+   "verdict": "indistinguishable",
+   "nuisance_at_bounds": []
+  },
+  {
+   "true": "CC-KTM",
    "alternative": "NULL-NG",
-   "D_per_shot": 0.027283977782576612,
-   "shots_per_setting": 20.40528178611526,
+   "D_per_shot": 0.027283978914272394,
+   "shots_per_setting": 20.405280939736826,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -320,10 +402,20 @@
    ]
   },
   {
+   "true": "CC-KTM",
+   "alternative": "CG-QFT-AH",
+   "D_per_shot": 0.024181322783617232,
+   "shots_per_setting": 23.023440854805994,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale"
+   ]
+  },
+  {
    "true": "DP-COLL",
    "alternative": "QG-COH",
-   "D_per_shot": 0.5391530527406133,
-   "shots_per_setting": 1.0326144905784858,
+   "D_per_shot": 0.5391530418479772,
+   "shots_per_setting": 1.03261451144064,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -335,8 +427,8 @@
   {
    "true": "DP-COLL",
    "alternative": "QG-EFT1",
-   "D_per_shot": 0.5391530527406133,
-   "shots_per_setting": 1.0326144905784858,
+   "D_per_shot": 0.5391530418479772,
+   "shots_per_setting": 1.03261451144064,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -348,8 +440,8 @@
   {
    "true": "DP-COLL",
    "alternative": "SC-MF",
-   "D_per_shot": 0.6069587771525963,
-   "shots_per_setting": 0.9172571117784725,
+   "D_per_shot": 0.6069587718250893,
+   "shots_per_setting": 0.9172571198295854,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -361,8 +453,8 @@
   {
    "true": "DP-COLL",
    "alternative": "CC-KTM",
-   "D_per_shot": 0.12591848534572805,
-   "shots_per_setting": 4.421410036588182,
+   "D_per_shot": 0.12591848450888168,
+   "shots_per_setting": 4.421410065972597,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -374,9 +466,119 @@
   },
   {
    "true": "DP-COLL",
+   "alternative": "CSL-COLL",
+   "D_per_shot": 0.0,
+   "shots_per_setting": Infinity,
+   "verdict": "indistinguishable",
+   "nuisance_at_bounds": []
+  },
+  {
+   "true": "DP-COLL",
    "alternative": "NULL-NG",
-   "D_per_shot": 0.48227291817756246,
-   "shots_per_setting": 1.1544028990958297,
+   "D_per_shot": 0.4822729240828014,
+   "shots_per_setting": 1.154402884960628,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "DP-COLL",
+   "alternative": "CG-QFT-AH",
+   "D_per_shot": 0.6069587718250892,
+   "shots_per_setting": 0.9172571198295857,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "CSL-COLL",
+   "alternative": "QG-COH",
+   "D_per_shot": 0.5391530418479772,
+   "shots_per_setting": 1.03261451144064,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "CSL-COLL",
+   "alternative": "QG-EFT1",
+   "D_per_shot": 0.5391530418479772,
+   "shots_per_setting": 1.03261451144064,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "CSL-COLL",
+   "alternative": "SC-MF",
+   "D_per_shot": 0.6069587718250893,
+   "shots_per_setting": 0.9172571198295854,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "CSL-COLL",
+   "alternative": "CC-KTM",
+   "D_per_shot": 0.12591848450888168,
+   "shots_per_setting": 4.421410065972597,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B",
+    "kappa_cc"
+   ]
+  },
+  {
+   "true": "CSL-COLL",
+   "alternative": "DP-COLL",
+   "D_per_shot": 0.0,
+   "shots_per_setting": Infinity,
+   "verdict": "indistinguishable",
+   "nuisance_at_bounds": [
+    "dp_convention"
+   ]
+  },
+  {
+   "true": "CSL-COLL",
+   "alternative": "NULL-NG",
+   "D_per_shot": 0.4822729240828014,
+   "shots_per_setting": 1.154402884960628,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "CSL-COLL",
+   "alternative": "CG-QFT-AH",
+   "D_per_shot": 0.6069587718250892,
+   "shots_per_setting": 0.9172571198295857,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -388,8 +590,8 @@
   {
    "true": "NULL-NG",
    "alternative": "QG-COH",
-   "D_per_shot": 0.012261832979871363,
-   "shots_per_setting": 45.404080761294516,
+   "D_per_shot": 0.012261833002459248,
+   "shots_per_setting": 45.40408067765431,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "mass_scale",
@@ -400,8 +602,8 @@
   {
    "true": "NULL-NG",
    "alternative": "QG-EFT1",
-   "D_per_shot": 0.012261832979871363,
-   "shots_per_setting": 45.404080761294516,
+   "D_per_shot": 0.012261833002459248,
+   "shots_per_setting": 45.40408067765431,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "mass_scale",
@@ -412,8 +614,8 @@
   {
    "true": "NULL-NG",
    "alternative": "SC-MF",
-   "D_per_shot": 0.009606654532791971,
-   "shots_per_setting": 57.95329196019085,
+   "D_per_shot": 0.00960665448463063,
+   "shots_per_setting": 57.9532922507299,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "mass_scale",
@@ -424,8 +626,8 @@
   {
    "true": "NULL-NG",
    "alternative": "CC-KTM",
-   "D_per_shot": 0.024838579543224427,
-   "shots_per_setting": 22.41421470703437,
+   "D_per_shot": 0.024838580347490133,
+   "shots_per_setting": 22.414213981268887,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "env_decoherence_scale",
@@ -438,11 +640,107 @@
   {
    "true": "NULL-NG",
    "alternative": "DP-COLL",
-   "D_per_shot": 0.3666170505868514,
-   "shots_per_setting": 1.518579820574093,
+   "D_per_shot": 0.3666170518067238,
+   "shots_per_setting": 1.5185798155212082,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "dp_convention"
+   ]
+  },
+  {
+   "true": "NULL-NG",
+   "alternative": "CSL-COLL",
+   "D_per_shot": 0.012261833002459277,
+   "shots_per_setting": 45.40408067765421,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "NULL-NG",
+   "alternative": "CG-QFT-AH",
+   "D_per_shot": 0.009606654484630573,
+   "shots_per_setting": 57.95329225073024,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "CG-QFT-AH",
+   "alternative": "QG-COH",
+   "D_per_shot": 0.0029600032512372824,
+   "shots_per_setting": 188.08670384631083,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale"
+   ]
+  },
+  {
+   "true": "CG-QFT-AH",
+   "alternative": "QG-EFT1",
+   "D_per_shot": 0.0029600032512372824,
+   "shots_per_setting": 188.08670384631083,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale"
+   ]
+  },
+  {
+   "true": "CG-QFT-AH",
+   "alternative": "SC-MF",
+   "D_per_shot": 0.0,
+   "shots_per_setting": Infinity,
+   "verdict": "indistinguishable",
+   "nuisance_at_bounds": []
+  },
+  {
+   "true": "CG-QFT-AH",
+   "alternative": "CC-KTM",
+   "D_per_shot": 0.025791656461347415,
+   "shots_per_setting": 21.585944110799417,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "kappa_cc"
+   ]
+  },
+  {
+   "true": "CG-QFT-AH",
+   "alternative": "DP-COLL",
+   "D_per_shot": 0.38393450073358104,
+   "shots_per_setting": 1.4500839435784747,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "dp_convention"
+   ]
+  },
+  {
+   "true": "CG-QFT-AH",
+   "alternative": "CSL-COLL",
+   "D_per_shot": 0.002960003251237336,
+   "shots_per_setting": 188.08670384630742,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale"
+   ]
+  },
+  {
+   "true": "CG-QFT-AH",
+   "alternative": "NULL-NG",
+   "D_per_shot": 0.010321406811408017,
+   "shots_per_setting": 53.940055369606675,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "local_phase_A",
+    "local_phase_B"
    ]
   }
  ],
@@ -621,9 +919,9 @@
   "log10_total_time_s": 2.230474169677023,
   "total_time_s": 170.00988346786662,
   "witness_shots_per_setting": 50.0,
-  "predicted_witness": -1.1022224313265072,
+  "predicted_witness": -1.102222432400934,
   "delta_phi_grav": -1.1494298421907334,
-  "delta_phi_nongrav": -0.0476177527310392,
+  "delta_phi_nongrav": -0.0476177540866705,
   "decoherence_rate_A": 0.05721051306364796,
   "dominant_decoherence": "gas_collisions",
   "constraints": {
@@ -638,7 +936,7 @@
    },
    "nongravitational_phase_fraction": {
     "ok": "True",
-    "value": 0.04142728071187283,
+    "value": 0.04142728189126739,
     "allowed": 0.1
    }
   },
@@ -646,12 +944,12 @@
    {
     "true": "QG-COH",
     "alternative": "CC-KTM",
-    "D_per_shot": 0.0841390974527198,
+    "D_per_shot": 0.08413909740362803,
     "best_alt_nuisance": {
-     "env_decoherence_scale": 0.5000000000000091,
+     "env_decoherence_scale": 0.5000000000000208,
      "mass_scale": 0.99,
-     "local_phase_A": 0.011467404032810415,
-     "local_phase_B": -0.01146739560356428,
+     "local_phase_A": 0.011467399567654891,
+     "local_phase_B": -0.011467405092912705,
      "kappa_cc": 1.0
     },
     "nuisance_at_bounds": [
@@ -659,18 +957,18 @@
      "mass_scale",
      "kappa_cc"
     ],
-    "shots_per_setting": 6.616867446343012,
+    "shots_per_setting": 6.616867450203688,
     "verdict": "distinguishable"
    },
    {
     "true": "QG-COH",
     "alternative": "SC-MF",
-    "D_per_shot": 0.104997699503918,
+    "D_per_shot": 0.10499769954238847,
     "best_alt_nuisance": {
-     "env_decoherence_scale": 1.9999999999999956,
-     "mass_scale": 1.0099999999999987,
-     "local_phase_A": 0.04999999999999885,
-     "local_phase_B": -0.0499999999999998
+     "env_decoherence_scale": 1.9999999999999967,
+     "mass_scale": 1.0099999999999998,
+     "local_phase_A": 0.049999999999997755,
+     "local_phase_B": -0.04999999999999862
     },
     "nuisance_at_bounds": [
      "env_decoherence_scale",
@@ -678,32 +976,31 @@
      "local_phase_A",
      "local_phase_B"
     ],
-    "shots_per_setting": 5.302375742801957,
+    "shots_per_setting": 5.302375740859202,
     "verdict": "distinguishable"
    },
    {
     "true": "QG-COH",
     "alternative": "NULL-NG",
-    "D_per_shot": 0.5512439850752294,
+    "D_per_shot": 0.5512439846199562,
     "best_alt_nuisance": {
-     "env_decoherence_scale": 1.9999999999999938,
-     "mass_scale": 0.9905102011014917,
+     "env_decoherence_scale": 1.9999999999999967,
+     "mass_scale": 1.0086325687533415,
      "local_phase_A": 0.05,
-     "local_phase_B": -0.04999999999999999
+     "local_phase_B": -0.05
     },
     "nuisance_at_bounds": [
      "env_decoherence_scale",
-     "mass_scale",
      "local_phase_A",
      "local_phase_B"
     ],
-    "shots_per_setting": 1.0099652240624535,
+    "shots_per_setting": 1.0099652248965854,
     "verdict": "distinguishable"
    }
   ]
  },
  "optimised_dossier": {
-  "sha256": "462d88792ac2476fb83cc2e8368815ba2a9ffeeabbd70d6dc32424e1a739b753",
+  "sha256": "c47a45736236c5f4b8df78a0c4d8e9a00654b8eef379eb7f1bfaedd93c7518bd",
   "consistency": {
    "passed": false,
    "problems": [
@@ -766,6 +1063,18 @@
     "status": "CALCULATED_REQUIREMENT",
     "basis": "|\u0394\u03c6_Coulomb + induced dipole| \u2264 0.05 rad with equal charges on both masses; even a single elementary charge exceeds the budget, so both masses must be exactly neutral or electrostatically screened"
    },
+   "max_electric_dipole": {
+    "value": 1.7521843962481256e-28,
+    "unit": "C m",
+    "status": "CALCULATED_REQUIREMENT",
+    "basis": "worst-orientation dipole\u2013dipole |\u0394\u03c6| \u2264 0.05 rad (patch potentials or trapped charge create such dipoles; ~10 mV patches typically exceed this)"
+   },
+   "max_bias_field_during_interaction": {
+    "value": 0.00010745413177870286,
+    "unit": "T",
+    "status": "CALCULATED_REQUIREMENT",
+    "basis": "induced diamagnetic dipole\u2013dipole |\u0394\u03c6| \u2264 0.05 rad (worst field axis)"
+   },
    "min_distance_casimir_10pct": {
     "value": 0.00015694180904273291,
     "unit": "m",
@@ -808,5 +1117,5 @@
    }
   }
  },
- "runtime_s": 956.7
+ "runtime_s": 215.4
 }

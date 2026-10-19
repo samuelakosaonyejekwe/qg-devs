@@ -1,6 +1,6 @@
 # Flagship research results — gravity-mediated entanglement
 
-Generated 2026-10-19T12:40 UTC by `tools/flagship_study.py` · QG-DEVS 0.1.0 · code `0e35432ec83abbab…` · runtime 956.7 s. Full numbers: `docs/flagship_results.json`.
+Generated 2026-10-19T14:38 UTC by `tools/flagship_study.py` · QG-DEVS 0.2.0 · code `2f3a87320415ef9c…` · runtime 215.4 s. Full numbers: `docs/flagship_results.json`.
 
 > **Evidence status: computational predictions only.** Nothing below is a physical measurement. Synthetic data are labelled SYNTHETIC. Gates G4 (feasibility confirmed by an experimental team), G6 (physical data) and G7 (replication) are not passed.
 
@@ -14,6 +14,9 @@ m = 1e-14 kg, d = 0.00045 m, Δx = 0.00025 m, t = 2.5 s, linear geometry: **Δφ
 * Casimir–Polder entangling phase: -0.0183 rad (5.84 % of the gravitational phase). Gravity dominates Casimir by 10× only beyond 157 µm.
 * Residual charge: the largest tolerable equal charge is **0 e**, so even one elementary charge per mass would swamp the gravitational phase; exact neutrality or screening is mandatory.
 * Diósi–Penrose collapse (uniform-sphere smearing): Γ_DP = **86.1 s⁻¹**, leaving coherence 3.25e-94 after t. If DP collapse is real at this smearing scale, the benchmark experiment cannot show entanglement — which makes the experiment a sharp test of DP.
+* CSL collapse with the standard GRW parameters (λ = 1e-16 s⁻¹, r_C = 100 nm): Γ_CSL = **4.59e+07 s⁻¹**, so entanglement could only appear if λ is many orders of magnitude below the GRW value — the experiment is a sharp CSL test.
+* Electric dipoles (from surface patch potentials or trapped charge) must stay below **3.33e-29 C·m** per mass, and the magnetic field during the interaction below **0.2 mT** (induced diamagnetic dipoles).
+* Stern–Gerlach loop closure: the gradient pulses must be accurate to **4.64e-09** (relative) to keep 90 % recombination visibility (assumed 100 Hz trap, 10 thermal quanta).
 * One-loop quantum-gravity EFT correction: relative size 1.68e-63: unobservable; QG-COH and QG-EFT1 are reported as observationally indistinguishable.
 * Closed-loop Stern–Gerlach realisation: time-integrated Δφ = -0.3577 rad and a required magnetic gradient of **2.15e+06 T/m**.
 
@@ -27,6 +30,8 @@ m = 1e-14 kg, d = 0.00045 m, Δx = 0.00025 m, t = 2.5 s, linear geometry: **Δφ
 | CC-KTM | 0 | 0.03972 | 0.817 |
 | DP-COLL | 0 | 1 | 3.103e-94 |
 | NULL-NG | 0 | 0.1119 | 0.9692 |
+| CSL-COLL | 0 | 1 | 0 |
+| CG-QFT-AH | 0 | 0.04285 | 0.9692 |
 
 Robust discrimination (the alternative may adjust all admissible nuisance parameters; shots per setting for an expected Bayes factor of 150):
 
@@ -36,12 +41,19 @@ Robust discrimination (the alternative may adjust all admissible nuisance parame
 | QG-COH | SC-MF | 0.00339 | 164 | distinguishable |
 | QG-COH | CC-KTM | 0.0195 | 28.6 | distinguishable |
 | QG-COH | DP-COLL | 0.372 | 1.5 | distinguishable |
+| QG-COH | CSL-COLL | 1.03e-17 | inf | indistinguishable |
 | QG-COH | NULL-NG | 0.0134 | 41.5 | distinguishable |
+| QG-COH | CG-QFT-AH | 0.00339 | 164 | distinguishable |
 | CC-KTM | QG-COH | 0.0166 | 33.5 | distinguishable |
 | CC-KTM | QG-EFT1 | 0.0166 | 33.5 | distinguishable |
 | CC-KTM | SC-MF | 0.0242 | 23 | distinguishable |
 | CC-KTM | DP-COLL | 0.248 | 2.25 | distinguishable |
+| CC-KTM | CSL-COLL | 0 | inf | indistinguishable |
 | CC-KTM | NULL-NG | 0.0273 | 20.4 | distinguishable |
+| CC-KTM | CG-QFT-AH | 0.0242 | 23 | distinguishable |
+
+
+*Reading the CSL rows:* CSL-COLL contains QG-COH as its λ → 0 limit (and with a suitable λ it can mimic the extra dephasing of CC-KTM), so it is *nested* rather than excludable: an observed entanglement witness bounds the collapse rate to λ ≲ 1e-25 s⁻¹ at r_C = 100 nm instead of falsifying CSL outright. 'Indistinguishable' here is the correct verdict for nested models, not a failure of the experiment.
 
 ## 4. Closing the loop on synthetic data
 
@@ -61,4 +73,4 @@ Overall technology readiness: TRL 1. Conceptual design only. The required parame
 
 ## 7. Honest conclusion
 
-The platform reproduces the established BMV predictions, quantifies every competing explanation it implements, and finds designs where implemented classical, semiclassical and hybrid models are statistically distinguishable from the coherent quantum model *in simulation*. It also shows (i) that distinguishing a classical measurement–feedback channel requires an independent decoherence calibration tighter than s*, (ii) that Diósi–Penrose collapse would erase the signal at these parameters, and (iii) that the required masses, splittings, gradients and charge control lie far beyond demonstrated capability. No discovery about the nature of gravity is claimed. The classical-gravity + quantum-matter mechanism of Aziz & Howl (2025) is registered but not implemented, so a positive witness could not yet be said to exclude it.
+The platform reproduces the established BMV predictions, quantifies every competing explanation it implements, and finds designs where implemented classical, semiclassical and hybrid models are statistically distinguishable from the coherent quantum model *in simulation*. It also shows (i) that distinguishing a classical measurement–feedback channel requires an independent decoherence calibration tighter than s*, (ii) that Diósi–Penrose collapse would erase the signal at these parameters, and (iii) that the required masses, splittings, gradients and charge control lie far beyond demonstrated capability. No discovery about the nature of gravity is claimed. The classical-gravity + quantum-matter mechanism of Aziz & Howl (2025) is now implemented (docs/AZIZ_HOWL_MODEL.md): at BMV parameters it predicts entanglement ~29 orders of magnitude weaker than QG-COH, with different mass, time and constituent-mass scaling.

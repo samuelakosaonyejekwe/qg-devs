@@ -1,45 +1,48 @@
 # Verification & validation report
 
-Generated 2026-10-19 13:50 UTC · QG-DEVS 0.2.0 · code SHA-256 `04bcd411a7ac33d6…` · Python 3.12.3 · Linux-6.18.33.1-microsoft-standard-WSL2-x86_64-with-glibc2.39
+Generated 2026-10-19 14:42 UTC · QG-DEVS 0.2.0 · code SHA-256 `2f3a87320415ef9c…` · Python 3.12.3 · Linux-6.18.33.1-microsoft-standard-WSL2-x86_64-with-glibc2.39
 
-**32 / 32 benchmarks passed, 0 failed.** (slow statistical benchmarks excluded; run with --slow)
+**35 / 35 benchmarks passed, 0 failed.**
 
 Tolerances were fixed in advance with the justification shown (gate G3). A passing verification benchmark shows the software solves its equations correctly; it is **not** evidence that any physical theory is correct.
 
 | Result | ID | Suite | Kind | Value | Tolerance | Justification | Reference | s |
 |---|---|---|---|---|---|---|---|---|
-| PASS | `S1-unitarity` | 1 | property | 1.554e-15 | ≤ 1.0e-12 | eigendecomposition is backward stable; error ~ d·ε_machine | exact property ‖U†U − I‖ = 0 | 0.004 |
-| PASS | `S1-rabi` | 1 | analytic | 4.441e-16 | ≤ 1.0e-12 | exact propagation; round-off only | Rabi, Phys. Rev. 51, 652 (1937) | 0.0007 |
-| PASS | `S1-schrodinger-rk-vs-exact` | 1 | independent_algorithm | 6.839e-11 | ≤ 1.0e-08 | DOP853 with rtol 1e-10 over ~20 periods | independent algorithms | 0.0152 |
-| PASS | `S1-lindblad-expm-vs-rk` | 1 | independent_algorithm | 3.648e-11 | ≤ 1.0e-08 | both methods converged to ≪1e-9 | independent algorithms | 0.0252 |
-| PASS | `S1-lindblad-physicality` | 1 | property | 4.441e-16 | ≤ 1.0e-10 | CPTP generator; numerical drift bounded by solver tolerance | Lindblad, CMP 48, 119 (1976) | 0.0303 |
-| PASS | `S1-amplitude-damping` | 1 | analytic | 1.388e-16 | ≤ 1.0e-09 | Krylov expm accuracy | textbook (Breuer & Petruccione 2002) | 0.0082 |
-| PASS | `S1-rk4-order` | 1 | convergence | 1.072e-03 | ≤ 1.5e-01 | classical RK4 has order 4; ±0.15 allows pre-asymptotic effects | Butcher (2016) | 0.0286 |
-| PASS | `S1-tomography-exact` | 1 | analytic | 4.700e-10 | ≤ 1.0e-06 | counts scaled to 1e9 per setting; rounding only | Pauli-basis reconstruction | 0.0029 |
-| PASS | `S1-mle-tomography` | 1 | statistical | 9.999e-01 | ≥ 9.9e-01 | expected infidelity ~1e-4 at these counts; 0.995 is a conservative floor | Hradil, PRA 55, R1561 (1997) | 0.0718 |
+| PASS | `S1-unitarity` | 1 | property | 1.554e-15 | ≤ 1.0e-12 | eigendecomposition is backward stable; error ~ d·ε_machine | exact property ‖U†U − I‖ = 0 | 0.0011 |
+| PASS | `S1-rabi` | 1 | analytic | 4.441e-16 | ≤ 1.0e-12 | exact propagation; round-off only | Rabi, Phys. Rev. 51, 652 (1937) | 0.002 |
+| PASS | `S1-schrodinger-rk-vs-exact` | 1 | independent_algorithm | 6.839e-11 | ≤ 1.0e-08 | DOP853 with rtol 1e-10 over ~20 periods | independent algorithms | 0.0448 |
+| PASS | `S1-lindblad-expm-vs-rk` | 1 | independent_algorithm | 3.648e-11 | ≤ 1.0e-08 | both methods converged to ≪1e-9 | independent algorithms | 0.2188 |
+| PASS | `S1-lindblad-physicality` | 1 | property | 4.441e-16 | ≤ 1.0e-10 | CPTP generator; numerical drift bounded by solver tolerance | Lindblad, CMP 48, 119 (1976) | 0.3825 |
+| PASS | `S1-amplitude-damping` | 1 | analytic | 1.388e-16 | ≤ 1.0e-09 | Krylov expm accuracy | textbook (Breuer & Petruccione 2002) | 0.1498 |
+| PASS | `S1-rk4-order` | 1 | convergence | 1.072e-03 | ≤ 1.5e-01 | classical RK4 has order 4; ±0.15 allows pre-asymptotic effects | Butcher (2016) | 0.2719 |
+| PASS | `S1-mcwf-vs-lindblad` | 1 | statistical | 7.737e-01 | ≤ 3.0e+00 | Monte-Carlo error ∝ 1/√N; compare in units of σ | Dalibard, Castin & Mølmer, PRL 68, 580 (1992) | 16.6815 |
+| PASS | `S1-tomography-exact` | 1 | analytic | 4.700e-10 | ≤ 1.0e-06 | counts scaled to 1e9 per setting; rounding only | Pauli-basis reconstruction | 0.0032 |
+| PASS | `S1-mle-tomography` | 1 | statistical | 9.999e-01 | ≥ 9.9e-01 | expected infidelity ~1e-4 at these counts; 0.995 is a conservative floor | Hradil, PRA 55, R1561 (1997) | 0.1414 |
 | PASS | `S2-shell-theorem` | 2 | analytic | 0.000e+00 | ≤ 1.0e-12 | exact branch in implementation; relative error | Newton's shell theorem | 0.0 |
-| PASS | `S2-self-energy` | 2 | analytic | 2.220e-16 | ≤ 1.0e-10 | adaptive quadrature with epsrel 1e-12 | classical result | 0.0001 |
-| PASS | `S2-overlap-continuity` | 2 | property | 5.000e-11 | ≤ 1.0e-08 | quadrature branch must join analytic branch | continuity | 0.0001 |
-| PASS | `S2-kepler-energy` | 2 | property | 2.435e-11 | ≤ 1.0e-05 | symplectic O(dt²) bounded energy error at 2000 steps/orbit | Hairer, Lubich & Wanner (2006) | 0.5926 |
-| PASS | `S2-verlet-order` | 2 | convergence | 1.703e-04 | ≤ 1.5e-01 | second-order method | Verlet (1967) | 0.1292 |
-| PASS | `S2-mercury-precession` | 2 | analytic | 2.145e-07 | ≤ 1.0e-05 | relative; higher-order GR terms ~ GM/(c²a) ≈ 3e-8 plus solver tol | Einstein (1915) | 0.1799 |
-| PASS | `S2-light-deflection` | 2 | analytic | 6.252e-06 | ≤ 1.0e-04 | relative; second-order term (15π/16)(GM/c²b) ≈ 6e-6 | Einstein (1916) | 0.6159 |
-| PASS | `S4-concurrence-formula` | 4 | analytic | 1.443e-15 | ≤ 1.0e-12 | SVD form of Wootters' formula is backward stable; the original eigenvalue form lost √ε≈1e-8 on rank-deficient states (found by the independent C++ comparison; implementation fixed, tolerance restored) | Wootters, PRL 80, 2245 (1998) | 0.013 |
-| PASS | `S4-analytic-vs-lindblad` | 4 | independent_algorithm | 5.722e-17 | ≤ 1.0e-09 | Krylov expm; dephasing commutes with H | independent algorithms | 0.0059 |
+| PASS | `S2-self-energy` | 2 | analytic | 2.220e-16 | ≤ 1.0e-10 | adaptive quadrature with epsrel 1e-12 | classical result | 0.0002 |
+| PASS | `S2-overlap-continuity` | 2 | property | 5.000e-11 | ≤ 1.0e-08 | quadrature branch must join analytic branch | continuity | 0.0002 |
+| PASS | `S2-kepler-energy` | 2 | property | 2.435e-11 | ≤ 1.0e-05 | symplectic O(dt²) bounded energy error at 2000 steps/orbit | Hairer, Lubich & Wanner (2006) | 0.6378 |
+| PASS | `S2-verlet-order` | 2 | convergence | 1.703e-04 | ≤ 1.5e-01 | second-order method | Verlet (1967) | 0.0975 |
+| PASS | `S2-mercury-precession` | 2 | analytic | 2.145e-07 | ≤ 1.0e-05 | relative; higher-order GR terms ~ GM/(c²a) ≈ 3e-8 plus solver tol | Einstein (1915) | 0.1219 |
+| PASS | `S2-light-deflection` | 2 | analytic | 6.252e-06 | ≤ 1.0e-04 | relative; second-order term (15π/16)(GM/c²b) ≈ 6e-6 | Einstein (1916) | 0.3933 |
+| PASS | `S4-concurrence-formula` | 4 | analytic | 1.443e-15 | ≤ 1.0e-12 | SVD form of Wootters' formula is backward stable; the original eigenvalue form lost √ε≈1e-8 on rank-deficient states (found by the independent C++ comparison; implementation fixed, tolerance restored) | Wootters, PRL 80, 2245 (1998) | 0.0085 |
+| PASS | `S4-analytic-vs-lindblad` | 4 | independent_algorithm | 5.722e-17 | ≤ 1.0e-09 | Krylov expm; dephasing commutes with H | independent algorithms | 0.0062 |
 | PASS | `S4-parallel-closed-form` | 4 | analytic | 6.661e-16 | ≤ 1.0e-12 | relative; identical formula evaluated two ways | Bose et al. 2017 geometry | 0.0001 |
-| PASS | `S4-witness-product-states` | 4 | property | 2.020e-02 | ≥ -1.0e-12 | witness property (product bound a·b' ≤ 1) | Chevalier, Paige & Kim, PRA 102, 022428 (2020) | 1.5602 |
-| PASS | `S4-dephasing-threshold` | 4 | property | 1.415e-16 | ≤ 1.0e-12 | Γ* = |dΔφ/dt|/2 threshold; negativity must vanish at Γ* | derived in this platform; cf. Kafri, Taylor & Milburn 2014 | 0.4819 |
-| PASS | `S5-free-spreading` | 5 | analytic | 3.032e-13 | ≤ 1.0e-08 | relative; free evolution is exact in Fourier space | textbook | 0.0525 |
-| PASS | `S5-ehrenfest-gravity` | 5 | analytic | 6.406e-13 | ≤ 1.0e-06 | relative; Ehrenfest exact for linear potential | Ehrenfest (1927) | 0.0641 |
+| PASS | `S4-witness-product-states` | 4 | property | 2.020e-02 | ≥ -1.0e-12 | witness property (product bound a·b' ≤ 1) | Chevalier, Paige & Kim, PRA 102, 022428 (2020) | 2.2581 |
+| PASS | `S4-dephasing-threshold` | 4 | property | 1.415e-16 | ≤ 1.0e-12 | Γ* = |dΔφ/dt|/2 threshold; negativity must vanish at Γ* | derived in this platform; cf. Kafri, Taylor & Milburn 2014 | 1.063 |
+| PASS | `S5-free-spreading` | 5 | analytic | 3.032e-13 | ≤ 1.0e-08 | relative; free evolution is exact in Fourier space | textbook | 0.0717 |
+| PASS | `S5-ehrenfest-gravity` | 5 | analytic | 6.406e-13 | ≤ 1.0e-06 | relative; Ehrenfest exact for linear potential | Ehrenfest (1927) | 0.0635 |
 | PASS | `S5-kasevich-chu` | 5 | independent_algorithm | 2.220e-16 | ≤ 1.0e-10 | relative | Kasevich & Chu, PRL 67, 181 (1991) | 0.0 |
-| PASS | `S6-tmsv-log-negativity` | 6 | analytic | 0.000e+00 | ≤ 1.0e-10 | closed form | Vidal & Werner (2002); Adesso & Illuminati (2007) | 0.0001 |
-| PASS | `S6-vacuum-stationary` | 6 | limiting_case | 0.000e+00 | ≤ 1.0e-12 | no coupling ⇒ E_N = 0 exactly | limiting case | 0.0028 |
+| PASS | `S5-recombination-coherent-overlap` | 5 | analytic | 0.000e+00 | ≤ 1.0e-12 | closed form exp(−|β|²/2) evaluated two ways | Englert, Schwinger & Scully, Found. Phys. 18, 1045 (1988) | 0.0 |
+| PASS | `S6-tmsv-log-negativity` | 6 | analytic | 0.000e+00 | ≤ 1.0e-10 | closed form | Vidal & Werner (2002); Adesso & Illuminati (2007) | 0.0002 |
+| PASS | `S6-vacuum-stationary` | 6 | limiting_case | 0.000e+00 | ≤ 1.0e-12 | no coupling ⇒ E_N = 0 exactly | limiting case | 0.0034 |
 | PASS | `S7-dp-closed-form` | 7 | analytic | 2.220e-16 | ≤ 1.0e-10 | relative; quadrature vs closed form | Diósi 1989; Penrose 1996 | 0.0 |
+| PASS | `S7-csl-point-limit` | 7 | limiting_case | 4.761e-07 | ≤ 1.0e-05 | relative; residual form-factor correction is O((R/r_C)²) = 1e-6 | Bassi et al., RMP 85, 471 (2013) | 0.0007 |
 | PASS | `S8-casimir-scaling` | 8 | property | 0.000e+00 | ≤ 1.0e-12 | exact power law | Casimir & Polder (1948) | 0.0 |
-| PASS | `S12-known-indistinguishable` | 12 | property | 0.000e+00 | ≤ 1.0e-12 | one-loop correction ~1e-60 relative ⇒ D ≈ 0 | identifiability test with known answer | 0.0834 |
-| PASS | `S12-known-distinguishable` | 12 | property | 3.392e-03 | ≥ 1.0e-04 | entanglement vs separable predictions differ at O(Δφ²) | identifiability test with known answer | 0.4165 |
-| PASS | `S14-blind-law-recovery` | 14 | property | 0.000e+00 | ≤ 0.0e+00 | exponents must rationalise exactly to the known law | Bose et al. 2017 | 4.2818 |
-| PASS | `S18-ledger-tamper` | 18 | property | 0.000e+00 | ≤ 0.0e+00 | hash chain must break on any edit | hash-chain integrity | 0.0056 |
+| PASS | `S12-known-indistinguishable` | 12 | property | 0.000e+00 | ≤ 1.0e-12 | one-loop correction ~1e-60 relative ⇒ D ≈ 0 | identifiability test with known answer | 0.0881 |
+| PASS | `S12-known-distinguishable` | 12 | property | 3.392e-03 | ≥ 1.0e-04 | entanglement vs separable predictions differ at O(Δφ²) | identifiability test with known answer | 0.5211 |
+| PASS | `S14-blind-law-recovery` | 14 | property | 0.000e+00 | ≤ 0.0e+00 | exponents must rationalise exactly to the known law | Bose et al. 2017 | 4.6939 |
+| PASS | `S18-ledger-tamper` | 18 | property | 0.000e+00 | ≤ 0.0e+00 | hash chain must break on any edit | hash-chain integrity | 0.0066 |
 
 ## Lean 4 formal verification
 
