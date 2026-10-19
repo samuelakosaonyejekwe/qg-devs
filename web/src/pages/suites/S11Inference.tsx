@@ -6,7 +6,10 @@ import { Card, Out, ProvBadge, SyntheticBanner, EvidenceBanner, ErrorBox, DataTa
 import { NumberField, SelectField, useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { JobRunner } from '../../components/JobRunner';
-import { BarChart } from '../../plot/Chart';
+import { BarChart, LinePlot } from '../../plot/Chart';
+import { View3D } from '../../components/View3D';
+import { usePlayer, PlayerControls } from '../../components/Player';
+import { Seg } from '../../components/ui';
 import { useStore, scenario } from '../../lib/store';
 import { apiPost } from '../../lib/api';
 import { fmtNum, shortHash } from '../../lib/format';
@@ -133,6 +136,7 @@ function Result({ res }: { res: any }) {
             fmtNum(post.effective_sample_size?.[n], 4), fi?.cramer_rao_std ? fmtNum(fi.cramer_rao_std[n], 3) : '—', <span class="small">{PARAM_INFO[n] ?? ''}</span>]; })} />
         <p class="small muted">Cramér–Rao σ is the Fisher-information lower bound on the standard deviation at the posterior mean for the given shots per setting; a posterior std far above it suggests prior truncation or non-Gaussianity.</p>
       </Card>
+      {samples.length > 1 && names.includes('lambda') && names.includes('decay') && names.includes('beta_err') && <ChainView names={names} samples={samples} summary={post.summary} />}
       <div class="grid-2">{names.map((n, k) => <Hist name={n} xs={samples.map((r) => r[k])} s={post.summary[n]} />)}</div>
       {fi && (
         <Card title="Fisher information">
@@ -153,6 +157,75 @@ function Result({ res }: { res: any }) {
           <Json data={{ ...res, posterior: { ...post, samples: `[${samples.length} samples omitted]` } }} />
         </Card>
       </Level>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------- animated chain
+/**
+ * The server's MCMC chain (post burn-in, thinned to ≤ 1000 samples as returned) replayed in chain order:
+ * a 3-D scatter of (λ, Γt, β_err) growing sample by sample with the most recent steps highlighted, and
+ * synchronised 2-D trace plots.
+ */
+function ChainView({ names, samples, summary }: { names: string[]; samples: number[][]; summary: Record<string, any> }) {
+  const iL = names.indexOf('lambda'), iD = names.indexOf('decay'), iB = names.indexOf('beta_err');
+  const n = samples.length;
+  const p = usePlayer(n, 60);
+  const [view, setView] = useState<'3d' | '2d'>('3d');
+  const shown = Math.max(1, Math.min(n, Math.floor(p.pos) + 1));
+  const range = (k: number, extra: number[] = []) => {
+    const xs = samples.map((r) => r[k]).concat(extra);
+    const lo = Math.min(...xs), hi = Math.max(...xs), pad = (hi - lo) * 0.08 || 0.05;
+    return [lo - pad, hi + pad] as [number, number];
+  };
+  const [l0, l1] = range(iL), [d0, d1] = range(iD), [b0, b1] = range(iB);
+  const pts = useMemo(() => samples.map((r) => [r[iL], r[iD], r[iB]] as [number, number, number]), [samples]);
+  const spec = useMemo(() => {
+    const trailStart = Math.max(0, shown - 25);
+    const refs: [number, number, number][] = [];
+    const notes: { at: [number, number, number]; text: string; color?: string }[] = [];
+    for (const [lam, txt, col] of [[1, 'λ = 1 (QG-COH)', '#0072B2'], [0, 'λ = 0 (no coupling)', '#009E73']] as const) {
+      if (lam >= l0 && lam <= l1) { refs.push([lam, d0, b0]); notes.push({ at: [lam, d0, b0 + (b1 - b0) * 0.08], text: txt, color: col }); }
+    }
+    return {
+      x: { label: 'λ coupling scale', unit: '1', min: l0, max: l1 }, y: { label: 'decay Γt', unit: '1', min: d0, max: d1 }, z: { label: 'β_err', unit: 'rad', min: b0, max: b1 },
+      points: [
+        { name: 'chain', pts: pts.slice(0, shown), color: '#56B4E9', size: 0.012 },
+        { name: 'recent steps', pts: pts.slice(trailStart, shown), color: '#D55E00', size: 0.018, line: true, lineWidth: 2, highlightLast: true },
+        ...(refs.length ? [{ name: 'reference', pts: refs, color: '#009E73', size: 0.03 }] : []),
+      ],
+      notes,
+    };
+  }, [shown, pts]);
+  const idx = samples.map((_, i) => i);
+  const outside = [0, 1].filter((lam) => lam < l0 || lam > l1);
+  return (
+    <Card title="MCMC chain replay" actions={<ProvBadge kind="COMPUTED" />}>
+      <p class="small muted">Replays the server's adaptive-Metropolis chain in sample order ({n} samples after burn-in, thinned by the server as returned — not every step is shown). Points are actual chain samples; nothing is interpolated.{outside.length ? ` λ = ${outside.join(' and ')} lies outside the sampled range and is not drawn.` : ''}</p>
+      <Seg label="View" value={view} onChange={setView} options={[{ v: '3d', label: '3-D posterior scatter' }, { v: '2d', label: '2-D traces' }]} />
+      {view === '3d' && (
+        <View3D kind="plot3d" opts={spec} name="mcmc-chain" title={`Posterior samples 1–${shown} of ${n}`} badge="COMPUTED" playing={p.playing}
+          label="Three-dimensional scatter of MCMC samples of coupling scale, decay and local phase error"
+          legend={[{ label: 'chain samples', color: '#56B4E9' }, { label: 'last 25 steps', color: '#D55E00' }, { label: 'λ reference (on floor edge)', color: '#009E73' }]}
+          onRecordStart={() => { p.setPos(0); p.setPlaying(true); }}
+          frameData={() => ({ samples_shown: shown, names: ['lambda', 'decay', 'beta_err'], last: pts[shown - 1], summary })}
+          fallback={<Traces idx={idx} samples={samples} iL={iL} iD={iD} iB={iB} pos={p.pos} />} />
+      )}
+      <PlayerControls p={p} n={n} label="Chain" />
+      {view === '2d' && <Traces idx={idx} samples={samples} iL={iL} iD={iD} iB={iB} pos={p.pos} />}
+    </Card>
+  );
+}
+
+function Traces({ idx, samples, iL, iD, iB, pos }: { idx: number[]; samples: number[][]; iL: number; iD: number; iB: number; pos: number }) {
+  return (
+    <div class="grid-3">
+      <LinePlot name="trace-lambda" title="λ trace" desc="Coupling scale versus sample index" xLabel="Sample" yLabel="λ" cursorX={pos} hlines={[{ y: 1, label: 'λ = 1', color: '#0072B2' }]}
+        series={[{ name: 'λ', x: idx, y: samples.map((r) => r[iL]), color: '#0072B2', width: 1.2 }]} />
+      <LinePlot name="trace-decay" title="Γt trace" desc="Decay exponent versus sample index" xLabel="Sample" yLabel="Γt" cursorX={pos}
+        series={[{ name: 'Γt', x: idx, y: samples.map((r) => r[iD]), color: '#E69F00', width: 1.2 }]} />
+      <LinePlot name="trace-beta" title="β_err trace" desc="Local phase error on A versus sample index" xLabel="Sample" yLabel="β_err" yUnit="rad" cursorX={pos}
+        series={[{ name: 'β_err', x: idx, y: samples.map((r) => r[iB]), color: '#009E73', width: 1.2 }]} />
     </div>
   );
 }

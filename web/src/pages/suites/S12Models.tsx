@@ -7,6 +7,8 @@ import { ScenarioForm } from '../../components/ScenarioForm';
 import { useValidity } from '../../components/fields';
 import { JobRunner } from '../../components/JobRunner';
 import { BarChart, HeatMap } from '../../plot/Chart';
+import { View3D } from '../../components/View3D';
+import { useMemo } from 'preact/hooks';
 import { apiPost, useApiGet, num } from '../../lib/api';
 import { useStore, scenario, settings, atLeast } from '../../lib/store';
 import { fmtNum } from '../../lib/format';
@@ -96,6 +98,9 @@ function Predictions() {
               items={p.map((r) => ({ label: `${r.id} (${r.witness_cpk < 0 ? '−' : '+'})`, value: Math.abs(r.witness_cpk), color: hypStyle(r.id).color }))} />
             <p class="small muted">Bar length is |⟨W⟩| on a logarithmic axis; the sign (in the label) decides whether entanglement is certified.</p>
           </Card>
+          <Card title="Predictions in 3-D (hypothesis × observable)" actions={<ProvBadge kind="COMPUTED" />}>
+            <Predictions3D p={p} />
+          </Card>
           <Card title="Predicted Pauli correlators (protocol frame)" level="expert">
             <DataTable head={['Setting', ...p.map((r) => r.id)]} numeric={p.map((_, i) => i + 1)}
               rows={Object.keys(p[0]?.correlators ?? {}).map((s) => [<code>{s}</code>, ...p.map((r) => fmtNum(r.correlators[s], 6))])} />
@@ -109,6 +114,51 @@ function Predictions() {
 interface Pair { true: string; alternative: string; D_per_shot: number; best_alt_nuisance: Record<string, number>; nuisance_at_bounds: string[]; shots_per_setting: number | string; verdict: string }
 interface DiscResult { hypotheses: string[]; settings: string[]; ln_bayes_target: number; max_feasible_shots: number; pairs: Pair[] }
 
+/** Observables shown as bars; every value comes from POST /api/falsification/predictions. */
+const OBS: { key: keyof ModelPrediction; label: string }[] = [
+  { key: 'negativity', label: 'Negativity' }, { key: 'concurrence', label: 'Concurrence' }, { key: 'witness_cpk', label: 'CPK witness' }, { key: 'coherence_A', label: 'Coherence A' },
+];
+function Predictions3D({ p }: { p: ModelPrediction[] }) {
+  const ids = p.map((r) => r.id);
+  const opts = useMemo(() => ({
+    x: { label: 'Hypothesis', cats: ids }, y: { label: 'Observable', cats: OBS.map((o) => o.label) },
+    z: { label: 'Predicted value', unit: '1', min: Math.min(0, ...p.map((r) => r.witness_cpk)), max: Math.max(1, ...p.map((r) => r.coherence_A)) },
+    bars: p.flatMap((r, i) => OBS.map((o, j) => ({ xi: i, yi: j, h: r[o.key] as number, color: hypStyle(r.id).color }))),
+  }), [p]);
+  return (
+    <>
+      <View3D kind="plot3d" name="predictions-3d" title="Predicted observables per hypothesis" badge="COMPUTED" opts={opts}
+        legend={ids.map((id) => ({ label: id, color: hypStyle(id).color }))} frameData={() => p.map((r) => ({ id: r.id, ...Object.fromEntries(OBS.map((o) => [o.key, r[o.key]])) }))}
+        label="Bars: predicted negativity, concurrence, CPK witness and single-mass coherence for each hypothesis" fallback={<p class="small muted">See the table above.</p>} />
+      <p class="small muted">Bar heights are the server's predictions (dimensionless). Negative witness bars point below zero: those hypotheses predict certifiable entanglement.</p>
+    </>
+  );
+}
+
+function Disc3D({ r, z }: { r: DiscResult; z: (number | null)[][] }) {
+  const ids = r.hypotheses;
+  const fin = z.flat().filter((v): v is number => v != null && v > 0).map((v) => Math.log10(v));
+  const top = fin.length ? Math.max(...fin) : 1;
+  const cap = top + 1; // indistinguishable pairs drawn as capped ghost bars above every finite value
+  const opts = useMemo(() => ({
+    x: { label: 'True hypothesis', cats: ids }, y: { label: 'Alternative', cats: ids },
+    z: { label: 'log10 shots per setting', unit: '1', min: 0, max: Math.ceil(cap) },
+    bars: ids.flatMap((t, i) => ids.map((a, j) => {
+      if (i === j) return null;
+      const v = z[i][j];
+      return v == null
+        ? { xi: i, yi: j, h: cap, color: '#9aa0a6', label: 'indistinguishable (∞)' }
+        : { xi: i, yi: j, h: Math.log10(Math.max(v, 1)), color: hypStyle(t).color };
+    }).filter((b): b is NonNullable<typeof b> => b != null)),
+  }), [r]);
+  return (
+    <View3D kind="plot3d" name="discrimination-3d" title="Shots per setting to discriminate (3-D)" badge="COMPUTED" opts={opts}
+      legend={[...ids.map((id) => ({ label: `true = ${id}`, color: hypStyle(id).color })), { label: 'indistinguishable (∞, capped)', color: '#9aa0a6' }]}
+      frameData={() => r.pairs} label="Bar height is log10 of shots per setting; grey capped bars mark pairs that no number of shots can distinguish"
+      fallback={<p class="small muted">The 2-D heat map above shows the same matrix.</p>} />
+  );
+}
+
 function DiscMatrix({ r }: { r: DiscResult }) {
   const ids = r.hypotheses;
   const look = (t: string, a: string) => r.pairs.find((p) => p.true === t && p.alternative === a);
@@ -121,6 +171,7 @@ function DiscMatrix({ r }: { r: DiscResult }) {
         nullLabel="indistinguishable / diagonal"
         annotate={(v, i, j) => { const yi = ids.length - 1 - i; if (yi === j) return '—'; return v == null ? 'indistinguishable' : fmtNum(v, 2); }}
         cellLabel={(i, j, v) => { const t = ids[ids.length - 1 - i], a = ids[j]; if (t === a) return `${t} vs itself`; const p = look(t, a); return `true ${t} vs alternative ${a}: ${v == null ? 'indistinguishable (D = 0 after nuisance adjustment)' : `${fmtNum(v, 4)} shots/setting`}${p ? ` — ${p.verdict}` : ''}`; }} />
+      <Disc3D r={r} z={z} />
       <DataTable head={['True', 'Alternative', 'D per shot (nats)', 'Shots / setting', 'Verdict', 'Nuisance at bounds', 'Best alternative nuisance']} numeric={[2, 3]}
         rows={r.pairs.map((p) => {
           const n = num(p.shots_per_setting);

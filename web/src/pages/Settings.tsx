@@ -1,3 +1,4 @@
+import { resetAllSavedInputs } from '../lib/resetAll';
 /** Settings: detail level, theme, API endpoint and token, opt-in browser compute, motion and local data. */
 import { useState } from 'preact/hooks';
 import { useStore, settings, applyTheme, type Mode, type Theme, type Settings as S } from '../lib/store';
@@ -78,6 +79,13 @@ function DataSection() {
       <div class="row" style={{ marginTop: '10px' }}>
         <Btn onClick={() => { const { apiToken: _t, ...rest } = settings.get(); downloadJSON(rest, 'qgdevs-settings.json'); }}>Export settings</Btn>
         <label class="btn">Import settings<input type="file" accept="application/json,.json" class="sr-only" onChange={(e: any) => { const f = e.currentTarget.files?.[0]; if (f) importSettings(f); }} /></label>
+      </div>
+      <div class="row" style={{ marginTop: '10px' }}>
+        <Btn kind="danger" data-reset-all onClick={() => {
+          if (!confirm('Reset all saved inputs? The shared design/environment returns to the reference defaults and remembered job/preregistration/dataset bindings are forgotten. Preferences (theme, detail level, API settings) and saved projects are kept.')) return;
+          const n = resetAllSavedInputs();
+          setMsg(`All saved inputs reset (${n} remembered binding(s) cleared; shared scenario restored to defaults).`);
+        }}>Reset all saved inputs</Btn>
       </div>
       {msg && <p class="small" role="status">{msg}</p>}
       <ErrorBox error={err} what="updating local data" />

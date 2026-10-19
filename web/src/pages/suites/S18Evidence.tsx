@@ -1,6 +1,7 @@
-import { RunBar } from '../../components/Reset';
+import { RunBar, useResetKey } from '../../components/Reset';
+import { View3D } from '../../components/View3D';
 /** Suite 18 — Discovery evidence and independent replication. */
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
 import { Card, ErrorBox, Loading, SourceChip, DataTable, Json, Btn, Level, Tip, StatusBadge, KV, InfoBanner, EvidenceBanner, Tabs, TabPanel } from '../../components/ui';
 import { NumberField, SelectField, TextField, useValidity } from '../../components/fields';
@@ -255,7 +256,34 @@ function Gates({ onClass }: { onClass: (c: Classification | null) => void }) {
           </div>
         </div>
       )}
+      {res && <Ladder3D gates={res.gates} c={c!} />}
     </Card>
+  );
+}
+
+/** Conceptual heights: an ordinal of gate status only — no physical or statistical meaning. */
+const GATE_RANK: Record<string, number> = { PASSED: 3, PARTIAL: 2, REQUIRES_HUMAN: 1, NOT_PASSED: 0.4 };
+const GATE_COLOR: Record<string, string> = { PASSED: '#1b7f3b', PARTIAL: '#E69F00', REQUIRES_HUMAN: '#0072B2', NOT_PASSED: '#b3261e' };
+
+function Ladder3D({ gates, c }: { gates: Gate[]; c: Classification }) {
+  const opts = useMemo(() => ({
+    x: { label: 'Position', cats: EVIDENCE_LADDER.map((_, i) => String(i + 1)) },
+    y: { label: 'Structure', cats: ['Evidence ladder', 'Gates G1–G7'] },
+    z: { label: 'Conceptual level (ordinal, no units)', min: 0, max: EVIDENCE_LADDER.length },
+    bars: [
+      ...EVIDENCE_LADDER.map((rung, i) => ({ xi: i, yi: 0, h: i + 1, color: i <= c.level ? '#1b7f3b' : '#b8bcc8', label: i === c.level ? `▶ ${rung}` : undefined })),
+      ...gates.map((g, i) => ({ xi: i, yi: 1, h: GATE_RANK[g.status] ?? 0.4, color: GATE_COLOR[g.status] ?? '#888888', label: `${g.gate}: ${g.status.replace(/_/g, ' ')}` })),
+    ],
+  }), [gates, c]);
+  return (
+    <div style={{ marginTop: '14px' }}>
+      <View3D kind="plot3d" name="evidence-ladder-3d" title="Evidence ladder and acceptance gates" badge="CONCEPTUAL" opts={opts}
+        legend={[{ label: 'rung reached (backend classification)', color: '#1b7f3b' }, { label: 'rung not reached', color: '#b8bcc8' }, { label: 'gate passed', color: GATE_COLOR.PASSED }, { label: 'gate partial', color: GATE_COLOR.PARTIAL }, { label: 'gate requires human review', color: GATE_COLOR.REQUIRES_HUMAN }, { label: 'gate not passed', color: GATE_COLOR.NOT_PASSED }]}
+        frameData={() => ({ classification: c, gates: gates.map((g) => ({ gate: g.gate, status: g.status })) })}
+        label="Conceptual staircase of the nine evidence rungs with the reached level highlighted, and the seven gates as pillars coloured by status"
+        fallback={<p class="small muted">See the ladder list and gate table above.</p>} />
+      <p class="small muted"><b>Conceptual view:</b> heights and positions only encode order (rung number) and gate status; they are not physical or statistical quantities. Rung reached: {c.level} ({c.classification}).</p>
+    </div>
   );
 }
 
@@ -311,6 +339,7 @@ function Package() {
 }
 
 export default function Page(_props: any) {
+  useResetKey('qg.lastPrereg'); useResetKey('qg.lastDataset'); // page reset forgets these bindings
   const [tab, setTab] = useState(() => (location.hash.slice(1) || 'ledger'));
   const [tick, setTick] = useState(0);
   const [cls, setCls] = useState<Classification | null>(null);

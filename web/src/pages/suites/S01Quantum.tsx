@@ -2,11 +2,11 @@ import { RunBar } from '../../components/Reset';
 /** Suite 1 — Lindblad playground (POST /api/quantum/lindblad) with populations, purity, state checks and a Bloch sphere. */
 import { useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, Out, EvidenceBanner, ErrorBox, DataTable, Json, Btn, Level, Seg, InfoBanner, ProvBadge, StatusBadge } from '../../components/ui';
+import { Card, Out, EvidenceBanner, ErrorBox, DataTable, Json, Level, Seg, InfoBanner, ProvBadge, StatusBadge } from '../../components/ui';
 import { NumberField, SelectField, useValidity } from '../../components/fields';
 import { LinePlot } from '../../plot/Chart';
 import { View3D } from '../../components/View3D';
-import { usePlayer, PlayerControls } from '../../components/Player';
+import { usePlayer, PlayerControls, interp, type PlayerState } from '../../components/Player';
 import { apiPost, isOfflineError } from '../../lib/api';
 import { fmtNum, fmtTime } from '../../lib/format';
 import { checkDensityMatrix } from '../../engine/index';
@@ -208,15 +208,15 @@ export default function Page(_props: { suite?: number }) {
             </Card>
             <Card title="Bloch sphere">
               {!single ? <p class="muted">The Bloch sphere represents a single qubit; this preset has two qubits.</p> : (<>
-                <p class="small muted">The path is assembled from {24} separate server evaluations of ρ(t_k) (t_k = k·t_final/24) — no interpolation. The arrow length is |r| (1 = pure).</p>
+                <p class="small muted">The path is assembled from {24} separate server evaluations of ρ(t_k) (t_k = k·t_final/24). During playback the display interpolates between neighbouring samples; the controls state which samples are shown. The arrow length is |r| (1 = pure).</p>
                 <div class="row">
-                  <Btn busy={blochRun.busy} disabled={!canRun} onClick={runBloch}>{path ? 'Recompute Bloch path' : 'Compute Bloch path (24 server calls)'}</Btn>
+                  <RunBar label={path ? 'Recompute Bloch path' : 'Compute Bloch path (24 server calls)'} busy={blochRun.busy} disabled={!canRun} onRun={runBloch} />
                   {blochRun.busy && <span class="small muted" aria-live="polite">{bprog}/24 evaluations…</span>}
                 </div>
                 <ErrorBox error={blochRun.err} what="computing the Bloch path" />
                 {path && (<>
                   <PlayerControls p={player} n={path.length} t={blochRun.data!.t} label="Bloch vector" />
-                  <BlochViews path={path} frame={fr} t={blochRun.data!.t} />
+                  <BlochViews path={path} frame={fr} t={blochRun.data!.t} p={player} />
                 </>)}
               </>)}
             </Card>
@@ -228,24 +228,29 @@ export default function Page(_props: { suite?: number }) {
   );
 }
 
-function BlochViews({ path, frame, t }: { path: [number, number, number][]; frame: number; t: number[] }) {
+function BlochViews({ path, frame, t, p }: { path: [number, number, number][]; frame: number; t: number[]; p: PlayerState }) {
   const [view, setView] = useState<'3d' | '2d'>('3d');
   const xs = path.map((p) => p[0]), ys = path.map((p) => p[1]), zs = path.map((p) => p[2]);
   const r = path[frame];
+  const pos = Math.min(p.pos, path.length - 1);
+  const cur = [interp(xs, pos), interp(ys, pos), interp(zs, pos)];
   const fallback = (
     <div class="grid-2">
       <LinePlot name="bloch-xz" title="x–z projection" desc="Bloch vector path projected on the x–z plane" xLabel="x = ⟨σx⟩" yLabel="z = ⟨σz⟩" xDomain={[-1.05, 1.05]} yDomain={[-1.05, 1.05]} aspect={1}
-        series={[{ name: 'path', x: xs.slice(0, frame + 1), y: zs.slice(0, frame + 1), color: SERIES_COLORS[0], markers: true }]} />
+        series={[{ name: 'solver samples', x: xs.slice(0, frame + 1), y: zs.slice(0, frame + 1), color: SERIES_COLORS[0], markers: true }, { name: 'displayed state', x: [cur[0]], y: [cur[2]], color: SERIES_COLORS[4], markers: true }]} />
       <LinePlot name="bloch-xy" title="x–y projection" desc="Bloch vector path projected on the x–y plane" xLabel="x = ⟨σx⟩" yLabel="y = ⟨σy⟩" xDomain={[-1.05, 1.05]} yDomain={[-1.05, 1.05]} aspect={1}
-        series={[{ name: 'path', x: xs.slice(0, frame + 1), y: ys.slice(0, frame + 1), color: SERIES_COLORS[1], markers: true }]} />
+        series={[{ name: 'solver samples', x: xs.slice(0, frame + 1), y: ys.slice(0, frame + 1), color: SERIES_COLORS[1], markers: true }, { name: 'displayed state', x: [cur[0]], y: [cur[1]], color: SERIES_COLORS[4], markers: true }]} />
     </div>
   );
   return (
     <div class="stack">
       <Seg label="Bloch view" value={view} onChange={setView} options={[{ v: '3d', label: '3-D sphere' }, { v: '2d', label: '2-D projections' }]} />
-      {view === '3d' ? <View3D kind="bloch" label="Bloch sphere with the computed state trajectory" opts={{ path, index: frame, labels: true }} frame={frame} fallback={fallback} /> : fallback}
+      {view === '3d' ? <View3D kind="bloch" label="Bloch sphere with the computed state trajectory" opts={{ path, index: pos, labels: true }} frame={pos} fallback={fallback}
+        title="Bloch vector r(t) = (⟨σx⟩, ⟨σy⟩, ⟨σz⟩)" badge="COMPUTED" name="bloch" legend={[{ label: 'path through server samples', color: 'var(--accent)' }]}
+        onRecordStart={() => { p.setPos(0); p.setPlaying(true); }} playing={p.playing}
+        frameData={() => ({ nearest_sample: frame, t_s: t[frame], bloch_vector: path[frame], displayed_interpolated: cur, source: 'COMPUTED (server, POST /api/quantum/lindblad)' })} /> : fallback}
       <div class="outs">
-        <Out label={`⟨σx⟩ at t = ${fmtNum(t[frame])} s`} value={r[0]} prov="COMPUTED" />
+        <Out label={`⟨σx⟩ at nearest solver sample t = ${fmtNum(t[frame])} s`} value={r[0]} prov="COMPUTED" />
         <Out label="⟨σy⟩" value={r[1]} prov="COMPUTED" />
         <Out label="⟨σz⟩" value={r[2]} prov="COMPUTED" />
         <Out label="|r|" value={Math.hypot(...r)} prov="COMPUTED" interp="1 for pure states, < 1 for mixed states (purity = (1 + |r|²)/2)." />

@@ -2,7 +2,9 @@ import { RunBar } from '../../components/Reset';
 /** Suite 13 — Experimental design and optimisation. */
 import { useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, ProvBadge, EvidenceBanner, ErrorBox, DataTable, Btn, Tabs, TabPanel, InfoBanner, Switch, Tip, Level } from '../../components/ui';
+import { Card, ProvBadge, EvidenceBanner, ErrorBox, DataTable, Btn, Tabs, TabPanel, InfoBanner, Switch, Tip, Level, Seg } from '../../components/ui';
+import { View3D } from '../../components/View3D';
+import { usePlayer, PlayerControls } from '../../components/Player';
 import { NumberField, SelectField, useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { JobRunner } from '../../components/JobRunner';
@@ -134,20 +136,65 @@ function Sweep2DView() {
   const [ax, setAx] = useState<Axis>({ p: 'separation', a: 2e-4, b: 1e-3, n: 20, log: false });
   const [ay, setAy] = useState<Axis>({ p: 'dx_A', a: 1e-5, b: 2.5e-4, n: 20, log: false });
   const [hyp, setHyp] = useState('QG-COH');
-  const [res, setRes] = useState<Sweep2D | null>(null);
+  const [animate, setAnimate] = useState(true);
+  const [tA, setTA] = useState(0.5);
+  const [tB, setTB] = useState(5);
+  const [K, setK] = useState(6);
+  const [frames, setFrames] = useState<{ t: number | null; r: Sweep2D }[] | null>(null);
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [prog, setProg] = useState('');
+  const [view, setView] = useState<'3d' | '2d'>('3d');
+  const [qty, setQty] = useState<'witness' | 'negativity'>('witness');
+  const timeAnim = animate && ax.p !== 'time' && ay.p !== 'time';
   const cells = ax.n * ay.n;
-  const ok = v.ok && !axisErr(ax) && !axisErr(ay) && cells <= 2500 && ax.p !== ay.p;
+  const cellLimit = timeAnim ? 900 : 2500;
+  const ok = v.ok && !axisErr(ax) && !axisErr(ay) && cells <= cellLimit && ax.p !== ay.p && (!timeAnim || (tA > 0 && tA < tB));
   const run = async () => {
-    setBusy(true); setErr(null);
-    try { setRes(await apiPost<Sweep2D>('/api/bmv/sweep2d', { ...sc, px: ax.p, xs: axisValues(ax), py: ay.p, ys: axisValues(ay), hypothesis: hyp })); } catch (e) { setErr(e); } finally { setBusy(false); }
+    setBusy(true); setErr(null); setFrames(null);
+    try {
+      const ts: (number | null)[] = timeAnim ? linspace(tA, tB, K) : [null];
+      const out: { t: number | null; r: Sweep2D }[] = [];
+      for (let k = 0; k < ts.length; k++) {
+        setProg(ts.length > 1 ? `sweep ${k + 1}/${ts.length} (t = ${fmtQ(ts[k]!, 's')})` : 'sweep running');
+        const design = ts[k] == null ? sc.design : { ...sc.design, time: ts[k]! };
+        out.push({ t: ts[k], r: await apiPost<Sweep2D>('/api/bmv/sweep2d', { ...sc, design, px: ax.p, xs: axisValues(ax), py: ay.p, ys: axisValues(ay), hypothesis: hyp }) });
+      }
+      setFrames(out);
+    } catch (e) { setErr(e); } finally { setBusy(false); setProg(''); }
   };
+  const n = frames?.length ?? 0;
+  const p = usePlayer(n, 1.2);
+  const res = frames ? frames[Math.min(n - 1, Math.round(p.pos))].r : null;
   const xi = res ? paramInfo(res.x.name) : null, yi = res ? paramInfo(res.y.name) : null;
-  const neg = useMemo(() => (res ? nullableMatrix(res.negativity) : null), [res]);
-  const wit = useMemo(() => (res ? nullableMatrix(res.witness) : null), [res]);
+  const mats = useMemo(() => frames?.map((f) => ({ neg: nullableMatrix(f.r.negativity), wit: nullableMatrix(f.r.witness) })) ?? null, [frames]);
+  // displayed matrices: interpolated between neighbouring time samples for smooth display (null if either is null)
+  const disp = useMemo(() => {
+    if (!mats) return null;
+    const i = Math.floor(Math.max(0, Math.min(n - 1, p.pos))), j = Math.min(n - 1, i + 1), w = p.pos - i;
+    const mix = (A: (number | null)[][], B: (number | null)[][]) => A.map((row, r) => row.map((x, c) => (x == null || B[r][c] == null ? null : x * (1 - w) + (B[r][c] as number) * w)));
+    return { neg: mix(mats[i].neg, mats[j].neg), wit: mix(mats[i].wit, mats[j].wit), i, w };
+  }, [mats, p.pos]);
+  const zr = useMemo(() => {
+    if (!mats) return { w: 1, n: 1 };
+    let w = 0, nn = 0;
+    for (const m of mats) { for (const r of m.wit) for (const x of r) if (x != null) w = Math.max(w, Math.abs(x)); for (const r of m.neg) for (const x of r) if (x != null) nn = Math.max(nn, x); }
+    return { w: w || 1, n: nn || 1 };
+  }, [mats]);
+  const neg = disp?.neg, wit = disp?.wit;
   const nNull = neg ? neg.flat().filter((x) => x == null).length : 0;
   const nCert = wit ? wit.flat().filter((x) => x != null && x < 0).length : 0;
+  const curT = frames && disp ? frames[disp.i].t : null;
+  const spec = useMemo(() => {
+    if (!res || !disp || !xi || !yi) return null;
+    const z = qty === 'witness' ? disp.wit : disp.neg;
+    return {
+      x: { label: xi.label, unit: xi.unit, log: ax.log }, y: { label: yi.label, unit: yi.unit, log: ay.log },
+      z: qty === 'witness' ? { label: '⟨W⟩', unit: '1', min: -zr.w, max: zr.w } : { label: 'negativity', unit: '1', min: 0, max: zr.n },
+      surfaces: [{ name: qty, xs: res.x.values, ys: res.y.values, z, colormap: qty === 'witness' ? 'diverging' : 'viridis', cmin: qty === 'witness' ? -zr.w : 0, cmax: qty === 'witness' ? zr.w : zr.n, wire: true }],
+    };
+  }, [res, disp, qty, zr]);
+  const tLabel = (k: number) => (frames && frames[k].t != null ? `t = ${fmtQ(frames[k].t!, 's')}` : `t = ${fmtQ(sc.design.time, 's')}`);
   return (
     <div class="split">
       <div class="card sticky-side">
@@ -155,27 +202,57 @@ function Sweep2DView() {
         <AxisInputs name="x axis" x={ax} set={setAx} report={v.report} others={ay.p} maxN={50} />
         <AxisInputs name="y axis" x={ay} set={setAy} report={v.report} others={ax.p} maxN={50} />
         <SelectField label="Hypothesis" value={hyp} onChange={setHyp} options={IMPLEMENTED_IDS.map((i) => ({ v: i, label: `${i} — ${hypStyle(i).short}` }))} help="Model whose negativity and witness are mapped." />
-        <p class={cells > 2500 ? 'field-error' : 'small muted'}>{cells} grid cells (interactive limit 2500 = 50 × 50; larger grids must be run as jobs).</p>
+        <fieldset class="fieldset"><legend>Third parameter: interaction time</legend>
+          <Switch checked={animate} onChange={setAnimate} label="Animate through interaction time" />
+          {animate && (ax.p === 'time' || ay.p === 'time') && <p class="small muted">Time is already a sweep axis, so no time animation is made.</p>}
+          {timeAnim && (
+            <div class="form-grid">
+              <NumberField name="tA" label="First time" unit="s" value={tA} min={0} minExclusive max={1e4} report={v.report} onChange={setTA} help="Interaction time of the first frame. Each frame is a separate server sweep at that time." />
+              <NumberField name="tB" label="Last time" unit="s" value={tB} min={0} minExclusive max={1e4} report={v.report} onChange={setTB} help="Interaction time of the last frame." />
+              <NumberField name="K" label="Time frames" unit="1" integer value={K} min={2} max={8} report={v.report} onChange={setK} help="Number of sweeps (server calls), run one after another." />
+            </div>
+          )}
+          {timeAnim && !(tA < tB) && <p class="field-error">First time must be below last time.</p>}
+        </fieldset>
+        <p class={cells > cellLimit ? 'field-error' : 'small muted'}>{cells} grid cells per sweep (limit {cellLimit}{timeAnim ? ' per frame while animating, to respect the server' : ' = 50 × 50; larger grids must be run as jobs'}).</p>
         <details><summary class="small">Base scenario (other parameters)</summary><ScenarioForm value={sc} onChange={(x) => scenario.set(x)} report={v.report} /></details>
-        <RunBar label="Run 2-D sweep" scenario busy={busy} disabled={!ok} onRun={run} />
+        <RunBar label={timeAnim ? `Run ${K} sweeps` : 'Run 2-D sweep'} scenario busy={busy} disabled={!ok} onRun={run} />
+        {busy && <p class="small muted" role="status">{prog}</p>}
       </div>
       <div class="stack">
         <EvidenceBanner />
         <ErrorBox error={err} what="running POST /api/bmv/sweep2d" />
-        {res && neg && wit && xi && yi && (<>
-          <InfoBanner>Hatched cells are <b>inadmissible geometry</b>: there the branches overlap or touch, or Δx does not exceed the particle diameter (qgdevs.bmv.check_geometry) — no prediction is made. {nNull} of {neg.length * (neg[0]?.length ?? 0)} cells are inadmissible; {nCert} cells predict a certifiable witness (⟨W⟩ &lt; 0).</InfoBanner>
-          <Card title={`Negativity — ${res.hypothesis}`} actions={<ProvBadge kind="COMPUTED" />}>
-            <HeatMap name="sweep2d-negativity" desc={`negativity of ${res.hypothesis} over ${xi.label} and ${yi.label}`} z={neg} x={res.x.values} y={res.y.values}
-              xLabel={xi.label} xUnit={xi.unit} yLabel={yi.label} yUnit={yi.unit} zLabel="negativity" palette="viridis" nullLabel="inadmissible geometry" />
-            <p class="small muted">Negativity &gt; 0 ⇔ the predicted two-qubit state is entangled (PPT criterion; maximum 0.5).</p>
-          </Card>
-          <Card title={`CPK witness ⟨W⟩ — ${res.hypothesis}`} actions={<ProvBadge kind="COMPUTED" />}>
-            <HeatMap name="sweep2d-witness" desc={`witness of ${res.hypothesis}; the black outline marks W = 0`} z={wit} x={res.x.values} y={res.y.values}
-              xLabel={xi.label} xUnit={xi.unit} yLabel={yi.label} yUnit={yi.unit} zLabel="⟨W⟩" palette="diverging" symmetric contour0 nullLabel="inadmissible geometry" />
-            <p class="small muted">Blue (⟨W⟩ &lt; 0) certifies entanglement with three local settings in the preregistered protocol frame; the outline is the W = 0 boundary. Axis ticks are cell centres{ax.log || ay.log ? ' (log-spaced grid)' : ''}.</p>
-          </Card>
+        {res && neg && wit && xi && yi && disp && (<>
+          <InfoBanner>Hatched cells (2-D) and crossed floor marks (3-D) are <b>inadmissible geometry</b>: the branches overlap or touch, or Δx does not exceed the particle diameter (qgdevs.bmv.check_geometry) — no prediction is made. {nNull} of {neg.length * (neg[0]?.length ?? 0)} cells are inadmissible; {nCert} cells predict a certifiable witness (⟨W⟩ &lt; 0).</InfoBanner>
+          <div class="row-between">
+            <Seg label="View" value={view} onChange={setView} options={[{ v: '3d', label: '3-D surface' }, { v: '2d', label: '2-D heat maps' }]} />
+            {view === '3d' && <Seg label="Quantity" value={qty} onChange={setQty} options={[{ v: 'witness', label: 'Witness ⟨W⟩' }, { v: 'negativity', label: 'Negativity' }]} />}
+          </div>
+          <p class="small">Showing <b>{tLabel(disp.i)}</b>{disp.w > 1e-3 && disp.i + 1 < n ? ` → ${tLabel(disp.i + 1)} (values interpolated between the two computed sweeps for display only)` : ' (computed sweep)'}.</p>
+          {view === '3d' && spec && (
+            <View3D kind="plot3d" opts={spec} name={`sweep-${qty}`} title={`${qty === 'witness' ? 'CPK witness ⟨W⟩' : 'Negativity'} — ${res.hypothesis}, ${curT != null ? tLabel(disp.i) : 'base time'}`} badge="COMPUTED" playing={p.playing}
+              label={`Surface of ${qty} over ${xi.label} and ${yi.label}`}
+              legend={qty === 'witness' ? [{ label: '⟨W⟩ < 0 (certified)', color: '#3182bd' }, { label: '⟨W⟩ > 0', color: '#e6550d' }, { label: 'inadmissible (floor marks)', color: '#888' }] : [{ label: 'negativity (viridis)', color: '#21918c' }, { label: 'inadmissible (floor marks)', color: '#888' }]}
+              onRecordStart={() => { p.setPos(0); p.setPlaying(true); }}
+              frameData={() => ({ hypothesis: res.hypothesis, time_s: curT, x: res.x, y: res.y, quantity: qty, values: qty === 'witness' ? mats![disp.i].wit : mats![disp.i].neg })}
+              fallback={<Heat2D res={res} neg={neg} wit={wit} xi={xi} yi={yi} />} />
+          )}
+          {n > 1 && <PlayerControls p={p} n={n} t={frames!.map((f) => f.t ?? sc.design.time)} label="Interaction time" />}
+          {view === '2d' && <Heat2D res={res} neg={neg} wit={wit} xi={xi} yi={yi} />}
+          <p class="small muted">Axis ticks are cell centres{ax.log || ay.log ? ' (log-spaced grid)' : ''}. Blue (⟨W⟩ &lt; 0) certifies entanglement with three local settings in the preregistered protocol frame.</p>
         </>)}
       </div>
+    </div>
+  );
+}
+
+function Heat2D({ res, neg, wit, xi, yi }: { res: Sweep2D; neg: (number | null)[][]; wit: (number | null)[][]; xi: { label: string; unit: string }; yi: { label: string; unit: string } }) {
+  return (
+    <div class="grid-2">
+      <HeatMap name="sweep2d-negativity" title={`Negativity — ${res.hypothesis}`} desc={`negativity of ${res.hypothesis} over ${xi.label} and ${yi.label}`} z={neg} x={res.x.values} y={res.y.values}
+        xLabel={xi.label} xUnit={xi.unit} yLabel={yi.label} yUnit={yi.unit} zLabel="negativity" palette="viridis" nullLabel="inadmissible geometry" />
+      <HeatMap name="sweep2d-witness" title={`CPK witness ⟨W⟩ — ${res.hypothesis}`} desc={`witness of ${res.hypothesis}; the outline marks W = 0`} z={wit} x={res.x.values} y={res.y.values}
+        xLabel={xi.label} xUnit={xi.unit} yLabel={yi.label} yUnit={yi.unit} zLabel="⟨W⟩" palette="diverging" symmetric contour0 nullLabel="inadmissible geometry" />
     </div>
   );
 }

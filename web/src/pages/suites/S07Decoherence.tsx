@@ -12,6 +12,9 @@ import { fmtQ, fmtNum, fmtPct } from '../../lib/format';
 import type { DecoBudget } from '../../lib/types';
 import { decoherenceBudget, getMaterial, clausiusMossotti, radiusOf } from '../../engine/index';
 import { useRun, body, logspace, MECH_LABEL, MECH_COLOR } from './f2-shared';
+import { Seg } from '../../components/ui';
+import { View3D } from '../../components/View3D';
+import { usePlayer, PlayerControls, interp } from '../../components/Player';
 
 export default function Page(_props: { suite?: number }) {
   const sc = useStore(scenario);
@@ -43,6 +46,7 @@ export default function Page(_props: { suite?: number }) {
           <ErrorBox error={r.error} what="computing the decoherence budget" />
           {r.offline && <p class="small muted">No fresh data was fetched. {b ? 'The values below are from the last successful server computation.' : ''} The Advanced view below still computes locally.</p>}
           {b && <Budget b={b} t={sc.design.time} dp={dp} />}
+          {b && <BlochDecay b={b} t={sc.design.time} />}
           <Level min="advanced"><LocalPressure b={b} dp={dp} /></Level>
           {b && atLeast(st.mode, 'expert') && <Card title="Raw response (expert)"><Json data={b} /></Card>}
         </div>
@@ -140,6 +144,62 @@ function LocalPressure({ b, dp }: { b: DecoBudget | null; dp: boolean }) {
             : <InfoBanner>No server result yet to cross-check against.</InfoBanner>}
         </div>
       )}
+    </Card>
+  );
+}
+
+// ----------------------------------------------------------------------------- Bloch-vector decay
+/**
+ * Each mass's branch qubit starts in |+⟩ (Bloch vector (1, 0, 0)). Pure dephasing at rate Γ leaves the
+ * populations unchanged and multiplies the coherence by e^{−Γt} — this is the definition of Γ used in
+ * qgdevs/decoherence.py (|ρ_LR(t)| = |ρ_LR(0)| e^{−Γt}) — so r(t) = (e^{−Γt}, 0, 0). The rates are the
+ * server's computed budget; the curves are that definition evaluated at 241 sample times.
+ */
+function BlochDecay({ b, t }: { b: DecoBudget; t: number }) {
+  const keys = Object.keys(b.mechanisms);
+  const [sel, setSel] = useState<string>('total');
+  const [span, setSpan] = useState<'run' | 'decay'>('run');
+  const rate = (k: string) => (k === 'total' ? b.total_rate : b.mechanisms[k].rate);
+  const T = span === 'run' ? t : Math.max(t, b.total_rate > 0 ? 5 / b.total_rate : t);
+  const N = 241;
+  const ts = useMemo(() => Array.from({ length: N }, (_, i) => (T * i) / (N - 1)), [T]);
+  const p = usePlayer(N, 40);
+  const curves = useMemo(() => Object.fromEntries(['total', ...keys].map((k) => [k, ts.map((x) => Math.exp(-rate(k) * x))])), [b, ts]);
+  const path = useMemo(() => curves[sel].map((x) => [x, 0, 0] as [number, number, number]), [curves, sel]);
+  const tNow = interp(ts, p.pos);
+  const label = (k: string) => (k === 'total' ? 'Total (all mechanisms)' : MECH_LABEL[k] ?? k);
+  const col = (k: string) => (k === 'total' ? '#111111' : MECH_COLOR[k] ?? '#888');
+  const view2d = (
+    <div class="grid-2">
+      <LinePlot name="coherence-decay" title="Coherence factor e^{−Γt}" desc="Remaining branch coherence of one mass for each mechanism" xLabel="Time" xUnit="s" yLabel="|r_x| = e^{−Γt}" yUnit="1" cursorX={tNow} yDomain={[0, 1.02]}
+        series={['total', ...keys].map((k) => ({ name: label(k), x: ts, y: curves[k], color: col(k), width: k === sel ? 3 : 1.5 }))} />
+      <LinePlot name="coherence-loss" title="Coherence loss 1 − e^{−Γt} (log scale)" desc="Coherence loss on a logarithmic axis so that tiny mechanisms remain visible" xLabel="Time" xUnit="s" yLabel="1 − e^{−Γt}" yUnit="1" logY cursorX={tNow}
+        series={['total', ...keys].filter((k) => rate(k) > 0).map((k) => ({ name: label(k), x: ts.slice(1), y: ts.slice(1).map((x) => -Math.expm1(-rate(k) * x)), color: col(k), width: k === sel ? 3 : 1.5 }))} />
+    </div>
+  );
+  return (
+    <Card title="Branch-qubit Bloch vector under each mechanism" actions={<ProvBadge kind="COMPUTED" />}>
+      <p class="small muted">The branch qubit (|L⟩, |R⟩) of one mass starts in |+⟩. Pure dephasing at the computed rate Γ shrinks the Bloch vector toward the z axis as r(t) = (e<sup>−Γt</sup>, 0, 0) — the definition of Γ in the decoherence model. Rates are the server's budget above; mechanisms with Γt ≪ 1 barely move the vector over the run.</p>
+      <div class="row" style={{ marginBottom: '6px' }}>
+        <label class="small">Mechanism{' '}
+          <select class="input" value={sel} onChange={(e: any) => setSel(e.currentTarget.value)}>
+            {['total', ...keys].map((k) => <option value={k}>{label(k)} — Γ = {fmtNum(rate(k), 3)} s⁻¹</option>)}
+          </select></label>
+        <Seg label="Time span" value={span} onChange={setSpan} options={[{ v: 'run', label: 'Interaction time' }, { v: 'decay', label: 'Until 5/Γ_total' }]} />
+      </div>
+      <PlayerControls p={p} n={N} t={ts} label="Decoherence" />
+      <div class="grid-2">
+        <View3D kind="bloch" name="decoherence-bloch" opts={{ path, index: p.pos, labels: true }} frame={p.pos} label={`Bloch vector of the branch qubit under ${label(sel)}`}
+          title={`${label(sel)} · |r| = ${fmtNum(interp(curves[sel], p.pos), 6)}`} badge="COMPUTED" legend={[{ label: label(sel), color: col(sel) }]}
+          playing={p.playing} onRecordStart={() => { p.setPos(0); p.setPlaying(true); }}
+          frameData={() => ({ mechanism: sel, rate_s: rate(sel), t_display: tNow, bloch_x: interp(curves[sel], p.pos), interpolated: Math.abs(p.pos - Math.round(p.pos)) > 1e-3 })}
+          fallback={view2d} />
+        <div class="outs" style={{ alignContent: 'start' }}>
+          <Out label="Displayed time" value={tNow} unit="s" interp={Math.abs(p.pos - Math.round(p.pos)) > 1e-3 ? 'between samples (display interpolation)' : `sample ${p.frame + 1}/${N}`} />
+          {['total', ...keys].map((k) => <Out label={`|r_x| — ${label(k)}`} value={interp(curves[k], p.pos)} sig={8} prov="COMPUTED" tone={k === sel ? 'good' : null} />)}
+        </div>
+      </div>
+      {view2d}
     </Card>
   );
 }

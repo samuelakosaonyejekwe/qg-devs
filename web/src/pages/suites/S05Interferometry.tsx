@@ -7,7 +7,7 @@ import { NumberField, useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { LinePlot, HeatMap } from '../../plot/Chart';
 import { View3D } from '../../components/View3D';
-import { usePlayer, PlayerControls } from '../../components/Player';
+import { usePlayer, PlayerControls, interp } from '../../components/Player';
 import { apiPost } from '../../lib/api';
 import { useStore, scenario } from '../../lib/store';
 import { fmtNum, fmtQ, fmtTime } from '../../lib/format';
@@ -83,7 +83,16 @@ function WavePacket() {
   const player = usePlayer(d?.frames.length ?? 0, 10);
   const [view, setView] = useState<'2d' | '3d'>('2d');
   const fr = d ? Math.min(player.frame, d.frames.length - 1) : 0;
-  const z = d?.frames[fr];
+  // display frame: linear blend of the two neighbouring solver frames at the fractional cursor (display only)
+  const z = useMemo(() => {
+    if (!d) return undefined;
+    const x = Math.max(0, Math.min(d.frames.length - 1, player.pos)), i = Math.floor(x), j = Math.min(d.frames.length - 1, i + 1), w = x - i;
+    if (w < 1e-3) return d.frames[i];
+    const A = d.frames[i], B = d.frames[j];
+    return A.map((row, a) => row.map((v, b) => v * (1 - w) + B[a][b] * w));
+  }, [d, player.pos]);
+  const tShown = d ? interp(d.t, player.pos) : 0;
+  const surfOpts = useMemo(() => (z ? { z, xLabel: 'x', yLabel: 'y', zLabel: '|ψ|²/max', colormap: 'magma' } : null), [z]);
   return (
     <Card title="Split wave packet in a gravitational field (2-D split-step Fourier)">
       <div class="split">
@@ -111,8 +120,12 @@ function WavePacket() {
             <PlayerControls p={player} n={d.frames.length} t={d.t} label="Wave packet" />
             <Seg label="Density view" value={view} onChange={setView} options={[{ v: '2d', label: 'Heat map' }, { v: '3d', label: '3-D surface' }]} />
             {view === '2d'
-              ? <HeatMap name="wavepacket" title={`|ψ(x, y)|² at t = ${fmtQ(d.t[fr], 's')}`} desc="Normalised probability density of the split wave packet" z={z} x={d.x} y={d.x} xLabel="x" xUnit="m" yLabel="y" yUnit="m" zLabel="|ψ|²/max" palette="magma" zDomain={[0, 1]} aspect={0.85} />
-              : <View3D kind="surface" label="Probability density surface" opts={{ z, xLabel: 'x', yLabel: 'y', zLabel: '|ψ|²/max', colormap: 'magma' }} frame={fr}
+              ? <HeatMap name="wavepacket" title={`|ψ(x, y)|² at t = ${fmtQ(tShown, 's')}${Math.abs(player.pos - fr) > 1e-3 ? ' (display blend of neighbouring solver frames)' : ''}`} desc="Normalised probability density of the split wave packet" z={z} x={d.x} y={d.x} xLabel="x" xUnit="m" yLabel="y" yUnit="m" zLabel="|ψ|²/max" palette="magma" zDomain={[0, 1]} aspect={0.85} />
+              : <View3D kind="surface" label="Probability density surface" opts={surfOpts} frame={player.pos}
+                  title={`|ψ(x, y)|² surface, t = ${fmtQ(tShown, 's')}`} badge="COMPUTED" name="wavepacket-surface"
+                  legend={[{ label: 'low |ψ|²', color: '#180f3d' }, { label: 'mid', color: '#b5367a' }, { label: 'max', color: '#fcfdbf' }]}
+                  onRecordStart={() => { player.setPos(0); player.setPlaying(true); }} playing={player.playing}
+                  frameData={() => ({ nearest_frame: fr, t_s: d.t[fr], x_m: d.x, density_normalised: d.frames[fr], source: `COMPUTED (server, ${d.kind})` })}
                   fallback={<HeatMap name="wavepacket" title="|ψ|²" desc="Normalised density" z={z} x={d.x} y={d.x} xLabel="x" xUnit="m" yLabel="y" yUnit="m" zLabel="|ψ|²/max" palette="magma" zDomain={[0, 1]} />} />}
             <p class="small muted">Each frame is normalised to its own maximum by the server (shape, not absolute density). Grid: ±{fmtQ(Math.max(...d.x), 'm')}.</p>
             <Level min="expert"><Json data={{ t: d.t, units: d.units, kind: d.kind, grid: d.x.length }} /></Level>

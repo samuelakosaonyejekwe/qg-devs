@@ -1,5 +1,6 @@
 /** Suite 16 — Calibration, verification, validation and uncertainty: V&V registry, results, Lean proofs. */
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
+import { View3D } from '../../components/View3D';
 import { SuiteHeader } from '../../components/SuiteHeader';
 import { Card, ErrorBox, Loading, SourceChip, DataTable, Btn, InfoBanner, Switch, AssuranceBadge, ASSURANCE_LIST, StatusBadge, ProvBadge, Level, Tip } from '../../components/ui';
 import { JobRunner } from '../../components/JobRunner';
@@ -38,6 +39,26 @@ function resultStatus(r: BenchResult) {
   return r.passed ? 'NUMERICALLY VERIFIED' : 'FAILED';
 }
 
+/** Counts of benchmarks per suite in the latest run (passed / failed / registered but not run). */
+function VV3D({ results, reg }: { results: BenchResult[]; reg: Bench[] }) {
+  const suites = [...new Set(reg.map((b) => b.suite))].sort((a, b) => a - b);
+  const rows = ['passed', 'failed', 'not run'];
+  const colors = ['#1b7f3b', '#b3261e', '#9aa0a6'];
+  const opts = useMemo(() => {
+    const count = (n: number, k: number) => k === 0 ? results.filter((x) => x.suite === n && x.passed).length
+      : k === 1 ? results.filter((x) => x.suite === n && !x.passed).length
+        : reg.filter((b) => b.suite === n && !results.some((x) => x.id === b.id)).length;
+    const bars = suites.flatMap((n, i) => rows.map((_, k) => ({ xi: i, yi: k, h: count(n, k), color: colors[k] }))).filter((b) => b.h > 0);
+    return { x: { label: 'Suite', cats: suites.map(String) }, y: { label: 'Outcome', cats: rows }, z: { label: 'Benchmarks (count)', min: 0, max: Math.max(1, ...bars.map((b) => b.h)) }, bars };
+  }, [results, reg]);
+  return (
+    <View3D kind="plot3d" name="vv-by-suite-3d" title="Latest verification run by suite" badge="COMPUTED" opts={opts}
+      legend={rows.map((r, k) => ({ label: r, color: colors[k] }))} frameData={() => opts.bars}
+      label="Bar heights are the number of benchmarks per suite that passed, failed or were not run in the latest verification job"
+      fallback={<p class="small muted">See the table above.</p>} />
+  );
+}
+
 function Latest({ reg, suite }: { reg: Bench[]; suite: number | null }) {
   const r = useApiGet<VVReport>('/api/vv/latest');
   if (r.loading && !r.data) return <Loading label="Loading latest verification run" />;
@@ -65,6 +86,7 @@ function Latest({ reg, suite }: { reg: Bench[]; suite: number | null }) {
           <span><AssuranceBadge status={resultStatus(x)} raw={x.passed ? 'passed' : 'failed'} />{x.error && <details><summary class="small">error</summary><pre class="code">{x.error}</pre></details>}</span>,
           `${fmtNum(x.seconds, 3)} s`,
         ])} />
+      {suite == null && <VV3D results={d.results ?? []} reg={reg} />}
       {notRun.length > 0 && <p class="small muted">Not included in this run{suite != null ? ' for this suite' : ''}: {notRun.map((b) => <code>{b.id}{b.slow ? ' (slow)' : ''} </code>)}</p>}
     </div>
   );

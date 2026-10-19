@@ -131,3 +131,8 @@ export function modelCurves(design: Design, env: Environment, ids: string[], tim
 }
 
 export { checkDensityMatrix };
+export { sobol } from './sobol';
+export { bornProbabilities, pointMassDeltaPhi } from './extra';
+
+export { evolveCoupledOscillators, logNegativityGaussian, gravitationalCouplingRate, thermalOccupation } from './optomech';
+export type { OptoParams, OptoResult } from './optomech';

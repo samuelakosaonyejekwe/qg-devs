@@ -1,0 +1,16 @@
+/* 3-D view chrome and crisp HTML labels (CSS2DRenderer) */
+.view3d-box { position: relative; }
+.view3d-box.is-fs { background: var(--bg); padding: 12px; display: flex; flex-direction: column; }
+.view3d-box.is-fs .view3d { flex: 1; height: auto; }
+.view3d-head { position: absolute; z-index: 3; top: 8px; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
+.view3d-title { font-weight: 650; font-size: 0.88rem; background: color-mix(in srgb, var(--bg-elev) 80%, transparent); padding: 2px 8px; border-radius: 6px; }
+.view3d-legend { position: absolute; z-index: 3; top: 38px; right: 10px; list-style: none; margin: 0; padding: 6px 8px; display: grid; gap: 3px; font-size: 0.76rem; background: color-mix(in srgb, var(--bg-elev) 85%, transparent); border: 1px solid var(--border); border-radius: 6px; pointer-events: none; }
+.view3d-legend li { display: flex; gap: 6px; align-items: center; }
+.view3d-rec { position: absolute; z-index: 3; top: 8px; right: 10px; color: #d32f2f; font-weight: 700; font-size: 0.8rem; }
+.view3d-tools { margin-top: 6px; gap: 6px; }
+.qg3d-label { font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; white-space: nowrap; text-shadow: 0 0 3px var(--bg-elev), 0 0 2px var(--bg-elev); }
+.qg3d-tick { font-weight: 500; font-size: 10.5px !important; opacity: 0.95; }
+.qg3d-axis { font-weight: 650; }
+.qg3d-scale { font-weight: 600; }
+.view3d[data-gl-lost] canvas { opacity: 0.4; }
+.player-sample { flex: 1 1 260px; color: var(--muted); }

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { apiPost, useApiGet, apiGet, isOfflineError, ApiError, type Job } from '../lib/api';
 import { useStore, scenario } from '../lib/store';
-import { GROUPS, suiteByN } from '../lib/nav';
+import { SUITES_IN_ORDER, topicOf } from '../lib/nav';
 import { useSuites } from '../components/SuiteHeader';
 import { Card, Out, EvidenceBanner, ErrorBox, Loading, MaturityBadge, SourceChip, StatusBadge, ProvBadge } from '../components/ui';
 import { fmtQ, fmtTime, humanKey } from '../lib/format';
@@ -69,25 +69,20 @@ function SuitesGrid() {
     <section id="suites" class="card" aria-labelledby="suites-h">
       <div class="card-head"><h2 id="suites-h">The 18 scientific suites</h2><SourceChip source={r.source === 'cache' ? 'cache' : null} cachedAt={r.cachedAt} /></div>
       {r.error && <p class="small muted">Maturity information is unavailable offline (no cached copy); navigation still works.</p>}
-      {GROUPS.map((g) => (
-        <div key={g.title} style={{ marginBottom: '14px' }}>
-          <h3>{g.title}</h3>
-          <div class="grid-3">
-            {g.suites.map((n) => {
-              const s = suiteByN(n);
-              const info = r.data?.find((x) => x.n === n);
-              return (
-                <a class="card suite-card" href={`/suite/${s.slug}`} style={{ marginTop: 0 }}>
-                  <span class="n">Suite {n}</span>
-                  <strong>{info?.name ?? s.name}</strong>
-                  <span class="row">{info ? <MaturityBadge m={info.maturity} /> : null}
-                    {info && <span class="small muted">{info.gaps.length ? `${info.gaps.length} documented gap${info.gaps.length > 1 ? 's' : ''}` : 'no open gaps declared'}</span>}</span>
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+      <div class="grid-3" data-dashboard-suites>
+        {SUITES_IN_ORDER.map((s) => {
+          const n = s.n;
+          const info = r.data?.find((x) => x.n === n);
+          return (
+            <a class="card suite-card" href={`/suite/${s.slug}`} style={{ marginTop: 0 }} data-suite-n={n}>
+              <span class="n">Suite {n} <span class="muted" style={{ fontWeight: 400 }}>· {topicOf(n)}</span></span>
+              <strong>{info?.name ?? s.name}</strong>
+              <span class="row">{info ? <MaturityBadge m={info.maturity} /> : null}
+                {info && <span class="small muted">{info.gaps.length ? `${info.gaps.length} documented gap${info.gaps.length > 1 ? 's' : ''}` : 'no open gaps declared'}</span>}</span>
+            </a>
+          );
+        })}
+      </div>
     </section>
   );
 }

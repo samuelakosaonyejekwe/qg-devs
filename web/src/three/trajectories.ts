@@ -3,7 +3,7 @@
  * a scale bar gives the true length in SI units. Body markers sit at the saved sample `frame`.
  */
 import * as THREE from 'three';
-import { createStage, color, lineSegments, lowEnd, roundLength, scaleBar, siFormat, textSprite, type Handle } from './core';
+import { createStage, color, lineSegments, pbr, polyline, roundLength, scaleBar, siFormat, textSprite, SPHERE_SEG, type Handle } from './core';
 
 type V3 = [number, number, number];
 export interface TrajOpts { series: { name: string; color: string; points: V3[] }[]; unit: string; frame?: number }
@@ -12,7 +12,7 @@ export function mountTrajectories(el: HTMLElement, opts: TrajOpts): Handle & { i
   const st = createStage(el);
   const root = new THREE.Group();
   st.scene.add(root);
-  const info = { metresPerUnit: 1, scaleBarLength: 0, frame: 0 };
+  const info = { metresPerUnit: 1, scaleBarLength: 0, frame: 0, samples: null as { i: number; j: number; w: number } | null };
   let o = opts;
   let markers: THREE.Mesh[] = [];
   let toScene = (p: V3) => new THREE.Vector3(...p);
@@ -23,6 +23,7 @@ export function mountTrajectories(el: HTMLElement, opts: TrajOpts): Handle & { i
       m.geometry?.dispose?.();
       const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
       mats.forEach((mm) => { (mm as any).map?.dispose?.(); mm.dispose(); });
+      if ((x as any).isCSS2DObject) (x as any).element.remove();
     });
     root.clear();
     markers = [];
@@ -37,12 +38,13 @@ export function mountTrajectories(el: HTMLElement, opts: TrajOpts): Handle & { i
     toScene = (p: V3) => new THREE.Vector3(p[0] - c.x, p[2] - c.z, -(p[1] - c.y)).multiplyScalar(s); // physics z → up
 
     const th = st.theme;
-    const seg = lowEnd ? 12 : 24;
     for (const ser of o.series) {
-      const g = new THREE.BufferGeometry().setFromPoints(ser.points.map(toScene));
-      root.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: color(ser.color) })));
-      const m = new THREE.Mesh(new THREE.SphereGeometry(0.035, seg, seg),
-        new THREE.MeshStandardMaterial({ color: color(ser.color), emissive: color(ser.color), emissiveIntensity: 0.3 }));
+      // anti-aliased screen-space trajectory line
+      root.add(polyline(ser.points.flatMap((p) => toScene(p).toArray()), ser.color, 2, 0.95));
+      const mat = pbr(ser.color, { roughness: 0.3 });
+      mat.emissive = color(ser.color); mat.emissiveIntensity = 0.25;
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.035, SPHERE_SEG[0], SPHERE_SEG[1]), mat);
+      m.castShadow = true;
       root.add(m);
       markers.push(m);
       const lab = textSprite(ser.name, ser.color, 0.08);
@@ -50,10 +52,9 @@ export function mountTrajectories(el: HTMLElement, opts: TrajOpts): Handle & { i
       lab.position.set(0.09, 0.06, 0);
     }
     // reference grid in the orbital (x–y) plane and scale bar
-    const grid = new THREE.GridHelper(2.4, 12, color(th.muted), color(th.muted));
-    (grid.material as THREE.Material).transparent = true;
-    (grid.material as THREE.Material).opacity = 0.25;
-    root.add(grid);
+    const gl: number[] = [];
+    for (let k = -6; k <= 6; k++) { const v = k * 0.2; gl.push(-1.2, 0, v, 1.2, 0, v, v, 0, -1.2, v, 0, 1.2); }
+    root.add(lineSegments(gl, th.muted, 0.25, 1));
     const L = roundLength(0.5 * ext);
     info.scaleBarLength = L;
     root.add(scaleBar(L * s, siFormat(L, o.unit || 'm'), th.fg, new THREE.Vector3(-1.1, 0, 1.35), 0.04));
@@ -66,9 +67,12 @@ export function mountTrajectories(el: HTMLElement, opts: TrajOpts): Handle & { i
   }
 
   function setFrame(f: number) {
+    // fractional frame: markers interpolated between saved samples for display only
     o.series.forEach((ser, i) => {
-      const k = Math.max(0, Math.min(ser.points.length - 1, Math.round(f)));
-      if (markers[i] && ser.points[k]) markers[i].position.copy(toScene(ser.points[k]));
+      const n = ser.points.length; if (!n || !markers[i]) return;
+      const x = Math.max(0, Math.min(n - 1, f)), a = Math.floor(x), b = Math.min(n - 1, a + 1), w = x - a;
+      markers[i].position.copy(toScene(ser.points[a]).lerp(toScene(ser.points[b]), w));
+      info.samples = { i: a, j: b, w };
     });
     info.frame = Math.round(f);
     st.requestRender();
@@ -87,7 +91,10 @@ export function mountTrajectories(el: HTMLElement, opts: TrajOpts): Handle & { i
     },
     setFrame(f: number) { o = { ...o, frame: f }; setFrame(f); },
     resetView: () => st.resetView(),
-    toPNG: (s?: number) => st.toPNG(s),
+    toPNG: (s?: number, tr?: boolean) => st.toPNG(s, tr),
+    composite: st.composite,
+    canvasSize: st.canvasSize,
+    memory: st.memory,
     dispose: () => st.dispose(),
   };
 }

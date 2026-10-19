@@ -1,6 +1,7 @@
 import { RunBar } from '../../components/Reset';
 /** Suite 15 — High-performance numerical simulation: job queue, native kernel, opt-in browser compute. */
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { View3D } from '../../components/View3D';
 import { SuiteHeader } from '../../components/SuiteHeader';
 import { Card, ProvBadge, ErrorBox, Loading, DataTable, Btn, InfoBanner, Switch, Progress, StatusBadge, KV, SourceChip, EvidenceBanner } from '../../components/ui';
 import { NumberField, SelectField, useValidity } from '../../components/fields';
@@ -144,6 +145,7 @@ function BrowserCompute() {
                 <HeatMap name="local-sweep-witness" desc="locally computed witness; outline marks W = 0" z={asNull(st.witness)} x={axes.xs} y={axes.ys} xLabel="Separation d" xUnit="m" yLabel="Δx" yUnit="m" zLabel="⟨W⟩" palette="diverging" symmetric contour0 nullLabel="inadmissible geometry or not computed" /></div>
             </div>
             <p class="small muted">Hatched cells are inadmissible geometries (branches overlap/touch) or cells not reached before the limit/stop.</p>
+            {st.finished && <LocalSurface3D xs={axes.xs} ys={axes.ys} neg={asNull(st.negativity)} wit={asNull(st.witness)} hyp={axes.hyp} />}
             {st.finished && <div class="row"><Btn busy={checking} onClick={crossCheck}>Cross-check 5 random cells against the server</Btn><span class="small muted">(5 × POST /api/bmv/sweep2d, 1 × 1 grids)</span></div>}
             <ErrorBox error={checkErr} what="cross-checking with POST /api/bmv/sweep2d" />
             {checks && (<>
@@ -155,6 +157,30 @@ function BrowserCompute() {
         </div>
       )}
     </Card>
+  );
+}
+
+/** 3-D surfaces of the finished local sweep (values from the in-browser engine; masked cells are not drawn). */
+function LocalSurface3D({ xs, ys, neg, wit, hyp }: { xs: number[]; ys: number[]; neg: (number | null)[][]; wit: (number | null)[][]; hyp: string }) {
+  const [q, setQ] = useState<'negativity' | 'witness'>('negativity');
+  const z = q === 'negativity' ? neg : wit;
+  const fin = z.flat().filter((v): v is number => v != null && Number.isFinite(v));
+  const lo = fin.length ? Math.min(...fin) : 0, hi = fin.length ? Math.max(...fin) : 1;
+  const opts = useMemo(() => ({
+    x: { label: 'Separation d', unit: 'm', min: xs[0], max: xs[xs.length - 1] }, y: { label: 'Branch separation Δx', unit: 'm', min: ys[0], max: ys[ys.length - 1] },
+    z: { label: q === 'negativity' ? 'Negativity' : 'CPK witness ⟨W⟩', unit: '1', min: lo, max: hi > lo ? hi : lo + 1e-12 },
+    surfaces: [{ name: q, xs, ys, z, colormap: q === 'negativity' ? 'viridis' : 'diverging', cmin: q === 'witness' ? -Math.max(Math.abs(lo), Math.abs(hi)) : lo, cmax: q === 'witness' ? Math.max(Math.abs(lo), Math.abs(hi)) : hi, wire: true }],
+  }), [q, xs, ys, z]);
+  return (
+    <div>
+      <div class="row" style={{ margin: '6px 0' }}><span class="small">3-D surface:</span>
+        <button type="button" class="btn-sm" aria-pressed={q === 'negativity'} onClick={() => setQ('negativity')}>Negativity</button>
+        <button type="button" class="btn-sm" aria-pressed={q === 'witness'} onClick={() => setQ('witness')}>Witness</button></div>
+      <View3D kind="plot3d" name={`local-sweep-${q}-3d`} title={`${q === 'negativity' ? 'Negativity' : 'CPK witness'} over d × Δx (${hyp})`} badge="COMPUTED LOCALLY" opts={opts}
+        legend={[{ label: 'viridis: low → high', color: '#21918c' }, { label: 'floor crosses: inadmissible / not computed', color: '#888888' }]}
+        frameData={() => ({ quantity: q, hypothesis: hyp, xs, ys, z })}
+        label="Surface of the locally computed sweep; masked cells are omitted" fallback={<p class="small muted">See the heat maps above.</p>} />
+    </div>
   );
 }
 

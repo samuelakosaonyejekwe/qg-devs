@@ -12,14 +12,15 @@ import { useStore, scenario, settings, atLeast } from '../lib/store';
 import { apiPost, isOfflineError, useApiGet, downloadBlob } from '../lib/api';
 import type { PredictResult, Scenario, BranchKey } from '../lib/types';
 import { BRANCHES } from '../lib/types';
-import { predictScenario, modelCurves, CONSTANTS } from '../engine/index';
+import { predictScenario, modelCurves, CONSTANTS, scenarioFor, modelState } from '../engine/index';
 import { ScenarioForm } from '../components/ScenarioForm';
 import { useValidity } from '../components/fields';
 import { Card, Out, EvidenceBanner, ErrorBox, Btn, Switch, Seg, DataTable, Json, Level, ProvBadge, SourceChip, Tip, InfoBanner } from '../components/ui';
 import { SuiteHeader } from '../components/SuiteHeader';
-import { LinePlot, BarChart } from '../plot/Chart';
+import { LinePlot, BarChart, HeatMap } from '../plot/Chart';
+import { colorAt, rgb } from '../plot/charts';
 import { View3D } from '../components/View3D';
-import { usePlayer, PlayerControls } from '../components/Player';
+import { usePlayer, PlayerControls, interp, type PlayerState } from '../components/Player';
 import { fmtQ, fmtNum, fmtTime, humanKey } from '../lib/format';
 import { hypStyle, IMPLEMENTED_IDS } from '../lib/hyp';
 import { idbAll, idbPut, idbDelete, newId } from '../lib/idb';
@@ -159,25 +160,26 @@ function Results({ r, prov, mode }: { r: Result; prov: 'COMPUTED' | 'COMPUTED_LO
         </div>
       </Card>
 
-      <ApparatusCard d={d} p={p} />
+      <ApparatusCard d={d} p={p} prov={prov} />
 
       <Card title="Time evolution (coherent-interaction model with environmental decoherence)" actions={<ProvBadge kind={prov} />}>
         <PlayerControls p={p} n={n} t={ts.t} label="Time series" />
         <div class="grid-2">
-          <LinePlot name="delta-phi-t" title="Entangling phase Δφ(t)" desc="Entangling phase versus interaction time" xLabel="Time" xUnit="s" yLabel="Δφ" yUnit="rad" cursorX={ts.t[p.frame]}
+          <LinePlot name="delta-phi-t" title="Entangling phase Δφ(t)" desc="Entangling phase versus interaction time" xLabel="Time" xUnit="s" yLabel="Δφ" yUnit="rad" cursorX={interp(ts.t, p.pos)}
             series={[{ name: 'Δφ (total)', x: ts.t, y: ts.delta_phi, color: hypStyle('QG-COH').color }]} />
-          <LinePlot name="entanglement-t" title="Concurrence and negativity" desc="Entanglement measures versus time" xLabel="Time" xUnit="s" yLabel="Measure" cursorX={ts.t[p.frame]}
+          <LinePlot name="entanglement-t" title="Concurrence and negativity" desc="Entanglement measures versus time" xLabel="Time" xUnit="s" yLabel="Measure" cursorX={interp(ts.t, p.pos)}
             series={[{ name: 'Concurrence', x: ts.t, y: ts.concurrence, color: '#0072B2' }, { name: 'Negativity', x: ts.t, y: ts.negativity, color: '#E69F00', dash: [6, 3] }]} />
-          <LinePlot name="witness-t" title="CPK witness ⟨W⟩(t)" desc="Entanglement witness versus time; negative values certify entanglement" xLabel="Time" xUnit="s" yLabel="⟨W⟩" cursorX={ts.t[p.frame]}
+          <LinePlot name="witness-t" title="CPK witness ⟨W⟩(t)" desc="Entanglement witness versus time; negative values certify entanglement" xLabel="Time" xUnit="s" yLabel="⟨W⟩" cursorX={interp(ts.t, p.pos)}
             shadeBelow={{ y: 0, label: 'W < 0: entanglement certified', color: 'rgba(23,112,58,0.10)' }} hlines={[{ y: 0 }]}
             series={[{ name: 'Witness (local-Z corrected)', x: ts.t, y: ts.witness_cpk, color: '#D55E00' }]} />
-          <LinePlot name="purity-t" title="Purity tr ρ²(t)" desc="Purity of the joint state versus time" xLabel="Time" xUnit="s" yLabel="Purity" cursorX={ts.t[p.frame]}
+          <LinePlot name="purity-t" title="Purity tr ρ²(t)" desc="Purity of the joint state versus time" xLabel="Time" xUnit="s" yLabel="Purity" cursorX={interp(ts.t, p.pos)}
             series={[{ name: 'Purity', x: ts.t, y: ts.purity, color: '#009E73' }]} />
         </div>
-        <p class="small muted">Values at the cursor: t = {fmtQ(ts.t[p.frame], 's')}, Δφ = {fmtNum(ts.delta_phi[p.frame], 5)} rad, C = {fmtNum(ts.concurrence[p.frame], 5)}, N = {fmtNum(ts.negativity[p.frame], 5)}, ⟨W⟩ = {fmtNum(ts.witness_cpk[p.frame], 5)}.</p>
+        <p class="small muted">Values at the nearest solver sample: t = {fmtQ(ts.t[p.frame], 's')}, Δφ = {fmtNum(ts.delta_phi[p.frame], 5)} rad, C = {fmtNum(ts.concurrence[p.frame], 5)}, N = {fmtNum(ts.negativity[p.frame], 5)}, ⟨W⟩ = {fmtNum(ts.witness_cpk[p.frame], 5)}.</p>
       </Card>
 
-      <ModelsCard r={r} frameT={ts.t[p.frame]} />
+      <ModelsCard r={r} frameT={interp(ts.t, p.pos)} />
+      <CityCard r={r} p={p} />
       <DecoherenceCard d={d} prov={prov} />
       <NongravCard d={d} prov={prov} />
 
@@ -203,7 +205,7 @@ function Results({ r, prov, mode }: { r: Result; prov: 'COMPUTED' | 'COMPUTED_LO
 }
 
 // ----------------------------------------------------------------------------- apparatus (3-D + 2-D)
-function ApparatusCard({ d, p }: { d: PredictResult; p: ReturnType<typeof usePlayer> }) {
+function ApparatusCard({ d, p, prov }: { d: PredictResult; p: PlayerState; prov: 'COMPUTED' | 'COMPUTED_LOCAL' }) {
   const [view, setView] = useState<'3d' | '2d'>('3d');
   const ts = d.time_series!;
   const opts = useMemo(() => ({
@@ -214,16 +216,20 @@ function ApparatusCard({ d, p }: { d: PredictResult; p: ReturnType<typeof usePla
     <Card title="Apparatus view" actions={<Seg label="View" value={view} onChange={setView} options={[{ v: '3d', label: '3-D' }, { v: '2d', label: '2-D top view' }]} />}>
       <p class="small muted">Branch centres at the computed positions (A at the origin, B along +x; split axis {d.design.geometry === 'linear' ? 'along x' : d.design.geometry === 'parallel' ? 'along y' : `at ${d.design.angle_deg}° to x`}). Segments A_i–B_j are coloured by |U_ij| (<span class="energy-ramp" aria-hidden="true" /> weak → strong). The phase dial and branch glow follow Δφ(t) from the time series.</p>
       {view === '3d' ? (
-        <View3D kind="apparatus" opts={opts} frame={p.frame} label="Three-dimensional view of the four superposition branches"
-          fallback={<TopView d={d} frame={p.frame} />}
+        <View3D kind="apparatus" opts={opts} frame={p.pos} label="Three-dimensional view of the four superposition branches"
+          title="BMV apparatus — branch layout and entangling phase" badge={prov === 'COMPUTED_LOCAL' ? 'COMPUTED LOCALLY' : 'COMPUTED'} name="bmv-apparatus"
+          legend={[{ label: 'Mass A branches', color: '#0072B2' }, { label: 'Mass B branches', color: '#D55E00' }, { label: 'weak |U_ij|', color: '#2b6cb0' }, { label: 'strong |U_ij|', color: '#dd6b20' }]}
+          onRecordStart={() => { p.setPos(0); p.setPlaying(true); }} playing={p.playing}
+          frameData={() => ({ sample_index_nearest: p.frame, t_s: ts.t[p.frame], delta_phi_rad: ts.delta_phi[p.frame], branch_positions_m: d.branch_positions, total_energies_J: d.total_energies_J, source: prov })}
+          fallback={<TopView d={d} frame={p.pos} />}
           overlay={(info) => info && (
             <>
               <span>Scale bar: {fmtQ(info.scaleBarMetres, 'm', 3)}{info.radiiEnlarged ? ` · radii enlarged ×${fmtNum(info.enlargementFactor, 3)} for visibility` : ' · radii to scale'}</span>
               <span>|U| {fmtQ(info.energyRamp?.min, 'J', 3)} <span class="energy-ramp" aria-hidden="true" /> {fmtQ(info.energyRamp?.max, 'J', 3)}</span>
-              <span>t = {fmtQ(ts.t[p.frame], 's')} · Δφ = {fmtNum(ts.delta_phi[p.frame], 4)} rad</span>
+              <span>t = {fmtQ(info.time ?? NaN, 's')} · Δφ = {fmtNum(info.deltaPhi ?? NaN, 4)} rad{info.samples && info.samples.w > 1e-3 ? ` (interpolated between samples ${info.samples.i + 1} and ${info.samples.j + 1})` : ''}</span>
             </>
           )} />
-      ) : <TopView d={d} frame={p.frame} />}
+      ) : <TopView d={d} frame={p.pos} />}
       <PlayerControls p={p} n={ts.t.length} t={ts.t} label="Apparatus" />
     </Card>
   );
@@ -255,7 +261,8 @@ export function TopView({ d, frame }: { d: PredictResult; frame: number }) {
   const mags = BRANCHES.map((k) => Math.abs(U[k]));
   const lo = Math.min(...mags), hi = Math.max(...mags);
   const ts = d.time_series!;
-  const dphi = ts.delta_phi[frame] ?? 0;
+  const dphi = interp(ts.delta_phi, frame); // display interpolation between solver samples
+  const tShown = interp(ts.t, frame);
   const glowMax = Math.max(...ts.delta_phi.map((v) => Math.abs(Math.sin(v / 2))), 1e-300);
   const glow = Math.abs(Math.sin(dphi / 2)) / glowMax;
   const bar = niceLen(ext / 3);
@@ -263,7 +270,7 @@ export function TopView({ d, frame }: { d: PredictResult; frame: number }) {
   const dialR = 26, dcx = W - 50, dcy = 44;
   const ang = -dphi; // dial hand rotates by Δφ (radians)
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`Top view of the branch layout at t = ${fmtQ(ts.t[frame], 's')}; entangling phase ${fmtNum(dphi, 4)} rad`} style={{ background: 'var(--bg-elev)', border: '1px solid var(--border)', borderRadius: '10px' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`Top view of the branch layout at t = ${fmtQ(tShown, 's')}; entangling phase ${fmtNum(dphi, 4)} rad`} style={{ background: 'var(--bg-elev)', border: '1px solid var(--border)', borderRadius: '10px' }}>
       {BRANCHES.map((b) => {
         const [a, c] = key(b);
         const t = hi > lo ? (Math.abs(U[b]) - lo) / (hi - lo) : 1;
@@ -284,6 +291,7 @@ export function TopView({ d, frame }: { d: PredictResult; frame: number }) {
         <circle cx={dcx} cy={dcy} r={dialR} fill="none" stroke="var(--border)" stroke-width="2" />
         <line x1={dcx} y1={dcy} x2={dcx + dialR * Math.cos(ang - Math.PI / 2)} y2={dcy + dialR * Math.sin(ang - Math.PI / 2)} stroke="#D55E00" stroke-width="3" stroke-linecap="round" />
         <text x={dcx} y={dcy + dialR + 14} font-size="11" fill="var(--fg)" text-anchor="middle">Δφ = {fmtNum(dphi, 3)} rad</text>
+        <text x={dcx} y={dcy + dialR + 28} font-size="10" fill="var(--muted)" text-anchor="middle">t = {fmtQ(tShown, 's')}</text>
       </g>
     </svg>
   );
@@ -441,5 +449,90 @@ function Projects({ res }: { res: Result | null }) {
       </div>
       {atLeast(settings.get().mode, 'advanced') && <p class="small muted" style={{ marginTop: '6px' }}>Projects are stored in this browser’s IndexedDB only; export JSON to share or archive them.</p>}
     </div>
+  );
+}
+
+// ----------------------------------------------------------------------------- density-matrix city plots
+const BASIS = ['LL', 'LR', 'RL', 'RR'];
+type Mat = { re: number[]; im: number[] }; // row-major 4×4
+
+/** ρ(t) for one hypothesis at every time-series sample, computed by the local engine (golden-vector verified). */
+function rhoSeries(r: Result, id: string): Mat[] {
+  const ts = r.data.time_series!;
+  const { scenario: sc } = scenarioFor(r.inputs.design, r.inputs.environment);
+  return ts.t.map((t) => { const m = modelState(id, sc, t); return { re: Array.from(m.re), im: Array.from(m.im) }; });
+}
+function rhoAt(series: Mat[], pos: number): Mat {
+  const x = Math.max(0, Math.min(series.length - 1, pos)), i = Math.floor(x), j = Math.min(series.length - 1, i + 1), w = x - i;
+  const a = series[i], b = series[j];
+  return { re: a.re.map((v, k) => v * (1 - w) + b.re[k] * w), im: a.im.map((v, k) => v * (1 - w) + b.im[k] * w) };
+}
+const phaseColor = (ph: number) => rgb(colorAt('twilight', (ph + Math.PI) / (2 * Math.PI)));
+
+function citySpec(m: Mat, zmax: number) {
+  const bars = [];
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+    const re = m.re[i * 4 + j], im = m.im[i * 4 + j];
+    bars.push({ xi: j, yi: i, h: Math.hypot(re, im), color: phaseColor(Math.atan2(im, re)) });
+  }
+  return {
+    x: { label: 'column (ket)', cats: BASIS }, y: { label: 'row (bra)', cats: BASIS }, z: { label: '|ρ_ij|', min: 0, max: zmax },
+    bars, barWidth: 0.72,
+  };
+}
+
+function CityCard({ r, p }: { r: Result; p: PlayerState }) {
+  const [a, setA] = useState('QG-COH');
+  const [b, setB] = useState('CC-KTM');
+  const [view, setView] = useState<'3d' | '2d'>('3d');
+  const ts = r.data.time_series!;
+  const sa = useMemo(() => rhoSeries(r, a), [r, a]);
+  const sb = useMemo(() => rhoSeries(r, b), [r, b]);
+  // cross-check: engine QG-COH state at t = T against the server/engine prediction's density matrix
+  const check = useMemo(() => {
+    const last = rhoSeries(r, 'QG-COH').slice(-1)[0];
+    let m = 0;
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+      m = Math.max(m, Math.abs(last.re[i * 4 + j] - r.data.density_matrix_real[i][j]), Math.abs(last.im[i * 4 + j] - r.data.density_matrix_imag[i][j]));
+    }
+    return m;
+  }, [r]);
+  const zmax = useMemo(() => Math.max(...[...sa, ...sb].flatMap((m) => m.re.map((v, k) => Math.hypot(v, m.im[k])))), [sa, sb]);
+  const ma = rhoAt(sa, p.pos), mb = rhoAt(sb, p.pos);
+  const specA = useMemo(() => citySpec(ma, zmax), [ma.re.join(), ma.im.join(), zmax]);
+  const specB = useMemo(() => citySpec(mb, zmax), [mb.re.join(), mb.im.join(), zmax]);
+  const legend = [-Math.PI, -Math.PI / 2, 0, Math.PI / 2, Math.PI].map((ph) => ({ label: `arg ρ = ${fmtNum(ph / Math.PI, 2)}π`, color: phaseColor(ph) }));
+  const i = Math.floor(Math.max(0, Math.min(ts.t.length - 1, p.pos))), w = p.pos - i;
+  const sel = (v: string, set: (x: string) => void, lab: string) => (
+    <label class="small">{lab}{' '}
+      <select class="input" style={{ padding: '3px 6px' }} value={v} onChange={(e: any) => set(e.currentTarget.value)}>
+        {IMPLEMENTED_IDS.map((id) => <option value={id}>{id}</option>)}
+      </select></label>
+  );
+  const heat = (m: Mat, id: string) => (
+    <div class="grid-2">
+      <HeatMap name={`rho-abs-${id}`} title={`|ρ_ij| — ${id}`} desc={`Magnitude of the density matrix for ${id}`} z={[0, 1, 2, 3].map((ii) => [0, 1, 2, 3].map((jj) => Math.hypot(m.re[ii * 4 + jj], m.im[ii * 4 + jj])))}
+        xCats={BASIS} yCats={BASIS} xLabel="column" yLabel="row" zLabel="|ρ_ij|" palette="cividis" zDomain={[0, zmax]} annotate={(v) => (v == null ? null : v.toFixed(3))} aspect={0.8} />
+      <HeatMap name={`rho-arg-${id}`} title={`arg ρ_ij — ${id}`} desc={`Phase of the density-matrix elements for ${id}`} z={[0, 1, 2, 3].map((ii) => [0, 1, 2, 3].map((jj) => Math.atan2(m.im[ii * 4 + jj], m.re[ii * 4 + jj])))}
+        xCats={BASIS} yCats={BASIS} xLabel="column" yLabel="row" zLabel="arg ρ_ij" zUnit="rad" palette="twilight" zDomain={[-Math.PI, Math.PI]} annotate={(v) => (v == null ? null : v.toFixed(2))} aspect={0.8} />
+    </div>
+  );
+  const panel = (m: Mat, spec: any, id: string) => view === '3d' ? (
+    <View3D kind="plot3d" opts={spec} label={`Density-matrix city plot for ${id}: bar height |ρ_ij|, colour arg ρ_ij`} title={`ρ(t) — ${id}`} badge="COMPUTED LOCALLY" name={`city-${id}`} legend={legend}
+      onRecordStart={() => { p.setPos(0); p.setPlaying(true); }} playing={p.playing}
+      frameData={() => ({ hypothesis: id, t_s: interp(ts.t, p.pos), samples: { i, j: Math.min(ts.t.length - 1, i + 1), w }, rho_re: m.re, rho_im: m.im, basis: BASIS, source: 'COMPUTED_LOCALLY (engine)' })}
+      fallback={heat(m, id)} />
+  ) : heat(m, id);
+  return (
+    <Card title="Density matrix ρ(t) — city plots by hypothesis" actions={<><ProvBadge kind="COMPUTED_LOCAL" /><Seg label="City plot view" value={view} onChange={setView} options={[{ v: '3d', label: '3-D' }, { v: '2d', label: '2-D heat maps' }]} /></>}>
+      <p class="small muted">Bar height = |ρ_ij| in the basis |LL⟩, |LR⟩, |RL⟩, |RR⟩; colour = arg ρ_ij on the cyclic “twilight” scale (−π…π). States are computed in this browser by the offline engine at the same times as the server time series, driven by the same playback cursor. The server additionally implements CG-QFT-AH; the local engine does not, so it cannot be shown here.</p>
+      <div class="row">{sel(a, setA, 'Left')}{sel(b, setB, 'Right')}</div>
+      <div class="grid-2" style={{ marginTop: '8px' }}>
+        <div>{panel(ma, specA, a)}</div>
+        <div>{panel(mb, specB, b)}</div>
+      </div>
+      <PlayerControls p={p} n={ts.t.length} t={ts.t} label="Density matrix" />
+      <p class="small muted">Cross-check at t = {fmtQ(r.inputs.design.time, 's')}: max |ρ_engine(QG-COH) − ρ_{r.source === 'local' ? 'local prediction' : 'server'}| = <b>{fmtNum(check, 2)}</b>{check < 1e-9 ? ' (agreement)' : ' (check)'}.</p>
+    </Card>
   );
 }

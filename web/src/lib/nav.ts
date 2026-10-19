@@ -45,3 +45,13 @@ export const TOOLS: { path: string; title: string; icon: string }[] = [
   { path: '/settings', title: 'Settings', icon: 'gear' },
   { path: '/help', title: 'Help & tutorials', icon: 'help' },
 ];
+
+/** Topic of a suite (secondary information only — never used for ordering). */
+export function topicOf(n: number): string {
+  return GROUPS.find((g) => g.suites.includes(n))?.title ?? '';
+}
+
+/** Suites in strict numerical order 1 … 18 (the only order used in navigation, cards and pickers). */
+export const SUITES_IN_ORDER: SuiteNav[] = [...SUITES].sort((a, b) => a.n - b.n);
+export const prevSuite = (n: number) => (n > 1 ? suiteByN(n - 1) : null);
+export const nextSuite = (n: number) => (n < 18 ? suiteByN(n + 1) : null);

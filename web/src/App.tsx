@@ -2,11 +2,12 @@ import type { ComponentType } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useRoute, goBack, goForward, canGoBack, canGoForward } from './lib/router';
 import { resolve } from './routes';
-import { GROUPS, SUITES, TOOLS, suiteByN } from './lib/nav';
+import { SUITES, SUITES_IN_ORDER, TOOLS, topicOf } from './lib/nav';
 import { useStore, settings, net, applyTheme, type Mode, type Theme } from './lib/store';
 import { listQueue, onQueueChange, replayQueue, type QueuedRequest } from './lib/queue';
 import { apiUrl } from './lib/api';
 import { InstallButton } from './components/Install';
+import { UpdateDialogHost, UpdateReadyChip, WhatsNewButton } from './components/UpdateDialog';
 import { ErrorBox } from './components/ui';
 import { ResetScope } from './components/Reset';
 
@@ -57,12 +58,13 @@ function SideNav({ path, open, close }: { path: string; open: boolean; close: ()
       {open && <div class="scrim" onClick={close} aria-hidden="true" />}
       <nav class={`sidenav ${open ? 'open' : ''}`} id="sidenav" aria-label="Main navigation" onClick={(e) => { if ((e.target as Element).closest('a')) close(); }}>
         <ul>{TOOLS.slice(0, 3).map((t) => <li><a href={t.path} aria-current={path === t.path ? 'page' : undefined}>{t.title}</a></li>)}</ul>
-        {GROUPS.map((g) => (
-          <div key={g.title}>
-            <h2>{g.title}</h2>
-            <ul>{g.suites.map((n) => { const s = suiteByN(n); const href = `/suite/${s.slug}`; return <li><a href={href} aria-current={path === href ? 'page' : undefined}><span class="num">{n}</span>{s.short}</a></li>; })}</ul>
-          </div>
-        ))}
+        <h2 id="nav-suites">Scientific suites</h2>
+        <ol class="suite-list" aria-labelledby="nav-suites" data-nav-suites>
+          {SUITES_IN_ORDER.map((s) => { const href = `/suite/${s.slug}`; return (
+            <li><a href={href} aria-current={path === href ? 'page' : undefined} title={`Suite ${s.n} · ${s.name} — topic: ${topicOf(s.n)}`} data-suite-n={s.n}>
+              <span class="num" aria-hidden="true">{s.n}</span><span class="nav-name">{s.short}<span class="nav-topic">{topicOf(s.n)}</span></span>
+            </a></li>); })}
+        </ol>
         <h2>System</h2>
         <ul>{TOOLS.slice(3).map((t) => <li><a href={t.path} aria-current={path === t.path ? 'page' : undefined}>{t.title}</a></li>)}</ul>
       </nav>
@@ -87,7 +89,6 @@ export function App() {
   const [loadErr, setLoadErr] = useState<unknown>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [queueN, setQueueN] = useState(0);
-  const [update, setUpdate] = useState<ServiceWorker | null>(null);
   const n = useStore(net);
 
   useEffect(() => {
@@ -103,7 +104,10 @@ export function App() {
   }, [r.path]);
 
   // move focus to the main heading after navigation (screen readers announce the new page)
-  useEffect(() => { const h = document.querySelector('main h1') as HTMLElement | null; if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); } }, [Comp]);
+  useEffect(() => {
+    if (document.querySelector('[aria-modal="true"]')) return; // never steal focus from an open dialog
+    const h = document.querySelector('main h1') as HTMLElement | null; if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); }
+  }, [Comp]);
 
   // Alt+← / Alt+→ drive real browser history
   useEffect(() => {
@@ -129,16 +133,11 @@ export function App() {
     return () => { unsub(); unNet(); navigator.serviceWorker?.removeEventListener('message', onMsg); };
   }, []);
 
-  // service-worker update prompt
-  useEffect(() => {
-    const onUpd = (e: Event) => setUpdate((e as CustomEvent).detail as ServiceWorker);
-    window.addEventListener('qg-sw-update', onUpd);
-    return () => window.removeEventListener('qg-sw-update', onUpd);
-  }, []);
 
   return (
     <>
       <a class="skip-link" href="#main">Skip to content</a>
+      <UpdateDialogHost />
       <header class="app-header">
         <button type="button" class="hist-btn menu-btn" aria-label="Open navigation" aria-expanded={navOpen} aria-controls="sidenav" onClick={() => setNavOpen((o) => !o)}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
@@ -152,12 +151,13 @@ export function App() {
         <div class="header-tools">
           <ModeSelect />
           <NetIndicator queue={queueN} />
+          <UpdateReadyChip />
+          <WhatsNewButton />
           <InstallButton />
           <ThemeToggle />
         </div>
       </header>
       {!n.online && <div class="offline-bar" role="status">Offline — no fresh data can be fetched. Cached responses are labelled “cached at …”; the BMV prediction falls back to the local engine; job submissions and preregistrations are queued on this device.</div>}
-      {update && <div class="update-bar" role="status">A new version of QG-DEVS is available. <button type="button" class="btn-sm" onClick={() => { update.postMessage({ type: 'SKIP_WAITING' }); }}>Reload to update</button></div>}
       <div class="layout">
         <SideNav path={r.path} open={navOpen} close={() => setNavOpen(false)} />
         <main id="main">

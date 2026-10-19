@@ -1,7 +1,12 @@
 import { RunBar } from '../../components/Reset';
 /** Suite 14 — Physical-law and hypothesis discovery (dimensionally constrained regression, hypothesis ledger). */
 import type { ComponentChildren } from 'preact';
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
+import { View3D } from '../../components/View3D';
+import { usePlayer, PlayerControls } from '../../components/Player';
+import { Seg, Out } from '../../components/ui';
+import { sobol, pointMassDeltaPhi } from '../../engine/index';
+import { DEFAULT_DESIGN, type Geometry } from '../../lib/types';
 import { SuiteHeader } from '../../components/SuiteHeader';
 import { Card, ProvBadge, EvidenceBanner, ErrorBox, Loading, SourceChip, DataTable, Btn, Tabs, TabPanel, InfoBanner, KV, Json, Level, StatusBadge } from '../../components/ui';
 import { NumberField, SelectField, useValidity } from '../../components/fields';
@@ -85,6 +90,7 @@ function ScalingView() {
             {Object.keys(law.constant_exponents).length > 0 && <p class="small">Constants solved for dimensional consistency: {Object.entries(law.constant_exponents).map(([k, e]) => <code>{SYM[k] ?? k}^{e} </code>)}</p>}
             <p class="small muted">Study: {res.study}, regime {res.regime}, geometry {res.geometry}, n = {res.n}, seed {res.seed}. Data SHA-256 <code>{shortHash(res.data_sha256, 16)}</code>. Recovering a known law blind is a check of the method, not a discovery.</p>
           </Card>
+          {res.regime === 'far' && law.dimensionally_consistent && law.expression && <SobolView res={res} />}
           {res.correction_series && (
             <Card title="Near-field correction series" actions={<ProvBadge kind="COMPUTED" />}>
               <p class="small">Variable {res.correction_series.variable}; normalisation {res.correction_series.normalisation}. Reference: <code>{res.correction_series.reference_series}</code></p>
@@ -191,5 +197,85 @@ export default function Page(_props: { suite?: number }) {
         <TabPanel id="ledger" active={tab}><LedgerView /></TabPanel>
       </div>
     </div>
+  );
+}
+
+// ----------------------------------------------------------------------------- Sobol designs + law surface
+/** Far-regime bounds of qgdevs.discovery.bmv_scaling_study (all four sampled log-uniformly). */
+const FAR_BOUNDS: Record<string, [number, number]> = { mass: [1e-16, 1e-13], separation: [2e-4, 1e-3], branch_separation: [1e-6, 1e-5], time: [0.1, 5.0] };
+const ORDER = ['mass', 'separation', 'branch_separation', 'time'];
+const rat = (e: string | null | undefined, raw: number) => { if (!e) return raw; const [a, b] = e.split('/').map(Number); return b ? a / b : a; };
+
+/**
+ * The scaling endpoint does not return its (scrambled-Sobol) samples, so the designs are re-sampled here with
+ * an unscrambled Sobol sequence over the same bounds and evaluated with the same point-mass entangling phase.
+ * The discovered law (server exponents and intercept) is drawn as a plane through them.
+ */
+function SobolView({ res }: { res: Scaling }) {
+  const law = res.law;
+  const e = Object.fromEntries(ORDER.map((k) => [k, rat(law.rational_exponents[k], law.raw_exponents[k])])) as Record<string, number>;
+  const c10 = law.log_prefactor / Math.LN10; // ln → log10
+  const data = useMemo(() => {
+    const U = sobol(res.n, 4);
+    return U.map((u) => {
+      const q: Record<string, number> = {};
+      ORDER.forEach((k, i) => { const [lo, hi] = FAR_BOUNDS[k]; q[k] = 10 ** (Math.log10(lo) + u[i] * (Math.log10(hi) - Math.log10(lo))); });
+      const dphi = Math.abs(pointMassDeltaPhi({ ...DEFAULT_DESIGN, mass_A: q.mass, mass_B: q.mass, separation: q.separation, dx_A: q.branch_separation, dx_B: q.branch_separation, time: q.time, geometry: res.geometry as Geometry }));
+      const x = e.mass * Math.log10(q.mass) + e.branch_separation * Math.log10(q.branch_separation) + e.time * Math.log10(q.time);
+      const y = Math.log10(q.separation), z = Math.log10(dphi);
+      const zLaw = c10 + x + e.separation * y;
+      return { q, dphi, x, y, z, rel: 10 ** (z - zLaw) - 1 };
+    });
+  }, [res]);
+  const maxRel = Math.max(...data.map((d) => Math.abs(d.rel)));
+  const n = data.length;
+  const p = usePlayer(n, 20);
+  const shown = Math.max(1, Math.min(n, Math.floor(p.pos) + 1));
+  const [view, setView] = useState<'3d' | '2d'>('3d');
+  const xr: [number, number] = [Math.min(...data.map((d) => d.x)), Math.max(...data.map((d) => d.x))];
+  const yr: [number, number] = [Math.log10(FAR_BOUNDS.separation[0]), Math.log10(FAR_BOUNDS.separation[1])];
+  const zAll = data.map((d) => d.z);
+  const zr: [number, number] = [Math.min(...zAll), Math.max(...zAll)];
+  const spec = useMemo(() => {
+    const NX = 24, NY = 24;
+    const xs = Array.from({ length: NX }, (_, i) => xr[0] + ((xr[1] - xr[0]) * i) / (NX - 1));
+    const ys = Array.from({ length: NY }, (_, j) => yr[0] + ((yr[1] - yr[0]) * j) / (NY - 1));
+    const z = ys.map((y) => xs.map((x) => { const v = c10 + x + e.separation * y; return v >= zr[0] - 0.5 && v <= zr[1] + 0.5 ? v : null; }));
+    return {
+      x: { label: 'Σ eᵢ log₁₀ qᵢ (m, Δx, t)', unit: '1', min: xr[0], max: xr[1] }, y: { label: 'log₁₀ d', unit: '1', min: yr[0], max: yr[1] }, z: { label: 'log₁₀ Δφ', unit: '1', min: zr[0] - 0.5, max: zr[1] + 0.5 },
+      surfaces: [{ name: 'discovered law', xs, ys, z, color: '#56B4E9', opacity: 0.45, wire: true }],
+      points: [{ name: 'designs', pts: data.slice(0, shown).map((d) => [d.x, d.y, d.z] as [number, number, number]), color: '#D55E00', size: 0.02, highlightLast: true }],
+    };
+  }, [data, shown]);
+  const exprX = `${fmtNum(e.mass, 3)}·log₁₀ m + ${fmtNum(e.branch_separation, 3)}·log₁₀ Δx + ${fmtNum(e.time, 3)}·log₁₀ t`;
+  const collapsed = data.map((d) => ({ x: d.x + e.separation * d.y, z: d.z })).sort((a, b) => a.x - b.x);
+  return (
+    <Card title="Sampled designs and the discovered power-law surface" actions={<><ProvBadge kind="COMPUTED_LOCAL" title="Design points re-sampled and evaluated in the browser" /><ProvBadge kind="COMPUTED" title="Law: server fit" /></>}>
+      <InfoBanner>The API does not return the server's sampled designs (they come from a scrambled Sobol sequence), so {n} designs are re-sampled here with an <b>unscrambled</b> Sobol sequence over the same far-field bounds and evaluated with the same point-mass entangling phase (local engine). The plane is the <b>server's</b> discovered law: z = {fmtNum(c10, 6)} + x + ({fmtNum(e.separation, 3)})·y with x = {exprX} (rational exponents; intercept = fitted ln-prefactor / ln 10).</InfoBanner>
+      <div class="outs">
+        <Out label="Max |Δφ_local / Δφ_law − 1|" value={maxRel} sig={3} prov="COMPUTED_LOCAL" interp="Residual of the locally evaluated designs against the server law; small values confirm the law on independent samples." />
+        <Out label="Designs shown" value={`${shown} / ${n}`} prov="COMPUTED_LOCAL" interp="Points appear in Sobol order (low-discrepancy filling of the design space)." />
+      </div>
+      <div class="row-between"><Seg label="View" value={view} onChange={setView} options={[{ v: '3d', label: '3-D' }, { v: '2d', label: '2-D collapse' }]} /></div>
+      {view === '3d' ? (
+        <View3D kind="plot3d" opts={spec} name="sobol-law" title={`Discovered law and ${shown} sampled designs`} badge="COMPUTED LOCALLY" playing={p.playing}
+          label="Three-dimensional scatter of sampled designs on the plane of the discovered power law"
+          legend={[{ label: 'designs (local engine)', color: '#D55E00' }, { label: 'discovered law (server fit)', color: '#56B4E9' }]}
+          onRecordStart={() => { p.setPos(0); p.setPlaying(true); }}
+          frameData={() => ({ law: { log10_prefactor: c10, exponents: e }, designs: data.slice(0, shown).map((d) => ({ ...d.q, delta_phi_rad: d.dphi, rel_residual: d.rel })) })}
+          fallback={<Collapse collapsed={collapsed} c10={c10} />} />
+      ) : <Collapse collapsed={collapsed} c10={c10} shown={shown} />}
+      <PlayerControls p={p} n={n} label="Sobol designs" />
+    </Card>
+  );
+}
+
+function Collapse({ collapsed, c10 }: { collapsed: { x: number; z: number }[]; c10: number; shown?: number }) {
+  const xs = collapsed.map((d) => d.x);
+  return (
+    <LinePlot name="law-collapse" title="Collapse onto the discovered law" desc="log10 of the entangling phase versus the combined exponent sum including separation; the line is the discovered law"
+      xLabel="Σ eᵢ log₁₀ qᵢ (incl. d)" yLabel="log₁₀ Δφ"
+      series={[{ name: 'discovered law (server)', x: [Math.min(...xs), Math.max(...xs)], y: [c10 + Math.min(...xs), c10 + Math.max(...xs)], color: '#56B4E9', width: 2.5 },
+        { name: 'sampled designs (local engine)', x: xs, y: collapsed.map((d) => d.z), color: '#D55E00', markers: true, width: 0.01 }]} />
   );
 }

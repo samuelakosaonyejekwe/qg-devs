@@ -221,11 +221,21 @@ def _h_vv(p, ctx):
     return {"summary": {"total": len(done), "passed": len(done) - n_fail, "failed": n_fail}, "results": done}
 
 
+def _records(p) -> bool:
+    """Only researcher/admin/scheduler jobs write to the permanent evidence ledger."""
+    return p.get("_role", "system") in ("researcher", "admin", "operator", "system")
+
+
 @handler("discovery_cycle")
 def _h_disc_cycle(p, ctx):
     from .discovery import run_discovery_cycle
     from .evidence import Ledger
-    return {"hypotheses": run_discovery_cycle(Ledger(paths()["ledger"]), seed=p.get("seed", 0))}
+    import tempfile
+    if _records(p):
+        return {"hypotheses": run_discovery_cycle(Ledger(paths()["ledger"]), seed=p.get("seed", 0)), "recorded": True}
+    with tempfile.TemporaryDirectory() as td:
+        return {"hypotheses": run_discovery_cycle(Ledger(Path(td) / "l.jsonl"), seed=p.get("seed", 0)),
+                "recorded": False, "note": "anonymous run: results not written to the evidence ledger"}
 
 
 @handler("calibration_tradeoff")
@@ -233,6 +243,8 @@ def _h_cal(p, ctx):
     from .discovery import calibration_tradeoff_study, HypothesisLedger
     from .evidence import Ledger
     r = calibration_tradeoff_study(n=p.get("n", 6), seed=p.get("seed", 0))
+    if not _records(p):
+        return {**r, "recorded": False, "note": "anonymous run: results not written to the evidence ledger"}
     HypothesisLedger(Ledger(paths()["ledger"])).record(
         title="Decoherence-calibration requirement for quantum vs classical-channel discrimination",
         statement=r["candidate_relationship"], method="bisection with the robust discrimination engine", study=r,

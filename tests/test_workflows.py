@@ -289,3 +289,16 @@ def test_recombination_requirement_monotone():
     a = itf.required_gradient_precision(1e-14, 250e-6, 0.25, 2 * np.pi * 100, 0)["max_relative_gradient_error"]
     b = itf.required_gradient_precision(1e-14, 250e-6, 0.25, 2 * np.pi * 100, 10)["max_relative_gradient_error"]
     assert 0 < b < a  # hotter motional state ⇒ tighter precision
+
+
+def test_vault_reingest_identical_bytes(tmp_path, ledger):
+    v = evidence.BlindVault(tmp_path / "v", ledger)
+    a = v.ingest(b"same", label="SYNTHETIC", role="exploratory", source="s", description="d")
+    b = v.ingest(b"same", label="SYNTHETIC", role="exploratory", source="s", description="d")
+    assert a.sha256 == b.sha256
+
+
+def test_discovery_returns_samples():
+    from qgdevs.discovery import bmv_scaling_study
+    r = bmv_scaling_study(n=16)
+    assert len(r["samples"]["delta_phi"]) == 16

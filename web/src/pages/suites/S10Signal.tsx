@@ -1,8 +1,15 @@
 import { RunBar } from '../../components/Reset';
 /** Suite 10 — synthetic measurement records, witness estimation, tomography and injection–recovery. Everything here is SYNTHETIC. */
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
+import { View3D } from '../../components/View3D';
+import { usePlayer, PlayerControls, interp } from '../../components/Player';
+import { HeatMap } from '../../plot/Chart';
+import { Seg } from '../../components/ui';
+import { bornProbabilities } from '../../engine/index';
+import { isOfflineError } from '../../lib/api';
+import type { Scenario } from '../../lib/types';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, Out, ProvBadge, SyntheticBanner, ErrorBox, Btn, Json, Level, InfoBanner, StatusBadge, KV } from '../../components/ui';
+import { Card, Out, ProvBadge, SyntheticBanner, ErrorBox, Json, Level, InfoBanner, StatusBadge, KV } from '../../components/ui';
 import { NumberField, SelectField, useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { LinePlot } from '../../plot/Chart';
@@ -85,7 +92,7 @@ export default function Page(_props: { suite?: number }) {
                 ) : <p class="muted">No witness estimate: the record lacks one of XX, YZ, ZY.</p>}
               </Card>
               <Card title="State tomography (maximum likelihood)" actions={<ProvBadge kind="SYNTHETIC" />}>
-                <Btn busy={tomo.busy} disabled={!tomoReady} onClick={tomo.run}>Reconstruct state</Btn>
+                <RunBar label="Reconstruct state" scenario busy={tomo.busy} disabled={!tomoReady} onRun={tomo.run} />
                 {!tomoReady && <p class="small muted">Requires counts for all nine Pauli settings.</p>}
                 <ErrorBox error={tomo.error} what="reconstructing the state" />
                 {tomo.data && <Tomo t={tomo.data} />}
@@ -93,6 +100,7 @@ export default function Page(_props: { suite?: number }) {
               {atLeast(st.mode, 'expert') && <Card title="Raw record (expert)"><Json data={rec} /></Card>}
             </>
           )}
+          <Convergence model={model} shots={shots} seed={seed} settings={sel} valid={v.ok && sel.length > 0} />
           <Injection />
         </div>
       </div>
@@ -163,5 +171,121 @@ function Injection() {
         </div>
       )}
     </Card>
+  );
+}
+
+// ----------------------------------------------------------------------------- convergence animation
+const OUTCOMES = ['++', '+−', '−+', '−−'];
+const OUTCOME_COLORS = ['#0072B2', '#E69F00', '#009E73', '#CC79A7'];
+
+/** Geometric ladder of record sizes from 10 up to `max` (at most 10 distinct values). */
+function ladder(max: number): number[] {
+  const K = Math.min(10, Math.max(2, Math.ceil(Math.log10(max / 10) * 3) + 1));
+  const out = new Set<number>();
+  for (let k = 0; k < K; k++) out.add(Math.round(10 * (max / 10) ** (k / (K - 1))));
+  return [...out].sort((a, b) => a - b);
+}
+
+interface Frames { Ns: number[]; freq: Record<string, number[]>[]; settings: string[]; model: string; seed: number; scenario: Scenario; born: Record<string, number[]> | null; bornError?: string; tv: number[] }
+
+/**
+ * Empirical outcome frequencies converging to the Born probabilities. Every frame is an independent SYNTHETIC
+ * record of N shots per setting produced by POST /api/signal/simulate (same model, design and seed); nothing
+ * is resampled in the browser. Born probabilities are computed locally from the hypothesis state in the
+ * protocol frame including readout error.
+ */
+function Convergence({ model, shots, seed, settings: sel, valid }: { model: string; shots: number; seed: number; settings: string[]; valid: boolean }) {
+  const sc = useStore(scenario);
+  const [fr, setFr] = useState<Frames | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [prog, setProg] = useState('');
+  const [err, setErr] = useState<unknown>(null);
+  const [view, setView] = useState<'3d' | '2d'>('3d');
+  const run = async () => {
+    setBusy(true); setErr(null); setFr(null);
+    const Ns = ladder(shots);
+    const freq: Record<string, number[]>[] = [];
+    try {
+      for (let k = 0; k < Ns.length; k++) {
+        setProg(`record ${k + 1}/${Ns.length}: N = ${Ns[k]} shots per setting`);
+        const r = await apiPost<SimRecord>('/api/signal/simulate', { ...body(sc), model, shots: Ns[k], seed, settings: sel });
+        const f: Record<string, number[]> = {};
+        for (const s of sel) { const c = r.counts[s]; const n = c.reduce((a, b) => a + b, 0) || 1; f[s] = c.map((x) => x / n); }
+        freq.push(f);
+      }
+      let born: Record<string, number[]> | null = null, bornError: string | undefined;
+      try { born = bornProbabilities(sc.design, sc.environment, model, sc.environment.readout_error, sel); }
+      catch (e) { bornError = String((e as Error).message); }
+      // total-variation distance, averaged over settings: ½ Σ_o |f_o − p_o|
+      const tv = born ? freq.map((f) => sel.reduce((a, s) => a + 0.5 * f[s].reduce((b, x, o) => b + Math.abs(x - born![s][o]), 0), 0) / sel.length) : [];
+      setFr({ Ns, freq, settings: sel, model, seed, scenario: sc, born, bornError, tv });
+    } catch (e) { setErr(e); } finally { setBusy(false); setProg(''); }
+  };
+  const n = fr?.Ns.length ?? 0;
+  const p = usePlayer(n, 1.5);
+  const zMax = useMemo(() => {
+    if (!fr) return 1;
+    let m = 0;
+    for (const f of fr.freq) for (const s of fr.settings) for (const x of f[s]) m = Math.max(m, x);
+    if (fr.born) for (const s of fr.settings) for (const x of fr.born[s]) m = Math.max(m, x);
+    return Math.min(1, Math.ceil(m * 11) / 10);
+  }, [fr]);
+  // display values at the player's position (linear interpolation between neighbouring records, display only)
+  const cur = useMemo(() => {
+    if (!fr) return null;
+    const out: Record<string, number[]> = {};
+    for (const s of fr.settings) out[s] = [0, 1, 2, 3].map((o) => interp(fr.freq.map((f) => f[s][o]), p.pos));
+    return out;
+  }, [fr, p.pos]);
+  const spec = useMemo(() => {
+    if (!fr || !cur) return null;
+    const bars = fr.settings.flatMap((s, i) => [0, 1, 2, 3].map((o) => ({ xi: i, yi: o, h: cur[s][o], color: OUTCOME_COLORS[o] })));
+    const pts = fr.born ? fr.settings.flatMap((s, i) => [0, 1, 2, 3].map((o) => [i, o, fr.born![s][o]] as [number, number, number])) : [];
+    return {
+      x: { label: 'Pauli setting', cats: fr.settings }, y: { label: 'Outcome', cats: OUTCOMES }, z: { label: 'Frequency', unit: '1', min: 0, max: zMax },
+      bars, barWidth: 0.55,
+      points: pts.length ? [{ name: 'Born probability', pts, color: '#D55E00', size: 0.03 }] : [],
+    };
+  }, [fr, cur, zMax]);
+  const i = Math.floor(p.pos);
+  return (
+    <Card title="Convergence of outcome frequencies to the Born probabilities" actions={<ProvBadge kind="SYNTHETIC" />}>
+      <p class="small muted">Requests a ladder of independent synthetic records (N = 10 … {shots} shots per setting, ≤ 10 server calls, same model, design and seed) and animates the empirical outcome frequencies. Orange markers are the Born probabilities of {model} in the protocol frame including readout error ε = {sc.environment.readout_error}, computed locally by the engine.</p>
+      <RunBar label="Generate record ladder" scenario busy={busy} disabled={!valid} onRun={run} />
+      {busy && <p class="small muted" role="status">{prog}</p>}
+      <ErrorBox error={err} what="generating synthetic records" />
+      {isOfflineError(err) && <p class="small muted">No fresh data was fetched; synthetic records are produced only by the server.</p>}
+      {fr && spec && cur && (
+        <div class="stack" style={{ marginTop: '8px' }}>
+          {fr.bornError && <InfoBanner>Born probabilities are not available in the offline engine for {fr.model} ({fr.bornError}); frequencies are shown without targets.</InfoBanner>}
+          <div class="row-between"><Seg label="View" value={view} onChange={setView} options={[{ v: '3d', label: '3-D bars' }, { v: '2d', label: '2-D' }]} />
+            <span class="small">Showing record N = <b>{fr.Ns[i]}</b>{p.pos - i > 1e-3 && i + 1 < n ? ` → ${fr.Ns[i + 1]} (interpolated between records for display only)` : ''} shots per setting</span></div>
+          {view === '3d' ? (
+            <View3D kind="plot3d" opts={spec} name="outcome-convergence" title={`Outcome frequencies, N = ${fr.Ns[i]}`} badge="SYNTHETIC" playing={p.playing}
+              label="Three-dimensional bars of empirical outcome frequencies per Pauli setting with Born-probability markers"
+              legend={[...OUTCOMES.map((o, k) => ({ label: `outcome ${o}`, color: OUTCOME_COLORS[k] })), ...(fr.born ? [{ label: 'Born probability (engine)', color: '#D55E00' }] : [])]}
+              onRecordStart={() => { p.setPos(0); p.setPlaying(true); }}
+              frameData={() => ({ label: 'SYNTHETIC', N: fr.Ns[i], settings: fr.settings, outcomes: OUTCOMES, frequencies: fr.freq[i], born: fr.born, model: fr.model, seed: fr.seed })}
+              fallback={<FreqHeat fr={fr} cur={cur} />} />
+          ) : <FreqHeat fr={fr} cur={cur} />}
+          <PlayerControls p={p} n={n} label="Record size" />
+          {fr.tv.length > 0 && (
+            <LinePlot name="tv-distance" title="Mean total-variation distance to the Born probabilities" desc="Average over settings of half the L1 distance between frequencies and Born probabilities versus record size"
+              xLabel="Shots per setting N" yLabel="TV distance" logX logY cursorX={Math.exp(interp(fr.Ns.map(Math.log), p.pos))}
+              series={[{ name: 'Synthetic records', x: fr.Ns, y: fr.tv, color: '#0072B2', markers: true },
+                { name: 'Reference ∝ 1/√N (through first point)', x: fr.Ns, y: fr.Ns.map((N) => fr.tv[0] * Math.sqrt(fr.Ns[0] / N)), color: '#7f7f7f', dash: [5, 4] }]} />
+          )}
+          <p class="small muted">Frequencies of independent records fluctuate around the Born probabilities with spread ∝ 1/√N; the dashed line is the scaling expectation, not a fit.</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function FreqHeat({ fr, cur }: { fr: Frames; cur: Record<string, number[]> }) {
+  return (
+    <HeatMap name="outcome-frequencies" title="Outcome frequencies (cell text: Born probability)" desc="Heat map of empirical outcome frequencies per setting and outcome"
+      z={OUTCOMES.map((_, o) => fr.settings.map((s) => cur[s][o]))} xCats={fr.settings} yCats={OUTCOMES} xLabel="Pauli setting" yLabel="Outcome" zLabel="Frequency" palette="viridis" zDomain={[0, 1]}
+      annotate={fr.born ? (_v, o, j) => fmtNum(fr.born![fr.settings[j]][o], 2) : undefined} />
   );
 }

@@ -1,44 +1,75 @@
 /**
- * Shared three.js stage: renderer, camera, orbit controls, on-demand rendering, resize handling,
- * theme colours from CSS custom properties, PNG export and text sprites.
- * Rendering quality adapts to the device (pixel ratio, tessellation) — never positions or values.
+ * Shared high-fidelity three.js stage.
+ *
+ * Rendering: antialiased WebGL, ACES filmic tone mapping, sRGB output, physically based lighting from a
+ * procedural studio environment (RoomEnvironment through PMREM — nothing downloaded), key/fill/rim lights
+ * and soft shadows. Text is rendered as crisp HTML (CSS2DRenderer); lines are anti-aliased screen-space
+ * lines (Line2/LineMaterial). Pixel ratio is min(devicePixelRatio, 2) and is lowered only while the measured
+ * frame time exceeds 33 ms, restoring automatically. Quality adaptation never changes positions or values.
+ *
+ * Export composites the WebGL frame and the HTML labels into one canvas at 1×–8× resolution (optionally with
+ * a transparent background), which is also what video capture records.
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 export interface Handle {
   update(opts: any): void;
   dispose(): void;
   resetView(): void;
+  /** Fractional frame index: modules interpolate between solver samples for display only. */
   setFrame?(f: number): void;
-  toPNG?(scale?: number): string;
+  toPNG?(scale?: number, transparent?: boolean): string;
+  /** Composite of WebGL + labels for export/video. */
+  composite?(ctx: CanvasRenderingContext2D, scale: number, transparent: boolean): void;
+  canvasSize?(): { w: number; h: number };
+  memory?(): { geometries: number; textures: number };
+  info?: any;
 }
 
 export const lowEnd: boolean =
   typeof navigator !== 'undefined' &&
   ((navigator.hardwareConcurrency || 8) <= 4 || ((navigator as any).deviceMemory ?? 8) <= 4);
 
+/**
+ * Rendering quality tier. 'high' on capable GPUs; 'low' for software renderers (SwiftShader, llvmpipe) and
+ * low-end devices: 1× pixels, standard materials, no shadows. Override with localStorage 'qg.gfx' =
+ * 'high' | 'low' | 'auto'. Tiers change only rendering cost, never positions or values.
+ */
+export let tier: 'high' | 'low' = lowEnd ? 'low' : 'high';
+function detectTier(gl: WebGLRenderingContext | WebGL2RenderingContext) {
+  let pref = 'auto';
+  try { pref = localStorage.getItem('qg.gfx') || 'auto'; } catch { /* ignore */ }
+  if (pref === 'high' || pref === 'low') { tier = pref; return; }
+  let name = '';
+  try { const ext = gl.getExtension('WEBGL_debug_renderer_info'); name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); } catch { /* ignore */ }
+  tier = lowEnd || /swiftshader|llvmpipe|software|basic render/i.test(name) ? 'low' : 'high';
+}
+
 export const reducedMotion = (): boolean =>
   typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export interface Theme { fg: string; bg: string; muted: string }
+export interface Theme { fg: string; bg: string; muted: string; accent: string }
 
 export function readTheme(el: HTMLElement): Theme {
   const cs = getComputedStyle(el);
   const get = (n: string, d: string) => cs.getPropertyValue(n).trim() || d;
-  return { fg: get('--fg', '#1b1f24'), bg: get('--bg', '#ffffff'), muted: get('--muted', '#6b7280') };
+  return { fg: get('--fg', '#1b1f24'), bg: get('--bg-elev', '#ffffff'), muted: get('--muted', '#6b7280'), accent: get('--accent', '#3442c0') };
 }
 
 /** three.Color accepts most CSS colour syntaxes; fall back if it cannot parse (e.g. oklch). */
 export function color(css: string, fallback = '#888888'): THREE.Color {
   const c = new THREE.Color();
-  try {
-    c.setStyle(css);
-    return c;
-  } catch {
-    return c.set(fallback);
-  }
+  try { c.setStyle(css); return c; } catch { return c.set(fallback); }
 }
+
+// Line materials need the viewport resolution; the owning stage updates them on resize.
+const lineMaterials = new Set<LineMaterial>();
 
 export interface Stage {
   scene: THREE.Scene;
@@ -46,48 +77,83 @@ export interface Stage {
   renderer: THREE.WebGLRenderer;
   controls: OrbitControls;
   theme: Theme;
+  labels: CSS2DRenderer;
   requestRender(): void;
   setHome(pos: THREE.Vector3, target: THREE.Vector3): void;
   resetView(): void;
-  toPNG(scale?: number): string;
+  toPNG(scale?: number, transparent?: boolean): string;
+  composite(ctx: CanvasRenderingContext2D, scale: number, transparent: boolean): void;
+  canvasSize(): { w: number; h: number };
+  memory(): { geometries: number; textures: number };
+  /** Enable soft shadows from the key light onto meshes with castShadow/receiveShadow. */
+  enableShadows(radius: number): void;
   dispose(): void;
 }
 
 export function createStage(el: HTMLElement): Stage {
   const theme = readTheme(el);
-  const renderer = new THREE.WebGLRenderer({ antialias: !lowEnd, alpha: true, preserveDrawingBuffer: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowEnd ? 1.5 : 2));
+  if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+  detectTier(renderer.getContext());
+  const maxPR = tier === 'high' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+  let pr = maxPR;
+  renderer.setPixelRatio(pr);
   renderer.setClearColor(0x000000, 0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const canvas = renderer.domElement;
-  canvas.style.display = 'block';
-  canvas.style.width = '100%';
-  canvas.style.height = '100%';
-  canvas.style.touchAction = 'none';
-  canvas.setAttribute('role', 'img');
+  Object.assign(canvas.style, { display: 'block', width: '100%', height: '100%', touchAction: 'none' });
   el.appendChild(canvas);
 
+  const labels = new CSS2DRenderer();
+  Object.assign(labels.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none', overflow: 'hidden' });
+  labels.domElement.className = 'qg3d-labels';
+  el.appendChild(labels.domElement);
+
   const scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-  const dir = new THREE.DirectionalLight(0xffffff, 1.6);
-  dir.position.set(2, 3, 4);
-  scene.add(dir);
+  let envRT: THREE.WebGLRenderTarget | null = null;
+  if (tier === 'high') {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    scene.environment = envRT.texture;
+    pmrem.dispose();
+  }
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8890a0, 0.35));
+  const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(2.5, 3.5, 4); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xdfe6ff, 0.45); fill.position.set(-3, 1.5, 2); scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xffffff, 0.6); rim.position.set(0, 2, -4); scene.add(rim);
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.001, 1000);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = !reducedMotion();
-  controls.dampingFactor = 0.12;
+  controls.dampingFactor = 0.1;
   controls.autoRotate = false;
 
   const home = { pos: new THREE.Vector3(0, 0, 3), target: new THREE.Vector3() };
-  let pending = false;
-  let disposed = false;
+  let pending = false, disposed = false, lost = false, visible = true, dirtyHidden = false;
+  let ema = 16, slowFrames = 0, fastFrames = 0, lastDraw = 0;
 
-  const draw = () => {
+  const size = () => renderer.getSize(new THREE.Vector2());
+  const syncLines = () => { const s = size(); for (const m of lineMaterials) m.resolution.set(s.x, s.y); };
+
+  const draw = (now: number) => {
     pending = false;
-    if (disposed) return;
-    // damping needs a few extra frames to settle; controls.update() returns true while moving
+    if (disposed || lost) return;
+    if (!visible) { dirtyHidden = true; return; } // offscreen: render when scrolled back into view
     if (controls.update()) requestRender();
     renderer.render(scene, camera);
+    labels.render(scene, camera);
+    // Adaptive resolution from the real frame interval during continuous animation: lower the pixel
+    // ratio only while frames take > 33 ms, restore when they are fast again (values never change).
+    const dt = now - lastDraw; lastDraw = now;
+    if (dt > 0 && dt < 1000) {
+      ema = 0.8 * ema + 0.2 * dt;
+      if (ema > 33 && pr > 1) { if (++slowFrames > 3) { pr = Math.max(1, pr * 0.75); renderer.setPixelRatio(pr); syncLines(); slowFrames = 0; } }
+      else if (ema < 18 && pr < maxPR) { if (++fastFrames > 120) { pr = Math.min(maxPR, pr / 0.75); renderer.setPixelRatio(pr); syncLines(); fastFrames = 0; } }
+      else slowFrames = 0;
+    }
   };
   function requestRender() {
     if (pending || disposed) return;
@@ -100,20 +166,60 @@ export function createStage(el: HTMLElement): Stage {
     const w = Math.max(1, el.clientWidth);
     const h = Math.max(1, el.clientHeight || Math.round(w * 0.6));
     renderer.setSize(w, h, false);
+    labels.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    syncLines();
     requestRender();
   };
   const ro = new ResizeObserver(resize);
   ro.observe(el);
   resize();
+  const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((es) => {
+    visible = es.some((e) => e.isIntersecting);
+    if (visible && dirtyHidden) { dirtyHidden = false; requestRender(); }
+  }, { rootMargin: '150px' }) : null;
+  io?.observe(el);
+
+  // WebGL context loss (GPU reset, tab backgrounding on mobile): pause and resume on restore.
+  const onLost = (e: Event) => { e.preventDefault(); lost = true; el.dataset.glLost = '1'; };
+  const onRestored = () => { lost = false; delete el.dataset.glLost; requestRender(); };
+  canvas.addEventListener('webglcontextlost', onLost);
+  canvas.addEventListener('webglcontextrestored', onRestored);
+
+  /** Draw the current frame (WebGL + HTML labels) into a 2-D context at `scale` × CSS size. */
+  function composite(ctx: CanvasRenderingContext2D, scale: number, transparent: boolean) {
+    const s = size();
+    const prevPR = renderer.getPixelRatio();
+    renderer.setPixelRatio(scale);
+    renderer.setSize(s.x, s.y, false);
+    syncLines();
+    renderer.render(scene, camera);
+    if (!transparent) { ctx.fillStyle = readTheme(el).bg; ctx.fillRect(0, 0, s.x * scale, s.y * scale); }
+    ctx.drawImage(canvas, 0, 0, s.x * scale, s.y * scale);
+    // labels: project every CSS2DObject and draw its text
+    scene.updateMatrixWorld();
+    const v = new THREE.Vector3();
+    scene.traverseVisible((o) => {
+      if (!(o as any).isCSS2DObject) return;
+      const div = (o as CSS2DObject).element as HTMLElement;
+      v.setFromMatrixPosition(o.matrixWorld).project(camera);
+      if (v.z < -1 || v.z > 1) return;
+      const x = ((v.x + 1) / 2) * s.x * scale, y = ((1 - v.y) / 2) * s.y * scale;
+      const cs = getComputedStyle(div);
+      ctx.font = `${cs.fontWeight} ${parseFloat(cs.fontSize) * scale}px ${cs.fontFamily}`;
+      ctx.fillStyle = cs.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(div.textContent ?? '', x, y);
+    });
+    renderer.setPixelRatio(prevPR);
+    renderer.setSize(s.x, s.y, false);
+    syncLines();
+    requestRender();
+  }
 
   return {
-    scene, camera, renderer, controls, theme, requestRender,
-    setHome(pos, target) {
-      home.pos.copy(pos);
-      home.target.copy(target);
-    },
+    scene, camera, renderer, controls, theme, labels, requestRender,
+    setHome(pos, target) { home.pos.copy(pos); home.target.copy(target); },
     resetView() {
       camera.position.copy(home.pos);
       controls.target.copy(home.target);
@@ -121,66 +227,106 @@ export function createStage(el: HTMLElement): Stage {
       controls.update();
       requestRender();
     },
-    toPNG(scale = 3) {
-      const size = renderer.getSize(new THREE.Vector2());
-      const pr = renderer.getPixelRatio();
-      renderer.setPixelRatio(scale);
-      renderer.setSize(size.x, size.y, false);
-      renderer.render(scene, camera);
-      const url = canvas.toDataURL('image/png'); // read immediately after render: buffer still valid
-      renderer.setPixelRatio(pr);
-      renderer.setSize(size.x, size.y, false);
-      requestRender();
-      return url;
+    composite,
+    canvasSize() { const s = size(); return { w: s.x, h: s.y }; },
+    toPNG(scale = 2, transparent = false) {
+      const s = size();
+      const k = Math.min(scale, 8192 / Math.max(s.x, s.y)); // cap at 8K on the long side
+      const c = document.createElement('canvas');
+      c.width = Math.round(s.x * k); c.height = Math.round(s.y * k);
+      composite(c.getContext('2d')!, k, transparent);
+      return c.toDataURL('image/png');
+    },
+    memory() { return { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures }; },
+    enableShadows(radius: number) {
+      if (tier !== 'high') return; // soft shadows only on capable GPUs
+      renderer.shadowMap.enabled = true;
+      key.castShadow = true;
+      key.shadow.mapSize.set(lowEnd ? 1024 : 2048, lowEnd ? 1024 : 2048);
+      const c = key.shadow.camera as THREE.OrthographicCamera;
+      c.left = c.bottom = -radius; c.right = c.top = radius; c.near = 0.01; c.far = 20;
+      key.shadow.radius = 4;
+      key.shadow.bias = -0.0005;
     },
     dispose() {
       disposed = true;
       ro.disconnect();
+      io?.disconnect();
       controls.dispose();
+      canvas.removeEventListener('webglcontextlost', onLost);
+      canvas.removeEventListener('webglcontextrestored', onRestored);
       scene.traverse((o) => {
         const m = o as THREE.Mesh;
         m.geometry?.dispose?.();
         const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
         for (const mat of mats) {
-          (mat as any).map?.dispose?.();
+          for (const v of Object.values(mat)) if (v && (v as THREE.Texture).isTexture) (v as THREE.Texture).dispose();
+          if (mat instanceof LineMaterial) lineMaterials.delete(mat);
           mat.dispose();
         }
+        if ((o as any).isCSS2DObject) (o as CSS2DObject).element.remove();
       });
+      envRT?.dispose();
       renderer.dispose();
       canvas.remove();
+      labels.domElement.remove();
     },
   };
 }
 
-/** Camera-facing text label (canvas texture sprite). `height` is in world units. */
-export function textSprite(text: string, css: string, height: number): THREE.Sprite {
-  const px = 48;
-  const c = document.createElement('canvas');
-  const ctx = c.getContext('2d')!;
-  ctx.font = `600 ${px}px system-ui, sans-serif`;
-  const w = Math.ceil(ctx.measureText(text).width) + 16;
-  c.width = w;
-  c.height = px + 16;
-  ctx.font = `600 ${px}px system-ui, sans-serif`;
-  ctx.fillStyle = css;
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, 8, c.height / 2);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  sp.scale.set((height * c.width) / c.height, height, 1);
-  sp.renderOrder = 10;
-  return sp;
+/**
+ * Crisp HTML text label anchored at a 3-D point. `height` (world units, legacy argument) selects the size
+ * class: larger values give larger text.
+ */
+export function textSprite(text: string, css: string, height: number, cls = ''): CSS2DObject {
+  const div = document.createElement('div');
+  div.className = `qg3d-label ${cls}`;
+  div.textContent = text;
+  div.style.color = css;
+  div.style.fontSize = `${Math.round(Math.max(11, Math.min(15, 11 + height * 30)))}px`;
+  const o = new CSS2DObject(div);
+  o.center.set(0.5, 0.5);
+  return o;
+}
+export const label = textSprite;
+
+/** Anti-aliased screen-space line segments (pairs of points), width in CSS pixels. */
+export function lineSegments(points: number[], css: string | THREE.Color, opacity = 1, widthPx = 1.6, dashed = false): LineSegments2 {
+  const g = new LineSegmentsGeometry();
+  g.setPositions(points);
+  const m = new LineMaterial({ color: (css instanceof THREE.Color ? css : color(css)).getHex(), linewidth: widthPx, transparent: opacity < 1, opacity, dashed, dashSize: 0.03, gapSize: 0.02 });
+  m.resolution.set(window.innerWidth, window.innerHeight);
+  lineMaterials.add(m);
+  const l = new LineSegments2(g, m);
+  if (dashed) l.computeLineDistances();
+  return l;
 }
 
-export function lineSegments(points: number[], css: string | THREE.Color, opacity = 1): THREE.LineSegments {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-  return new THREE.LineSegments(
-    g,
-    new THREE.LineBasicMaterial({ color: css instanceof THREE.Color ? css : color(css), transparent: opacity < 1, opacity }),
-  );
+/** Polyline through points [x,y,z,…] as anti-aliased line. */
+export function polyline(points: number[], css: string | THREE.Color, widthPx = 2, opacity = 1): LineSegments2 {
+  const seg: number[] = [];
+  for (let i = 0; i + 5 < points.length; i += 3) seg.push(points[i], points[i + 1], points[i + 2], points[i + 3], points[i + 4], points[i + 5]);
+  return lineSegments(seg, css, opacity, widthPx);
 }
+
+/** Physically based material for masses / apparatus parts. */
+export function pbr(css: string | THREE.Color, opts: { metalness?: number; roughness?: number; opacity?: number; emissive?: string } = {}): THREE.MeshStandardMaterial {
+  if (tier !== 'high') {
+    return new THREE.MeshStandardMaterial({
+      color: css instanceof THREE.Color ? css : color(css), metalness: opts.metalness ?? 0.1, roughness: opts.roughness ?? 0.4,
+      transparent: (opts.opacity ?? 1) < 1, opacity: opts.opacity ?? 1, emissive: opts.emissive ? color(opts.emissive) : new THREE.Color(0x000000),
+    });
+  }
+  return new THREE.MeshPhysicalMaterial({
+    color: css instanceof THREE.Color ? css : color(css), metalness: opts.metalness ?? 0.1, roughness: opts.roughness ?? 0.35,
+    clearcoat: 0.4, clearcoatRoughness: 0.25, transparent: (opts.opacity ?? 1) < 1, opacity: opts.opacity ?? 1,
+    emissive: opts.emissive ? color(opts.emissive) : new THREE.Color(0x000000),
+  });
+}
+
+/** Sphere tessellation: high definition (64×48) except on low-end devices. */
+export const SPHERE_SEG: [number, number] = lowEnd ? [40, 28] : [64, 48];
+export const highTier = () => tier === 'high';
 
 const PREFIX: [number, string][] = [
   [1e24, 'Y'], [1e21, 'Z'], [1e18, 'E'], [1e15, 'P'], [1e12, 'T'], [1e9, 'G'], [1e6, 'M'], [1e3, 'k'],
@@ -192,8 +338,7 @@ export function siFormat(v: number, unit: string): string {
   if (v === 0 || !isFinite(v)) return `${v} ${unit}`;
   const a = Math.abs(v);
   const [f, p] = PREFIX.find(([f]) => a >= f * 0.9999) ?? PREFIX[PREFIX.length - 1];
-  const x = v / f;
-  return `${+x.toPrecision(3)} ${p}${unit}`;
+  return `${+(v / f).toPrecision(3)} ${p}${unit}`;
 }
 
 /** Largest "round" length (1, 2 or 5 × 10^k) not exceeding `max`. */
@@ -205,20 +350,23 @@ export function roundLength(max: number): number {
 }
 
 /** Scale bar: a line of length L (world units) with end ticks, plus a label. */
-export function scaleBar(L: number, label: string, css: string, origin: THREE.Vector3, tick: number): THREE.Group {
+export function scaleBar(L: number, text: string, css: string, origin: THREE.Vector3, tick: number): THREE.Group {
   const g = new THREE.Group();
   const { x, y, z } = origin;
-  g.add(lineSegments([x, y, z, x + L, y, z, x, y - tick, z, x, y + tick, z, x + L, y - tick, z, x + L, y + tick, z], css));
-  const t = textSprite(label, css, tick * 2.2);
+  g.add(lineSegments([x, y, z, x + L, y, z, x, y - tick, z, x, y + tick, z, x + L, y - tick, z, x + L, y + tick, z], css, 1, 2));
+  const t = textSprite(text, css, 0.06, 'qg3d-scale');
   t.position.set(x + L / 2, y - tick * 2.6, z);
   g.add(t);
   return g;
 }
 
-/** Small RGB colour maps sampled at 5 stops (perceptually uniform matplotlib maps). */
+/** Perceptually uniform colour maps (matplotlib viridis/magma/cividis; cyclic twilight for phase). */
 const MAPS: Record<string, number[][]> = {
-  viridis: [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]],
-  magma: [[0, 0, 4], [81, 18, 124], [183, 55, 121], [252, 137, 97], [252, 253, 191]],
+  viridis: [[68, 1, 84], [72, 40, 120], [62, 74, 137], [49, 104, 142], [38, 130, 142], [31, 158, 137], [53, 183, 121], [110, 206, 88], [181, 222, 43], [253, 231, 37]],
+  magma: [[0, 0, 4], [28, 16, 68], [79, 18, 123], [129, 37, 129], [181, 54, 122], [229, 80, 100], [251, 135, 97], [254, 194, 135], [252, 253, 191]],
+  cividis: [[0, 34, 78], [18, 53, 112], [59, 73, 108], [87, 92, 109], [112, 113, 115], [138, 134, 120], [165, 156, 116], [195, 179, 105], [225, 204, 85], [254, 232, 56]],
+  twilight: [[226, 217, 226], [166, 191, 203], [109, 148, 196], [95, 94, 176], [79, 40, 113], [47, 20, 52], [96, 31, 76], [158, 54, 81], [196, 112, 103], [214, 175, 162], [226, 217, 226]],
+  diverging: [[8, 81, 156], [49, 130, 189], [107, 174, 214], [189, 215, 231], [247, 247, 247], [253, 208, 162], [253, 174, 107], [230, 85, 13], [166, 54, 3]],
 };
 
 export function colormap(name: string, t: number, out: THREE.Color): THREE.Color {
@@ -227,8 +375,17 @@ export function colormap(name: string, t: number, out: THREE.Color): THREE.Color
   const i = Math.min(s.length - 2, Math.floor(u));
   const f = u - i;
   const a = s[i], b = s[i + 1];
-  return out.setRGB(
-    (a[0] + (b[0] - a[0]) * f) / 255, (a[1] + (b[1] - a[1]) * f) / 255, (a[2] + (b[2] - a[2]) * f) / 255,
-    THREE.SRGBColorSpace,
-  );
+  return out.setRGB((a[0] + (b[0] - a[0]) * f) / 255, (a[1] + (b[1] - a[1]) * f) / 255, (a[2] + (b[2] - a[2]) * f) / 255, THREE.SRGBColorSpace);
+}
+export function colormapCss(name: string, t: number): string {
+  const c = colormap(name, t, new THREE.Color());
+  return `#${c.getHexString(THREE.SRGBColorSpace)}`;
+}
+
+/** Linear interpolation into a sampled series at fractional index f (display only). */
+export function sampleAt(arr: ArrayLike<number>, f: number): number {
+  if (!arr.length) return NaN;
+  const x = Math.max(0, Math.min(arr.length - 1, f));
+  const i = Math.floor(x), j = Math.min(arr.length - 1, i + 1), w = x - i;
+  return arr[i] * (1 - w) + arr[j] * w;
 }

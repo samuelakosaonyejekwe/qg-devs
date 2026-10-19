@@ -136,7 +136,10 @@ def bmv_scaling_study(n: int = 256, seed: int = 0, regime: str = "far", geometry
     law = power_law_discovery(X, y)
     data_hash = sha256_bytes(canonical({"X": {k: v.tolist() for k, v in X.items()}, "y": y.tolist()}))
     out = {"study": "bmv_scaling", "regime": regime, "geometry": geometry, "n": n, "seed": seed, "law": law,
-           "data_sha256": data_hash}
+           "data_sha256": data_hash,
+           "samples": {"mass": X["mass"].tolist(), "separation": X["separation"].tolist(),
+                       "branch_separation": X["branch_separation"].tolist(), "time": X["time"].tolist(),
+                       "delta_phi": y.tolist()}}
     if regime == "near" or law["max_rel_residual"] > 0.05:
         from .constants import G, hbar
         lead = 2 * G * S["mass"] ** 2 * S["time"] / (hbar * S["separation"])

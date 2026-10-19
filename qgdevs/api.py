@@ -88,24 +88,35 @@ def _tokens() -> dict[str, str]:
     return dict(t.split(":", 1) if ":" in t else (t, "researcher") for t in raw.split(",") if t)
 
 
+RESEARCHER_ONLY = ("Researcher access required: this action writes to the permanent evidence record. "
+                   "Enter your access token in Settings → API bearer token.")
+
+
 def role(authorization: str | None = Header(default=None)) -> str:
+    """'public' for anonymous visitors when tokens are configured; 'researcher' in development mode."""
     toks = _tokens()
     if not toks:
         return "researcher"  # development mode: no tokens configured
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(401, "bearer token required for this operation")
-    r = toks.get(authorization[7:])
-    if not r:
-        raise HTTPException(403, "invalid token")
-    return r
+    if not authorization:
+        return "public"
+    if not authorization.startswith("Bearer ") or authorization[7:] not in toks:
+        raise HTTPException(403, "invalid access token (check Settings → API bearer token)")
+    return toks[authorization[7:]]
 
 
 def need(*roles):
     def dep(r: str = Depends(role)):
         if r not in roles and r != "admin":
-            raise HTTPException(403, f"requires role {roles}")
+            raise HTTPException(401 if r == "public" else 403, RESEARCHER_ONLY if r == "public" else f"requires role {roles}")
         return r
     return dep
+
+
+# Computation-only jobs anyone may run (bounded per visitor); everything that writes evidence needs a token.
+PUBLIC_JOB_TYPES = {"discrimination_matrix", "design_optimise", "vv_run", "inference", "dossier",
+                    "discovery_cycle", "calibration_tradeoff", "fetch_source"}
+PUBLIC_MAX_ACTIVE_PER_CLIENT = 3
+PUBLIC_MAX_QUEUE = 40
 
 
 # ----------------------------------------------------------------------------- schemas
@@ -447,12 +458,26 @@ class JobIn(BaseModel):
 
 
 @app.post("/api/jobs")
-def submit_job(j: JobIn, r: str = Depends(need("researcher", "operator"))):
+def submit_job(j: JobIn, request: Request, r: str = Depends(role)):
     if j.type not in HANDLERS:
         raise HTTPException(422, f"unknown job type; available: {sorted(HANDLERS)}")
     if len(json.dumps(j.params)) > 2_000_000:
         raise HTTPException(413, "params too large")
-    return J({"id": JobStore().submit(j.type, j.params)})
+    client = request.client.host if request.client else "?"
+    st = JobStore()
+    params = {k: v for k, v in j.params.items() if not k.startswith("_")}
+    if r == "public":
+        if j.type not in PUBLIC_JOB_TYPES:
+            raise HTTPException(401, RESEARCHER_ONLY)
+        active = [x for x in st.list(500) if x["status"] in ("queued", "running")]
+        mine = [x for x in active if (st.get(x["id"]) or {}).get("params", {}).get("_client") == client]
+        if len(mine) >= PUBLIC_MAX_ACTIVE_PER_CLIENT:
+            raise HTTPException(429, f"you already have {len(mine)} jobs running; wait for one to finish "
+                                     f"(limit {PUBLIC_MAX_ACTIVE_PER_CLIENT} per visitor)")
+        if len(active) >= PUBLIC_MAX_QUEUE:
+            raise HTTPException(503, "the job queue is busy; please try again in a few minutes")
+    params.update({"_role": r, "_client": client})
+    return J({"id": st.submit(j.type, params), "role": r})
 
 
 @app.get("/api/jobs")
@@ -467,12 +492,20 @@ def job(jid: str):
         raise HTTPException(404)
     if j["status"] == "succeeded" and j["result_path"]:
         j["result"] = json.loads(Path(j["result_path"]).read_text())
+    j["params"] = {k: v for k, v in j["params"].items() if not k.startswith("_")}
     return J(j)
 
 
 @app.post("/api/jobs/{jid}/cancel")
-def cancel(jid: str, r: str = Depends(need("researcher", "operator"))):
-    JobStore().cancel(jid)
+def cancel(jid: str, request: Request, r: str = Depends(role)):
+    st = JobStore()
+    j = st.get(jid)
+    if not j:
+        raise HTTPException(404)
+    client = request.client.host if request.client else "?"
+    if r == "public" and j["params"].get("_client") != client:
+        raise HTTPException(403, "only the visitor who submitted a job (or a researcher) can cancel it")
+    st.cancel(jid)
     return J({"ok": True})
 
 
@@ -760,6 +793,8 @@ if DIST.exists():
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(404, "unknown API endpoint")
         f = DIST / path
         if path and f.is_file() and DIST in f.resolve().parents:
             return FileResponse(f)

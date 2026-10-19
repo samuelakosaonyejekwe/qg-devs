@@ -1,16 +1,18 @@
 {
   "name": "qg-devs-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "QG-DEVS — Quantum Gravity Discovery and Experimental Verification System: web front end (installable PWA)",
+  "description": "QG-DEVS \u2014 Quantum Gravity Discovery and Experimental Verification System: web front end (installable PWA)",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/gen-icons.mjs && vite build && node scripts/size-report.mjs",
+    "build": "node scripts/gen-icons.mjs && node scripts/copy-release-notes.mjs && vite build && node scripts/size-report.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "golden": "../.venv/bin/python ../tools/golden_vectors.py"
+    "golden": "../.venv/bin/python ../tools/golden_vectors.py",
+    "pretest": "node scripts/copy-release-notes.mjs",
+    "pretypecheck": "node scripts/copy-release-notes.mjs"
   },
   "dependencies": {
     "preact": "10.24.3",

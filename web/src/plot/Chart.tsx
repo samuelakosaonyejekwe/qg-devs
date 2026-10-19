@@ -5,8 +5,9 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { CanvasPainter, SvgPainter, readTheme, type Painter } from './painter';
-import { drawLine, hoverLine, dataDomain, drawHeat, hoverHeat, drawBars, invert, type LineOpts, type View, type LineLayout, type HeatOpts, type HeatLayout, type BarOpts } from './charts';
+import { drawLine, drawCursor, hoverLine, dataDomain, drawHeat, hoverHeat, drawBars, invert, type LineOpts, type View, type LineLayout, type HeatOpts, type HeatLayout, type BarOpts } from './charts';
 import { fmtQ } from '../lib/format';
+import { startRecording, saveBlob, videoSupported, type Recording } from '../lib/video';
 
 function useSize(ref: { current: HTMLElement | null }, aspect: number, minH: number, maxH: number) {
   const [size, setSize] = useState({ w: 600, h: 320 });
@@ -21,6 +22,29 @@ function useSize(ref: { current: HTMLElement | null }, aspect: number, minH: num
     return () => ro.disconnect();
   }, [aspect, minH, maxH]);
   return size;
+}
+
+/** True while the element is (nearly) in the viewport; offscreen charts defer repaints. */
+function useVisible(ref: { current: Element | null }) {
+  const [v, setV] = useState(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((es) => setV(es.some((e) => e.isIntersecting)), { rootMargin: '200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return v;
+}
+
+/** Cheap value signature of line-plot data (so parent re-renders with equal data do not repaint). */
+function seriesSig(o: LineOpts): string {
+  return o.series.map((s) => {
+    const n = Math.min(s.x.length, s.y.length);
+    let acc = 0;
+    for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 64))) acc += (s.y[i] || 0) * (i + 1) + (s.x[i] || 0);
+    return `${s.name}|${s.color}|${s.dash}|${n}|${s.x[0]}|${s.x[n - 1]}|${s.y[0]}|${s.y[n - 1]}|${acc}`;
+  }).join(';') + JSON.stringify([o.xLabel, o.yLabel, o.xUnit, o.yUnit, o.logX, o.logY, o.hlines, o.shadeBelow, o.title]);
 }
 
 function paint(canvas: HTMLCanvasElement, w: number, h: number, draw: (p: Painter) => void) {
@@ -75,17 +99,39 @@ function useThemeTick() {
 
 interface Frame { title?: string; desc: string; name: string; aspect?: number; minH?: number; maxH?: number; toolbar?: ComponentChildren }
 
-function Toolbar({ onReset, onPNG, onSVG, extra, zoom }: { onReset?: () => void; onPNG: () => void; onSVG: () => void; extra?: ComponentChildren; zoom?: (f: number) => void }) {
+function Toolbar({ onReset, onPNG, onSVG, extra, zoom, onVideo, recording, onFullscreen, fs }: { onReset?: () => void; onPNG: (scale: number) => void; onSVG: () => void; extra?: ComponentChildren; zoom?: (f: number) => void; onVideo?: () => void; recording?: boolean; onFullscreen?: () => void; fs?: boolean }) {
+  const [scale, setScale] = useState(3);
   return (
     <div class="chart-toolbar" role="toolbar" aria-label="Chart tools">
       {extra}
       {zoom && <button type="button" class="btn-icon" onClick={() => zoom(0.8)} aria-label="Zoom in" title="Zoom in (+)">+</button>}
       {zoom && <button type="button" class="btn-icon" onClick={() => zoom(1.25)} aria-label="Zoom out" title="Zoom out (−)">−</button>}
       {onReset && <button type="button" class="btn-icon" onClick={onReset} title="Reset view (0 or double-click)" aria-label="Reset view">⟲</button>}
-      <button type="button" class="btn-sm" onClick={onPNG} title="Download PNG at 3× resolution">PNG</button>
+      <select class="input" style={{ padding: '1px 3px', fontSize: '0.78rem' }} value={scale} onChange={(e: any) => setScale(Number(e.currentTarget.value))} aria-label="PNG resolution"><option value={1}>1×</option><option value={2}>2×</option><option value={3}>3×</option><option value={4}>4×</option></select>
+      <button type="button" class="btn-sm" onClick={() => onPNG(scale)} title="Download PNG at the selected resolution">PNG</button>
       <button type="button" class="btn-sm" onClick={onSVG} title="Download vector SVG">SVG</button>
+      {onVideo && videoSupported() && <button type="button" class="btn-sm" onClick={onVideo} aria-pressed={!!recording} title="Record the animation as video (WebM/MP4)">{recording ? '■ Stop' : '● Video'}</button>}
+      {onFullscreen && <button type="button" class="btn-sm" onClick={onFullscreen} aria-pressed={!!fs}>{fs ? 'Exit full' : 'Full'}</button>}
     </div>
   );
+}
+
+/** Fullscreen + video recording shared by all charts (video draws the live chart each frame). */
+function useChartExtras(wrap: { current: HTMLElement | null }, size: { w: number; h: number }, drawRef: { current: (p: Painter) => void }, name: string) {
+  const [rec, setRec] = useState<Recording | null>(null);
+  const [fs, setFs] = useState(false);
+  useEffect(() => {
+    const f = () => setFs(document.fullscreenElement === wrap.current);
+    document.addEventListener('fullscreenchange', f);
+    return () => document.removeEventListener('fullscreenchange', f);
+  }, []);
+  const onVideo = async () => {
+    if (rec) { const r = rec; setRec(null); const { blob, ext } = await r.stop(); saveBlob(blob, `${name}.${ext}`); return; }
+    const scale = Math.min(2, window.devicePixelRatio || 1);
+    setRec(startRecording((ctx, s) => { ctx.save(); ctx.scale(s, s); ctx.fillStyle = readTheme(wrap.current!).bg; ctx.fillRect(0, 0, size.w, size.h); drawRef.current(new CanvasPainter(ctx, size.w, size.h)); ctx.restore(); }, size.w, size.h, 60, scale));
+  };
+  const onFullscreen = () => (fs ? document.exitFullscreen() : wrap.current?.requestFullscreen?.());
+  return { onVideo, recording: !!rec, onFullscreen, fs };
 }
 
 // ----------------------------------------------------------------------------- line plot
@@ -105,13 +151,24 @@ export function LinePlot(props: LineOpts & Frame) {
   const layout = useRef<LineLayout | null>(null);
 
   const hv = hover && layout.current ? hoverLine(opts, layout.current, hover.px) : null;
+  const visible = useVisible(wrap);
+  const ov = useRef<HTMLCanvasElement>(null);
+  // static layer: repainted only when data, view, size or theme change (not on every cursor move)
+  const baseKey = `${seriesSig(opts)}|${view.x}|${view.y}|${size.w}x${size.h}|${themeTick}|${visible}`;
+  const lastBase = useRef('');
   useEffect(() => {
-    if (!cv.current || !wrap.current) return;
+    if (!cv.current || !wrap.current || !visible || lastBase.current === baseKey) return;
+    lastBase.current = baseKey;
     const th = readTheme(wrap.current);
-    paint(cv.current, size.w, size.h, (p) => { layout.current = drawLine(p, th, opts, view, hv?.x ?? null); });
+    paint(cv.current, size.w, size.h, (p) => { layout.current = drawLine(p, th, { ...opts, cursorX: null }, view, null); });
   });
-  void themeTick;
-
+  // overlay layer: playhead cursor and hover line
+  useEffect(() => {
+    if (!ov.current || !wrap.current || !visible || !layout.current) return;
+    const th = readTheme(wrap.current);
+    const L = layout.current;
+    paint(ov.current, size.w, size.h, (p) => { drawCursor(p, th, opts, L, hv?.x ?? opts.cursorX, hv != null); });
+  });
   const zoomAt = (fx: number, fy: number, k: number, axis: 'xy' | 'x' | 'y' = 'xy') => {
     setView((v) => {
       const L = layout.current; if (!L) return v;
@@ -171,17 +228,20 @@ export function LinePlot(props: LineOpts & Frame) {
   });
 
   const drawAll = (p: Painter) => { drawLine(p, readTheme(wrap.current!), opts, view); };
+  const drawRef = useRef(drawAll); drawRef.current = drawAll;
+  const ex = useChartExtras(wrap, size, drawRef, name);
   return (
     <figure class="chart" ref={wrap}>
       <div class="chart-head">
         {title && <figcaption class="chart-title">{title}</figcaption>}
-        <Toolbar extra={toolbar} zoom={(k) => { const L = layout.current; if (L) zoomAt(L.plot.x + L.plot.w / 2, L.plot.y + L.plot.h / 2, k); }} onReset={() => setView(base)}
-          onPNG={() => exportPNG(wrap.current!, size.w, size.h, 3, drawAll, name)} onSVG={() => exportSVG(wrap.current!, size.w, size.h, drawAll, name)} />
+        <Toolbar extra={toolbar} zoom={(k) => { const L = layout.current; if (L) zoomAt(L.plot.x + L.plot.w / 2, L.plot.y + L.plot.h / 2, k); }} onReset={() => setView(base)} {...ex}
+          onPNG={(k) => exportPNG(wrap.current!, size.w, size.h, k, drawAll, name)} onSVG={() => exportSVG(wrap.current!, size.w, size.h, drawAll, name)} />
       </div>
       <div class="chart-canvas-wrap">
         <canvas ref={cv} tabIndex={0} role="img" aria-label={`${title ?? name}: ${desc}. Focus and use +/− to zoom, arrow keys to pan, 0 to reset; Ctrl+wheel zooms.`}
           onPointerDown={onDown as any} onPointerMove={onMove as any} onPointerUp={onUp as any} onPointerCancel={onUp as any}
           onPointerLeave={() => { setHover(null); }} onDblClick={() => setView(base)} onKeyDown={onKey as any} style={{ touchAction: 'pan-y' }} />
+        <canvas ref={ov} class="chart-overlay" aria-hidden="true" />
         {hv && hover && (
           <div class="chart-tip" style={{ left: `${Math.min(hover.px + 14, size.w - 190)}px`, top: `${Math.max(4, hover.py - 10)}px` }} role="status">
             <div class="tip-x">{opts.xLabel}: {fmtQ(hv.x, opts.xUnit)}</div>
@@ -210,13 +270,15 @@ export function HeatMap(props: HeatOpts & Frame & { cellLabel?: (i: number, j: n
   void themeTick;
   const hh = hover && layout.current ? hoverHeat(opts, layout.current, hover.px, hover.py) : null;
   const drawAll = (p: Painter) => { drawHeat(p, readTheme(wrap.current!), opts); };
+  const drawRef = useRef(drawAll); drawRef.current = drawAll;
+  const ex = useChartExtras(wrap, size, drawRef, name);
   const label = (i: number, j: number, v: number | null) => cellLabel ? cellLabel(i, j, v) : (
     `${opts.xLabel}: ${opts.xCats ? opts.xCats[j] : fmtQ(opts.x![j], opts.xUnit)} · ${opts.yLabel}: ${opts.yCats ? opts.yCats[i] : fmtQ(opts.y![i], opts.yUnit)} · ${opts.zLabel}: ${v == null || !Number.isFinite(v) ? (opts.nullLabel ?? 'no value') : fmtQ(v, opts.zUnit, 5)}`);
   return (
     <figure class="chart" ref={wrap}>
       <div class="chart-head">
         {title && <figcaption class="chart-title">{title}</figcaption>}
-        <Toolbar extra={toolbar} onPNG={() => exportPNG(wrap.current!, size.w, size.h, 3, drawAll, name)} onSVG={() => exportSVG(wrap.current!, size.w, size.h, drawAll, name)} />
+        <Toolbar extra={toolbar} {...ex} onPNG={(k) => exportPNG(wrap.current!, size.w, size.h, k, drawAll, name)} onSVG={() => exportSVG(wrap.current!, size.w, size.h, drawAll, name)} />
       </div>
       <div class="chart-canvas-wrap">
         <canvas ref={cv} tabIndex={0} role="img" aria-label={`${title ?? name}: ${desc}`}
@@ -248,7 +310,7 @@ export function BarChart(props: BarOpts & Frame) {
     <figure class="chart" ref={wrap}>
       <div class="chart-head">
         {title && <figcaption class="chart-title">{title}</figcaption>}
-        <Toolbar extra={toolbar} onPNG={() => exportPNG(wrap.current!, size.w, size.h, 3, drawAll, name)} onSVG={() => exportSVG(wrap.current!, size.w, size.h, drawAll, name)} />
+        <Toolbar extra={toolbar} onPNG={(k) => exportPNG(wrap.current!, size.w, size.h, k, drawAll, name)} onSVG={() => exportSVG(wrap.current!, size.w, size.h, drawAll, name)} />
       </div>
       <div class="chart-canvas-wrap"><canvas ref={cv} role="img" aria-label={`${title ?? name}: ${desc}`} /></div>
     </figure>

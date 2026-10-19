@@ -143,8 +143,10 @@ class BlindVault:
         if role not in ROLES:
             raise ValueError(f"role must be one of {ROLES}")
         h = sha256_bytes(data)
-        (self.root / h).write_bytes(data)
-        os.chmod(self.root / h, 0o440)
+        f = self.root / h
+        if not f.exists():  # content-addressed: identical bytes are already stored (and read-only)
+            f.write_bytes(data)
+            os.chmod(f, 0o440)
         rec = DatasetRecord(h[:16], label, role, h, source, description)
         self.ledger.append("dataset_ingest", {**rec.__dict__, "prereg_id": prereg_id, "bytes": len(data)})
         return rec

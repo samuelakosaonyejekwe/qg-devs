@@ -1,6 +1,7 @@
+import { APP_VERSION, openWhatsNew } from '../components/UpdateDialog';
 /** Help & tutorials: suites, evidence ladder, gates, assurance and provenance legends, experiment categories, offline use. */
 import { useSuites } from '../components/SuiteHeader';
-import { SUITES } from '../lib/nav';
+import { SUITES_IN_ORDER as SUITES } from '../lib/nav';
 import { AssuranceBadge, ASSURANCE_LIST, ProvBadge, MaturityBadge, PageHead, Card } from '../components/ui';
 
 const SUITE_HELP: Record<number, { what: string; outputs: string; endpoints: string }> = {
@@ -65,7 +66,7 @@ const PROV_TEXT: [string, string][] = [
 const TOC: [string, string][] = [
   ['suites', 'The 18 suites'], ['categories', 'Thought, computational, virtual and physical experiments'], ['ladder', 'Evidence ladder'],
   ['gates', 'Acceptance gates G1–G7'], ['assurance', 'Assurance statuses'], ['provenance', 'Provenance badges'], ['modes', 'Detail levels'],
-  ['offline', 'Offline use and installation'], ['keys', 'Keyboard shortcuts'], ['tutorials', 'Tutorials'],
+  ['whatsnew', "What's new"], ['offline', 'Offline use and installation'], ['keys', 'Keyboard shortcuts'], ['tutorials', 'Tutorials'],
 ];
 
 export default function Page(_props: any) {
@@ -126,6 +127,10 @@ export default function Page(_props: any) {
         <p><b>Beginner</b>, <b>Advanced</b> and <b>Expert</b> change only how many inputs and how much detail are shown. Calculations are identical at every level; hidden inputs keep their values and are always used. Change the level in the header or in <a href="/settings">Settings</a>.</p>
       </Card>
 
+      <Card id="whatsnew" title="What's new">
+        <p>You are running QG-DEVS version <b>{APP_VERSION}</b>. The release notes list highlights and fixes for every version; they are shown automatically once after an update.</p>
+        <button type="button" class="btn" onClick={openWhatsNew}>Show what's new</button>
+      </Card>
       <Card id="offline" title="Offline use and installation">
         <ul class="tight">
           <li>Use “Install app” in the header (or the browser menu: “Add to Home Screen” on iOS, “Install app” on Android, the install icon in the address bar on desktop).</li>

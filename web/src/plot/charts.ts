@@ -214,9 +214,12 @@ const VIRIDIS = ['#440154', '#482878', '#3e4989', '#31688e', '#26828e', '#1f9e89
 const MAGMA = ['#000004', '#180f3d', '#440f76', '#721f81', '#9e2f7f', '#cd4071', '#f1605d', '#fd9668', '#feca8d', '#fcfdbf'];
 // Blue–white–orange diverging (colour-blind safe): negative values blue.
 const DIVERGING = ['#08519c', '#3182bd', '#6baed6', '#bdd7e7', '#f7f7f7', '#fdd0a2', '#fdae6b', '#e6550d', '#a63603'];
-export type Palette = 'viridis' | 'magma' | 'diverging';
+const CIVIDIS = ['#00224e', '#123570', '#3b496c', '#575d6d', '#707173', '#8a8678', '#a59c74', '#c3b369', '#e1cc55', '#fee838'];
+// cyclic map for phases (matplotlib "twilight")
+const TWILIGHT = ['#e2d9e2', '#a6bfcb', '#6d94c4', '#5f5eb0', '#4f2871', '#2f1434', '#601f4c', '#9e3651', '#c47067', '#d6afa2', '#e2d9e2'];
+export type Palette = 'viridis' | 'magma' | 'diverging' | 'cividis' | 'twilight';
 function hexToRgb(h: string): [number, number, number] { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
-const PAL: Record<Palette, [number, number, number][]> = { viridis: VIRIDIS.map(hexToRgb), magma: MAGMA.map(hexToRgb), diverging: DIVERGING.map(hexToRgb) };
+const PAL: Record<Palette, [number, number, number][]> = { viridis: VIRIDIS.map(hexToRgb), magma: MAGMA.map(hexToRgb), diverging: DIVERGING.map(hexToRgb), cividis: CIVIDIS.map(hexToRgb), twilight: TWILIGHT.map(hexToRgb) };
 export function colorAt(pal: Palette, t: number): [number, number, number] {
   const c = PAL[pal];
   const x = Math.min(1, Math.max(0, t)) * (c.length - 1);
@@ -372,4 +375,22 @@ export function drawBars(p: Painter, th: ChartTheme, o: BarOpts): BarLayout {
     if (!o.logX && d0 < 0) p.polyline([X0, plot.y, X0, plot.y + plot.h], th.fg, 1);
   });
   return { plot, rowH };
+}
+
+/** Cursor / hover overlay for a line plot drawn on a separate transparent layer (cheap per frame). */
+export function drawCursor(p: Painter, th: ChartTheme, o: LineOpts, L: LineLayout, x: number | null | undefined, hover: boolean) {
+  if (x == null || !Number.isFinite(x)) return;
+  const X = map(L.xs, x);
+  if (!(X >= L.plot.x && X <= L.plot.x + L.plot.w)) return;
+  p.clip(L.plot.x, L.plot.y, L.plot.w, L.plot.h);
+  p.polyline([X, L.plot.y, X, L.plot.y + L.plot.h], hover ? th.muted : th.accent, hover ? 1 : 1.5, hover ? [3, 3] : []);
+  if (!hover) for (const s of o.series) {
+    // marker at the displayed position: linear interpolation between neighbouring samples (display only)
+    let j = -1;
+    for (let k = 0; k + 1 < s.x.length; k++) if ((s.x[k] - x) * (s.x[k + 1] - x) <= 0) { j = k; break; }
+    const y = j < 0 ? s.y[nearestIndex(s.x, x)] : s.x[j + 1] === s.x[j] ? s.y[j] : s.y[j] + ((s.y[j + 1] - s.y[j]) * (x - s.x[j])) / (s.x[j + 1] - s.x[j]);
+    const Y = map(L.ys, y);
+    if (Number.isFinite(Y)) p.circle(X, Y, 4, s.color, th.bg);
+  }
+  p.unclip();
 }

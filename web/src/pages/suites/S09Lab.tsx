@@ -3,10 +3,11 @@ import { RunBar, useAfterReset } from '../../components/Reset';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
-import { Card, Out, ProvBadge, StatusBadge, EvidenceBanner, ErrorBox, Btn, DataTable, Json, Level, InfoBanner, Tabs, TabPanel, KV, SourceChip } from '../../components/ui';
+import { Card, Out, ProvBadge, StatusBadge, EvidenceBanner, ErrorBox, Btn, DataTable, Json, Level, InfoBanner, Tabs, TabPanel, KV, SourceChip, Seg } from '../../components/ui';
 import { useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { View3D } from '../../components/View3D';
+import { usePlayer, PlayerControls } from '../../components/Player';
 import { useStore, scenario, settings, atLeast } from '../../lib/store';
 import { apiPost, apiPostBlob, downloadBlob, useApiGet } from '../../lib/api';
 import { fmtQ, fmtNum, fmtTime, humanKey, shortHash } from '../../lib/format';
@@ -247,17 +248,27 @@ function Apparatus3D({ stamp }: { stamp: string }) {
     return { positions: pos, radiusA: rA, radiusB: rB, energies: p.total_energies_J, phases: p.time_series ? { t: p.time_series.t, deltaPhi: p.time_series.delta_phi } : undefined };
   }, [s, p]);
   const chamber = s?.objects.find((o) => o.type === 'cylinder');
+  const ts = p?.time_series;
+  const player = usePlayer(ts?.t.length ?? 0, 20);
+  const [view, setView] = useState<'3d' | '2d'>('3d');
   return (
-    <Card title="3-D apparatus model" actions={<><ProvBadge kind="COMPUTED" /><SourceChip source={null} /></>}>
+    <Card title="3-D apparatus model" actions={<><ProvBadge kind="COMPUTED" /><SourceChip source={null} /><Seg label="Apparatus view" value={view} onChange={setView} options={[{ v: '3d', label: '3-D' }, { v: '2d', label: '2-D top view' }]} /></>}>
       <ErrorBox error={scene.error || pred.error} what="loading the scene" />
-      {opts ? (
-        <View3D kind="apparatus" opts={opts} label="Branch spheres at the computed positions with interaction lines coloured by energy"
+      {opts && view === '2d' && <TopView2D s={s!} />}
+      {opts && view === '3d' ? (
+        <View3D kind="apparatus" opts={opts} frame={player.pos} label="Branch spheres at the computed positions with interaction lines coloured by energy"
+          title="Apparatus geometry and Δφ(t)" badge="COMPUTED" name="lab-apparatus"
+          legend={[{ label: 'Mass A branches', color: '#0072B2' }, { label: 'Mass B branches', color: '#D55E00' }, { label: 'weak |U_ij|', color: '#2b6cb0' }, { label: 'strong |U_ij|', color: '#dd6b20' }]}
+          onRecordStart={() => { player.setPos(0); player.setPlaying(true); }} playing={player.playing}
+          frameData={() => ({ nearest_sample: player.frame, t_s: ts?.t[player.frame], delta_phi_rad: ts?.delta_phi[player.frame], scene: s, source: 'COMPUTED (server: /api/lab/export/scene, /api/bmv/predict)' })}
           fallback={<TopView2D s={s!} />}
           overlay={(info) => info && <>
+            {info.time != null && <span>t = {fmtQ(info.time, 's')} · Δφ = {fmtNum(info.deltaPhi, 4)} rad</span>}
             <span>Scale bar: {fmtQ(info.scaleBarMetres, 'm', 3)}{info.radiiEnlarged ? ` · radii enlarged ×${fmtNum(info.enlargementFactor, 3)} for visibility` : ' · radii to scale'}</span>
             {info.energyRamp && <span>|U_ij| <span class="energy-ramp" /> {fmtQ(info.energyRamp.min, 'J', 3)} → {fmtQ(info.energyRamp.max, 'J', 3)}</span>}
           </>} />
-      ) : (scene.busy || pred.busy) ? <p class="muted">Loading scene…</p> : !scene.error && !pred.error ? <p class="muted">Scene unavailable for this design (inadmissible geometry?).</p> : null}
+      ) : opts ? null : (scene.busy || pred.busy) ? <p class="muted">Loading scene…</p> : !scene.error && !pred.error ? <p class="muted">Scene unavailable for this design (inadmissible geometry?).</p> : null}
+      {opts && ts && <PlayerControls p={player} n={ts.t.length} t={ts.t} label="Apparatus Δφ(t)" />}
       <p class="small muted">Sphere positions and radii come from POST /api/lab/export/scene; line colours use the total branch energies from POST /api/bmv/predict.{chamber ? ` The vacuum chamber (radius ${fmtQ(chamber.radius, 'm', 3)}) is listed by the server as “${chamber.role}” and is not drawn.` : ''}</p>
     </Card>
   );

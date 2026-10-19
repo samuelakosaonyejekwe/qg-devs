@@ -6,7 +6,7 @@ import { Card, Out, EvidenceBanner, ErrorBox, Json, Level, Seg, InfoBanner, Prov
 import { NumberField, SelectField, useValidity } from '../../components/fields';
 import { LinePlot } from '../../plot/Chart';
 import { View3D } from '../../components/View3D';
-import { usePlayer, PlayerControls } from '../../components/Player';
+import { usePlayer, PlayerControls, interp } from '../../components/Player';
 import { apiPost } from '../../lib/api';
 import { fmtNum, fmtQ, fmtTime } from '../../lib/format';
 import { CONSTANTS } from '../../engine/index';
@@ -137,7 +137,11 @@ function NBody() {
 
   const fallback = d && (
     <LinePlot name="nbody-xy" title="Trajectories (x–y plane)" desc="Body trajectories projected on the x–y plane" xLabel="x" xUnit="m" yLabel="y" yUnit="m" aspect={0.8}
-      series={series.map((s) => ({ name: s.name, x: s.points.slice(0, player.frame + 1).map((p) => p[0]), y: s.points.slice(0, player.frame + 1).map((p) => p[1]), color: s.color }))} />
+      series={[
+        ...series.map((s) => ({ name: s.name, x: s.points.map((p) => p[0]), y: s.points.map((p) => p[1]), color: s.color, width: 1.6 })),
+        // body positions at the playback cursor (interpolated between saved samples for display)
+        ...series.map((s) => ({ name: `${s.name} (now)`, x: [interp(s.points.map((p) => p[0]), player.pos)], y: [interp(s.points.map((p) => p[1]), player.pos)], color: s.color, markers: true })),
+      ]} />
   );
   return (
     <Card title="N-body integration (velocity Verlet)">
@@ -177,12 +181,15 @@ function NBody() {
             <div class="row"><ProvBadge kind="COMPUTED" /><span class="small muted">{d.t.length} frames · {fmtTime(r.at)}</span></div>
             <Seg label="Trajectory view" value={view} onChange={setView} options={[{ v: '3d', label: '3-D' }, { v: '2d', label: '2-D (x–y)' }]} />
             <PlayerControls p={player} n={nFrames} t={d.t} label="N-body" />
-            {view === '3d' ? <View3D kind="trajectories" label="Computed N-body trajectories" opts={{ series, unit: 'm' }} frame={player.frame} fallback={fallback} /> : fallback}
+            {view === '3d' ? <View3D kind="trajectories" label="Computed N-body trajectories" opts={{ series, unit: 'm' }} frame={player.pos} fallback={fallback}
+              title="N-body trajectories (velocity Verlet)" badge="COMPUTED" name="nbody" legend={series.map((s) => ({ label: s.name, color: s.color }))}
+              onRecordStart={() => { player.setPos(0); player.setPlaying(true); }} playing={player.playing}
+              frameData={() => ({ nearest_sample: player.frame, t_s: d.t[player.frame], positions_m: Object.fromEntries(series.map((s) => [s.name, s.points[player.frame]])), source: 'COMPUTED (server, POST /api/gravity/nbody)' })} /> : fallback}
             <div class="outs">
               <Out label="Max |relative energy drift|" value={Math.max(...drift.map(Math.abs))} prov="COMPUTED" interp="max |E(t) − E₀|/|E₀|. Symplectic integration keeps this bounded; halve Δt to see it drop ~4×." />
               <Out label="Simulated span" value={d.t[d.t.length - 1]} unit="s" prov="COMPUTED" interp={`${fmtNum(d.t[d.t.length - 1] / 86400, 4)} days.`} />
             </div>
-            <LinePlot name="nbody-energy" title="Relative energy drift (E − E₀)/|E₀|" desc="Total energy error versus time" xLabel="Time" xUnit="s" yLabel="(E − E₀)/|E₀|" yUnit="1" cursorX={d.t[player.frame]}
+            <LinePlot name="nbody-energy" title="Relative energy drift (E − E₀)/|E₀|" desc="Total energy error versus time" xLabel="Time" xUnit="s" yLabel="(E − E₀)/|E₀|" yUnit="1" cursorX={interp(d.t, player.pos)}
               series={[{ name: 'energy drift', x: d.t, y: drift, color: SERIES_COLORS[0] }]} />
             <Level min="expert"><Json data={{ t: d.t.length, energy: d.energy.slice(0, 20) }} /></Level>
           </>)}

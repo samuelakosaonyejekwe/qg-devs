@@ -61,6 +61,25 @@ def test_synthetic_label_and_jobs(client):
 
 def test_tokens_enforced(client, monkeypatch):
     monkeypatch.setenv("QGDEVS_API_TOKENS", "s3cret:researcher")
-    assert client.post("/api/jobs", json={"type": "vv_run", "params": {}}).status_code == 401
-    ok = client.post("/api/jobs", json={"type": "vv_run", "params": {}}, headers={"Authorization": "Bearer s3cret"})
-    assert ok.status_code == 200
+    assert client.post("/api/jobs", json={"type": "backup", "params": {}}).status_code == 401
+    assert client.post("/api/jobs", json={"type": "backup", "params": {}},
+                       headers={"Authorization": "Bearer wrong"}).status_code == 403
+    ok = client.post("/api/jobs", json={"type": "backup", "params": {}}, headers={"Authorization": "Bearer s3cret"})
+    assert ok.status_code == 200 and ok.json()["role"] == "researcher"
+
+
+def test_unknown_api_is_404(client):
+    assert client.get("/api/does-not-exist").status_code == 404
+
+
+def test_public_can_compute_but_not_write_evidence(client, monkeypatch):
+    monkeypatch.setenv("QGDEVS_API_TOKENS", "s3cret:researcher")
+    r = client.post("/api/jobs", json={"type": "vv_run", "params": {"ids": ["S1-rabi"]}})
+    assert r.status_code == 200 and r.json()["role"] == "public"
+    assert "_client" not in client.get(f"/api/jobs/{r.json()['id']}").json()["params"]
+    assert client.post("/api/jobs", json={"type": "backup", "params": {}}).status_code == 401
+    d = client.post("/api/evidence/signoff", json={"gate": "G1", "reviewer": "x", "affiliation": "y", "statement": "z"})
+    assert d.status_code == 401 and "Settings" in d.json()["detail"]
+    for _ in range(3):
+        client.post("/api/jobs", json={"type": "vv_run", "params": {"ids": ["S1-rabi"]}})
+    assert client.post("/api/jobs", json={"type": "vv_run", "params": {}}).status_code == 429

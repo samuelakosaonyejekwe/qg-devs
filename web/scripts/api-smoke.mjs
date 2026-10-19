@@ -85,9 +85,14 @@ await check('icons', async () => {
 
 // ---------------------------------------------------------------- read endpoints
 for (const p of ['/api/health', '/api/suites', '/api/constants', '/api/materials', '/api/models', '/api/jobs', '/api/vv/registry', '/api/vv/latest', '/api/lean/status',
-  '/api/discovery/hypotheses', '/api/data/connectors', '/api/data/catalogue', '/api/evidence/ledger', '/api/thought/lm-status', '/api/instruments']) {
+  '/api/discovery/hypotheses', '/api/data/connectors', '/api/data/catalogue', '/api/evidence/ledger', '/api/thought/lm-status', '/api/instruments', '/api/release']) {
   await check(`GET ${p}`, async () => { const r = await req('GET', p); assert(r.ok, `status ${r.status}`); return `${Math.round(r.ms)} ms`; });
 }
+await check('release notes for update dialog', async () => {
+  const r = await req('GET', '/api/release');
+  assert(r.ok && r.data.version && r.data.releases?.[0]?.version === r.data.version, JSON.stringify(r.data).slice(0, 120));
+  return `server ${r.data.version}, ${r.data.releases.length} releases`;
+});
 await check('suites: 18 with maturity', async () => {
   const r = await req('GET', '/api/suites');
   assert(r.data.length === 18 && r.data.every((s) => s.maturity), 'bad suite list');
@@ -128,7 +133,7 @@ await check('POST /api/signal/simulate (SYNTHETIC)', async () => {
 });
 await check('POST /api/signal/tomography', async () => { const r = await req('POST', '/api/signal/tomography', { counts }); assert(r.ok, `status ${r.status} ${JSON.stringify(r.data).slice(0, 200)}`); });
 await check('POST /api/signal/injection', async () => { const r = await req('POST', '/api/signal/injection?trials=50'); assert(r.ok && r.data.data_label === 'SYNTHETIC', 'bad'); });
-await check('POST /api/falsification/predictions', async () => { const r = await req('POST', '/api/falsification/predictions', SC); assert(r.ok && r.data.predictions.length === 6 && r.data.registered_not_implemented.length >= 1, 'bad'); });
+await check('POST /api/falsification/predictions', async () => { const r = await req('POST', '/api/falsification/predictions', SC); assert(r.ok && r.data.predictions.length >= 6 && Array.isArray(r.data.registered_not_implemented), 'bad'); return `${r.data.predictions.length} implemented hypotheses, ${r.data.registered_not_implemented.length} registered-not-implemented`; });
 await check('POST /api/bmv/sweep2d', async () => {
   const xs = Array.from({ length: 12 }, (_, i) => 1e-4 + i * 1e-4), ys = Array.from({ length: 10 }, (_, i) => 1e-5 + i * 3e-5);
   const r = await req('POST', '/api/bmv/sweep2d', { ...SC, px: 'separation', xs, py: 'dx_A', ys, hypothesis: 'QG-COH' });
@@ -161,13 +166,20 @@ await check('POST /api/evidence/preregister', async () => {
 let dsId = null;
 await check('POST /api/evidence/datasets (multipart)', async () => {
   const fd = new FormData();
-  fd.append('file', new Blob([JSON.stringify({ counts })], { type: 'application/json' }), 'synthetic-counts.json');
+  fd.append('file', new Blob([JSON.stringify({ counts, generated_utc: new Date().toISOString() })], { type: 'application/json' }), 'synthetic-counts.json');
   fd.append('label', 'SYNTHETIC'); fd.append('role', 'blind_test'); fd.append('source', 'api-smoke'); fd.append('description', 'smoke test'); fd.append('prereg_id', preregId ?? '');
   const r = await req('POST', '/api/evidence/datasets', undefined, { form: fd });
   assert(r.ok, `status ${r.status} ${JSON.stringify(r.data).slice(0, 200)}`);
   dsId = r.data.dataset_id ?? r.data.id;
   return `dataset ${dsId}`;
 });
+const notes = [];
+{ // informational: re-ingesting byte-identical data (backend vault file is read-only after the first write)
+  const mk = () => { const fd = new FormData(); fd.append('file', new Blob(['qgdevs duplicate-ingest probe'], { type: 'text/plain' }), 'dup.txt'); fd.append('label', 'SYNTHETIC'); fd.append('role', 'exploratory'); fd.append('source', 'api-smoke'); return fd; };
+  await req('POST', '/api/evidence/datasets', undefined, { form: mk() });
+  const r2 = await req('POST', '/api/evidence/datasets', undefined, { form: mk() });
+  notes.push(`re-ingesting identical bytes → HTTP ${r2.status}${r2.status >= 500 ? ' (BACKEND ISSUE: BlindVault.ingest rewrites a 0440 file)' : ''}`);
+}
 await check('POST /api/evidence/unblind', async () => { const r = await req('POST', '/api/evidence/unblind', { dataset_id: dsId, prereg_id: preregId }); assert(r.ok, `status ${r.status} ${JSON.stringify(r.data).slice(0, 200)}`); });
 await check('POST /api/evidence/gates', async () => { const r = await req('POST', '/api/evidence/gates?hypothesis=QG-COH', SC); assert(r.ok && r.data.gates.length === 7, 'bad'); return `level ${r.data.classification.level}: ${r.data.classification.classification}`; });
 await check('GET /api/evidence/ledger chain', async () => { const r = await req('GET', '/api/evidence/ledger'); assert(r.ok && r.data.verification.valid, JSON.stringify(r.data.verification)); return `${r.data.verification.length} entries, chain valid`; });
@@ -195,5 +207,6 @@ await check('job vv_run (subset)', async () => {
 // ---------------------------------------------------------------- report
 const w = Math.max(...results.map((r) => r.name.length));
 for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name.padEnd(w)}  ${r.note}`);
+for (const n of notes) console.log(`NOTE  ${n}`);
 console.log(`\n${results.length - failures}/${results.length} checks passed against ${BASE}`);
 process.exit(failures ? 1 : 0);

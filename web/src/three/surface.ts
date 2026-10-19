@@ -6,8 +6,9 @@
  */
 import * as THREE from 'three';
 import { colormap, createStage, lineSegments, textSprite, type Handle } from './core';
+import * as CORE from './core';
 
-export interface SurfaceOpts { z: number[][]; xLabel: string; yLabel: string; zLabel: string; colormap?: 'viridis' | 'magma' }
+export interface SurfaceOpts { z: number[][]; xLabel: string; yLabel: string; zLabel: string; colormap?: 'viridis' | 'magma' | 'cividis' }
 
 const HEIGHT = 0.8; // scene height of the maximum value
 
@@ -15,7 +16,7 @@ export function mountSurface(el: HTMLElement, opts: SurfaceOpts): Handle & { inf
   const st = createStage(el);
   const root = new THREE.Group();
   st.scene.add(root);
-  const info = { zMax: 0, nx: 0, ny: 0 };
+  const info = { zMax: 0, nx: 0, ny: 0, colormap: opts.colormap ?? 'viridis', colorbar: [] as string[] };
   let o = opts;
   let mesh: THREE.Mesh | null = null;
   const tmp = new THREE.Color();
@@ -26,6 +27,7 @@ export function mountSurface(el: HTMLElement, opts: SurfaceOpts): Handle & { inf
       m.geometry?.dispose?.();
       const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
       mats.forEach((mm) => { (mm as any).map?.dispose?.(); mm.dispose(); });
+      if ((x as any).isCSS2DObject) (x as any).element.remove();
     });
     root.clear();
     const ny = o.z.length, nx = o.z[0]?.length ?? 0;
@@ -35,10 +37,17 @@ export function mountSurface(el: HTMLElement, opts: SurfaceOpts): Handle & { inf
     const g = new THREE.PlaneGeometry(2, 2, nx - 1, ny - 1);
     g.rotateX(-Math.PI / 2);
     g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(nx * ny * 3), 3));
-    mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.6 }));
+    // physically based, smooth-shaded (per-vertex normals recomputed every frame)
+    mesh = new THREE.Mesh(g, CORE.highTier() ? new THREE.MeshPhysicalMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.45, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.4 }) : new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.5, metalness: 0 }));
+    mesh.receiveShadow = true;
     root.add(mesh);
     const th = st.theme;
-    root.add(lineSegments([-1, 0, 1, 1, 0, 1, -1, 0, 1, -1, 0, -1, -1, 0, 1, -1, HEIGHT, 1], th.muted));
+    root.add(lineSegments([-1, 0, 1, 1, 0, 1, -1, 0, 1, -1, 0, -1, -1, 0, 1, -1, HEIGHT, 1], th.muted, 1, 1.4));
+    const gl: number[] = [];
+    for (let k = -4; k <= 4; k++) { const v = k * 0.25; gl.push(-1, 0, v, 1, 0, v, v, 0, -1, v, 0, 1); }
+    root.add(lineSegments(gl, th.muted, 0.2, 1));
+    info.colormap = o.colormap ?? 'viridis';
+    info.colorbar = [0, 0.25, 0.5, 0.75, 1].map((t) => CORE.colormapCss(info.colormap, t));
     const lx = textSprite(o.xLabel, th.fg, 0.08); lx.position.set(0, 0, 1.2);
     const ly = textSprite(o.yLabel, th.fg, 0.08); ly.position.set(-1.25, 0, 0);
     const lz = textSprite(o.zLabel, th.fg, 0.08); lz.position.set(-1.1, HEIGHT + 0.12, 1);
@@ -84,7 +93,10 @@ export function mountSurface(el: HTMLElement, opts: SurfaceOpts): Handle & { inf
       if (relabel) build(); else fill();
     },
     resetView: () => st.resetView(),
-    toPNG: (s?: number) => st.toPNG(s),
+    toPNG: (s?: number, tr?: boolean) => st.toPNG(s, tr),
+    composite: st.composite,
+    canvasSize: st.canvasSize,
+    memory: st.memory,
     dispose: () => st.dispose(),
   };
 }
