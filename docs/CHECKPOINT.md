@@ -21,18 +21,11 @@ _Last updated: 2026-10-19 (session in progress). If a session is interrupted, re
 
 ## IN PROGRESS (resume here)
 
-1. **Web update** (`web/`), delegated to a web agent. Before deploying, check `git status web/` and run the web tests (`npm run typecheck && npm test && npm run build`). The update covers:
-   - (a) a Reset control beside every Run (page or shared scenario; Settings: reset all);
-   - (b) an update pop-up / "What's new" dialog driven by `GET /api/release` (`qgdevs/release_notes.json`, version 0.2.0);
-   - (c) sidebar suites in strict order 1..18 under "Scientific suites";
-   - (d) new 3-D dynamic views for S04 density-matrix city plot, S06, S07, S08, S10, S11, S13 and S14, plus conceptual views where appropriate;
-   - (e) a high-fidelity rendering bar for all 2-D and 3-D animations: antialiasing, DPR, PBR lighting, CSS2D labels, Line2, 60 fps interpolation with the sample time shown, 4K/8K PNG and WebM export, fullscreen, context-loss handling, reduced motion, and synchronised 2-D/3-D toggles;
-   - (f) 2× screenshots in light and dark into `docs/screenshots/`.
-
-   Note: commit 5c0a292 accidentally included some intermediate web files; the finished update supersedes them.
-2. **Science gaps — DONE (commit dd33170):** CSL-COLL hypothesis (8 hypotheses in total); patch-dipole, diamagnetic and NV spin–spin backgrounds with dossier limits (p ≤ 3.3e-29 C m, B ≤ 0.20 mT); Stern–Gerlach recombination visibility and gradient-precision requirement (≈5e-9 relative); pytest 107 passed.
-   - Running: `tools/flagship_study.py` regenerating `docs/FLAGSHIP_RESULTS.md` with all 8 hypotheses. If it was interrupted, re-run it and commit `docs/FLAGSHIP_RESULTS.md` and `docs/flagship_results.json`. Then run `tools/gen_docs.py --slow` and commit `docs/`.
-3. **Release 0.2.0:** run pytest, then `cd web && npm test && npm run build`, commit with an explicit file list (never `commit -a` while agents are editing), push, deploy (commands above), and verify live: `/`, `/api/health`, `/api/release`, `/api/lean/status` (43 proved).
+- **0.2.0 is LIVE** (commit 03daa70, plus start.sh forwarded-IP fix). It includes Reset, update dialogs, the 1–18 order and HD 2-D/3-D views on all suites; public computation jobs (rate-limited); evidence writes need a token. Verified live: 43 Lean theorems, 8 hypotheses, `/api/equations`.
+- **Next (web agent):**
+  - (1) KaTeX/LaTeX rendering of every equation, using `/api/equations` and the models' `tex` fields; and add katex to `web/package.json` so `tests/test_equations.py` runs;
+  - (2) friendly 401/403/429/503 UX, plus an audit of every page for raw errors and layout issues.
+- **Then:** verify (pytest, `cd web && npm run typecheck && npm test && npm run build`), add a 0.2.1 entry to `qgdevs/release_notes.json`, bump the version, commit with an explicit file list, and deploy. The server build uses the full Dockerfile: `sudo docker build -t qgdevs:<ver> .` then `run` (see Live system).
 
 ## Rules
 
