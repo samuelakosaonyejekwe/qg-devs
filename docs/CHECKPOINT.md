@@ -1,36 +1,44 @@
 # Development checkpoint and resume instructions
 
-_Last updated: 2026-10-19._
+_Last updated: 2026-10-19 (session in progress). If a session is interrupted, resume from "IN PROGRESS" below._
 
-## State
+## Live system
 
-- Scientific core: all 18 suites have working modules (maturity in `docs/SUITES.md`).
-- V&V: 33/33 benchmarks pass (`docs/VV_REPORT.md`). pytest covers workflows, the API, the native kernel and the
-  MATLAB bridge (the bridge tests skip when no MATLAB/Octave is installed).
-- Independent C++ kernel: built by `make -C cpp`; 18 comparison tests.
-- Flagship study: `tools/flagship_study.py` → `docs/FLAGSHIP_RESULTS.md`.
-- Lean 4 project: `lean/` (status in `lean/proof_status.json`).
-- Web app: `web/` (PWA).
-- Deployment configuration exists, but nothing is deployed — this needs hosting accounts (`docs/DEPLOYMENT.md`).
+- App: https://63-186-135-183.sslip.io. The API reference is at `/api/docs`.
+- Server: AWS Lightsail instance `qg-devs` in eu-central-1, static IP 63.186.135.183, running Caddy (TLS) and Docker.
+- Deploy:
+  - `ssh -i ~/.ssh/qgdevs-lightsail.pem ubuntu@63.186.135.183`
+  - `cd /opt/qgdevs/src && git pull && sudo docker build -t qgdevs:latest .`
+  - `sudo docker rm -f qgdevs && sudo docker run -d --name qgdevs --restart unless-stopped --env-file /opt/qgdevs/server.env -p 127.0.0.1:8000:8000 -v qgdevs-data:/data qgdevs:latest`
+- Secrets live only on the developer machine (`~/.config/qgdevs/server.env`) and on the server (`/opt/qgdevs/server.env`).
 
-## Resume
+## DONE (verified)
 
-```bash
-cd /home/akosa/grqg
-.venv/bin/pytest -q                       # everything green?
-.venv/bin/python tools/gen_docs.py --slow # regenerate registry / V&V / suites docs
-(cd lean && ./check.sh)                   # machine-check proofs
-(cd web && npm test && npm run build)
-```
+- 18 suites, 7 hypotheses including Aziz–Howl, nuisance-robust discrimination, design optimisation, discovery engine, dossiers, evidence ledger, thought lab, and the optional language model.
+- pytest: 102 passed, 2 skipped (MATLAB/Octave not installed). V&V: 33/33 benchmarks.
+- C++ kernel: 18 comparison tests. Lean 4: 43 theorems proved, 0 open (`lean/check.sh`).
+- Web app v1 deployed. Web tests: 129 passed.
 
-## Next scientific milestones (in order)
+## IN PROGRESS (resume here)
 
-1. Implement the Aziz–Howl classical-gravity + quantum-matter mechanism (CG-QFT-AH) from the paper's derivation,
-   so that a positive witness can be tested against it.
-2. Run a DOI-linked literature review of the calibration trade-off relation s* = 1 + |Δφ|/(2Γt). Record it in the
-   hypothesis ledger to settle gate G2 novelty.
-3. Add the CSL collapse model, patch-potential and magnetic backgrounds, and the Stern–Gerlach Humpty-Dumpty
-   (imperfect recombination) loss.
-4. Extend discrimination to the Gaussian oscillator family (Suite 6) and to time-resolved witness scaling.
-5. Partner with an experimental group: replace estimated or assumed BOM entries with supplier-confirmed ones,
-   adapt the instrument interfaces, and run preregistered blinded tests (gates G4–G7).
+1. **Web update** (`web/`), delegated to a web agent. Before deploying, check `git status web/` and run the web tests (`npm run typecheck && npm test && npm run build`). The update covers:
+   - (a) a Reset control beside every Run (page or shared scenario; Settings: reset all);
+   - (b) an update pop-up / "What's new" dialog driven by `GET /api/release` (`qgdevs/release_notes.json`, version 0.2.0);
+   - (c) sidebar suites in strict order 1..18 under "Scientific suites";
+   - (d) new 3-D dynamic views for S04 density-matrix city plot, S06, S07, S08, S10, S11, S13 and S14, plus conceptual views where appropriate;
+   - (e) a high-fidelity rendering bar for all 2-D and 3-D animations: antialiasing, DPR, PBR lighting, CSS2D labels, Line2, 60 fps interpolation with the sample time shown, 4K/8K PNG and WebM export, fullscreen, context-loss handling, reduced motion, and synchronised 2-D/3-D toggles;
+   - (f) 2× screenshots in light and dark into `docs/screenshots/`.
+
+   Note: commit 5c0a292 accidentally included some intermediate web files; the finished update supersedes them.
+2. **Science gaps (lead developer), in order:**
+   - (i) CSL collapse model (decoherence rate for uniform spheres, Fourier form factor) plus the CSL hypothesis;
+   - (ii) patch-potential and magnetic (diamagnetic gradient) backgrounds in `em.py`;
+   - (iii) Stern–Gerlach imperfect-recombination ("Humpty-Dumpty") coherence loss in `interferometry.py`;
+   - each with V&V benchmarks and tests. Then regenerate docs (`tools/gen_docs.py --slow`) and re-run `tools/flagship_study.py`.
+3. **Release 0.2.0:** run pytest, then `cd web && npm test && npm run build`, commit with an explicit file list (never `commit -a` while agents are editing), push, deploy (commands above), and verify live: `/`, `/api/health`, `/api/release`, `/api/lean/status` (43 proved).
+
+## Rules
+
+- No AI or bot attribution in commits or files.
+- Scan for secrets before every push; the repository is public.
+- Never claim that synthetic or computational results are physical evidence.
