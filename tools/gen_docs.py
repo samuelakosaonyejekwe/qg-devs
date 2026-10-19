@@ -44,7 +44,7 @@ for h in models.HYPOTHESES.values():
 # ---------------------------------------------------------------- V&V report
 rep = vv.run(include_slow="--slow" in sys.argv)
 s = rep["summary"]
-lines = [f"# Verification & validation report\n",
+lines = ["# Verification & validation report\n",
          f"Generated {now} · QG-DEVS {__version__} · code SHA-256 `{code_hash()[:16]}…` · Python {platform.python_version()} "
          f"· {platform.platform()}\n",
          f"**{s['passed']} / {s['total']} benchmarks passed, {s['failed']} failed.**"

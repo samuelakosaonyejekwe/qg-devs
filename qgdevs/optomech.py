@@ -36,17 +36,19 @@ def gravitational_coupling_rate(m_A: float, m_B: float, d: float, omega: float) 
     return 2 * G * m_A * m_B * xA * xB / (hbar * d**3)
 
 
-def _drift(omega: float, g: float, gamma: float, omega_shift: float) -> np.ndarray:
+def _drift(omega: float, g: float, gamma: float, shift_A: float, shift_B: float | None = None) -> np.ndarray:
     """Drift matrix for quadratures (X_A, P_A, X_B, P_B) with X = (a+a†)/√2, P = -i(a-a†)/√2.
 
-    H/ħ = ω(X²+P²)/2 ×2 + 2g X_A X_B; gravity also shifts each trap frequency (self-terms of the
-    expansion), included as omega_shift on the X² coefficient.
+    H/ħ = ω(X²+P²)/2 ×2 + 2g X_A X_B − s_A X_A² − s_B X_B²: gravity also softens each trap (self-terms
+    −G m_A m_B x_X²/d³ of the expansion), entering as s_X on the X² coefficient.
     """
     w = omega
+    sA = shift_A
+    sB = shift_A if shift_B is None else shift_B
     return np.array([[-gamma / 2, w, 0, 0],
-                     [-(w - 2 * omega_shift), -gamma / 2, -2 * g, 0],
+                     [-(w - 2 * sA), -gamma / 2, -2 * g, 0],
                      [0, 0, -gamma / 2, w],
-                     [-2 * g, 0, -(w - 2 * omega_shift), -gamma / 2]])
+                     [-2 * g, 0, -(w - 2 * sB), -gamma / 2]])
 
 
 def log_negativity_gaussian(V: np.ndarray) -> float:
@@ -64,8 +66,9 @@ def evolve_coupled_oscillators(m_A: float, m_B: float, d: float, omega: float, T
     """Covariance-matrix dynamics; coupling_scale = 0 switches gravity's bilinear term off (classical
     reference with no coherent coupling), 1 = quantum-coherent Newtonian coupling."""
     g = coupling_scale * gravitational_coupling_rate(m_A, m_B, d, omega)
-    # second-order self-terms -G m_A m_B x²/d³ give -g X² per mode (equal masses): frequency shift
-    A = _drift(omega, g, gamma, g)
+    # second-order self-term −G m_A m_B x_A²/d³ = −ħ s_A X_A² with s_A = g·x_zpfA/x_zpfB = g·√(m_B/m_A)
+    # (and A ↔ B); for equal masses both reduce to g
+    A = _drift(omega, g, gamma, g * np.sqrt(m_B / m_A), g * np.sqrt(m_A / m_B))
     n_th = thermal_occupation(omega, T_bath)
     D = gamma * (n_th + 0.5) * np.eye(4)  # symmetric damping: vacuum (V = I/2) is stationary at n_th = 0
     s = (2 * n_init + 1) / 2
@@ -80,7 +83,11 @@ def evolve_coupled_oscillators(m_A: float, m_B: float, d: float, omega: float, T
 
     ts = np.linspace(0, t_final, n_out)
     sol = solve_ivp(f, (0, t_final), V0.ravel(), t_eval=ts, rtol=1e-10, atol=1e-12, method="DOP853")
+    if not sol.success:
+        raise RuntimeError(f"covariance integration failed: {sol.message}")
     EN = [log_negativity_gaussian(sol.y[:, k].reshape(4, 4)) for k in range(len(ts))]
-    return {"t": ts.tolist(), "log_negativity": EN, "coupling_rate_rad_s": g,
+    # normal modes of the conservative part: stable only while every mode frequency² is positive
+    stable = bool(np.all(np.real(np.linalg.eigvals(A + gamma / 2 * np.eye(4))) <= 1e-12 * max(omega, 1.0)))
+    return {"t": ts.tolist(), "log_negativity": EN, "coupling_rate_rad_s": g, "dynamically_stable": stable,
             "thermal_occupation_bath": n_th, "omega": omega,
             "note": "Gaussian-state model; classical-mediator hypotheses predict E_N = 0 identically"}

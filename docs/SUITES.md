@@ -1,6 +1,6 @@
 # The 18 scientific suites — implementation maturity
 
-Generated 2026-10-19 14:42 UTC from `qgdevs/suites.py`.
+Generated 2026-10-19 17:53 UTC from `qgdevs/suites.py`.
 
 | # | Suite | Maturity | Modules | Documented gaps |
 |---|---|---|---|---|

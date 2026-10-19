@@ -19,7 +19,11 @@ from .api import _dumps
 def _scenario(path: str | None):
     from .bmv import BMVDesign
     from .design import Environment
-    cfg = json.load(open(path)) if path else {}
+    if path:
+        with open(path) as f:
+            cfg = json.load(f)
+    else:
+        cfg = {}
     return BMVDesign.from_dict(cfg.get("design", {})), Environment(**cfg.get("environment", {}))
 
 
@@ -38,15 +42,10 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     if a.cmd in ("predict", "reproduce"):
-        from .bmv import predict
-        from .design import scenario_for
-        from .discrimination import predictions_table
+        from .design import full_prediction
         d, env = _scenario(a.config)
-        sc, extra = scenario_for(d, env)
-        d.gamma_A, d.gamma_B = sc.gamma_env_A, sc.gamma_env_B
-        out = predict(d, extra_energies=sc.nongrav_energies)
-        out["models"] = predictions_table(sc)
-        print(_dumps(out))
+        # identical to POST /api/bmv/predict (default n_times), so a reproduction package re-run is comparable
+        print(_dumps(full_prediction(d, env)))
     elif a.cmd == "dossier":
         from .lab import generate_dossier
         d, env = _scenario(a.config)

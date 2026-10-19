@@ -136,9 +136,9 @@ def eigvalsh(A) -> np.ndarray:
     """Eigenvalues (ascending) of the Hermitian part of A by cyclic complex Jacobi."""
     lib = _get()
     A = _c128(A)
+    if A.ndim != 2 or A.shape[0] == 0 or A.shape[0] != A.shape[1]:
+        raise ValueError("eigvalsh: non-empty square matrix required")
     n = A.shape[0]
-    if A.shape != (n, n):
-        raise ValueError("eigvalsh: square matrix required")
     w = np.zeros(n)
     _check(lib.qgdevs_eigvalsh(n, _ptr(A.view(np.float64)), _ptr(w)), lib)
     return w
@@ -169,6 +169,8 @@ def cpk_witness_best_sign(rho) -> float:
 def purity(rho) -> float:
     lib = _get()
     rho = _c128(rho)
+    if rho.ndim != 2 or rho.shape[0] != rho.shape[1] or rho.shape[0] == 0:
+        raise ValueError("purity: non-empty square matrix required")  # the kernel reads n×n entries
     out = np.zeros(1)
     _check(lib.qgdevs_purity(rho.shape[0], _ptr(rho.view(np.float64)), _ptr(out)), lib)
     return float(out[0])
@@ -263,9 +265,13 @@ def nbody_verlet(pos0, vel0, masses, dt: float, nsteps: int, save_every: int = 1
     """Velocity-Verlet integration; returns (ts, traj_p, traj_v) like gravity.nbody_verlet."""
     lib = _get()
     pos0, vel0, masses = _f64(pos0), _f64(vel0), _f64(masses).ravel()
+    if pos0.ndim != 2:
+        raise ValueError("pos0 must be (n, dim)")
     n, dim = pos0.shape
     if vel0.shape != (n, dim) or masses.shape != (n,):
         raise ValueError("pos0/vel0 must be (n, dim) and masses (n,)")
+    if int(save_every) <= 0 or int(nsteps) < 0:
+        raise ValueError("save_every must be positive and nsteps non-negative")
     nsave = nsteps // save_every + 1
     t, P, V = np.zeros(nsave), np.zeros((nsave, n, dim)), np.zeros((nsave, n, dim))
     _check(lib.qgdevs_nbody_verlet(n, dim, _ptr(pos0), _ptr(vel0), _ptr(masses), float(dt), int(nsteps),
@@ -276,6 +282,8 @@ def nbody_verlet(pos0, vel0, masses, dt: float, nsteps: int, save_every: int = 1
 def nbody_energy(pos, vel, masses) -> float:
     lib = _get()
     pos, vel, masses = _f64(pos), _f64(vel), _f64(masses).ravel()
+    if pos.ndim != 2 or vel.shape != pos.shape or masses.shape != (pos.shape[0],):
+        raise ValueError("pos/vel must be (n, dim) and masses (n,)")  # the kernel reads n·dim entries of each
     out = np.zeros(1)
     _check(lib.qgdevs_nbody_energy(pos.shape[0], pos.shape[1], _ptr(pos), _ptr(vel), _ptr(masses), _ptr(out)), lib)
     return float(out[0])

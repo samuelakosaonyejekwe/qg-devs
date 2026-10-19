@@ -163,9 +163,19 @@ def calibration_tradeoff_study(n: int = 12, seed: int = 0) -> dict:
     bisection with the full robust-discrimination engine and compared with the candidate closed form
       s* = 1 + |Δφ_g| / (2 Γ_env t)      (derived from Γ_env s* = Γ_env + Γ*,  Γ* = |Δφ_g|/(2t)).
     """
-    from .models import HYPOTHESES, Scenario, Nuisance
+    from .models import HYPOTHESES, Scenario, Nuisance, Hypothesis, COMMON_NUISANCE
     from .discrimination import robust_divergence, MeasurementChain, protocol_frame
-    import copy
+
+    class _ScaledEnv(Hypothesis):
+        """QG-COH whose environmental-scale nuisance range is [1, s_max] (built per call: no shared state is
+        modified, so concurrent predictions in the same process are unaffected)."""
+        smax: float = 1.0
+
+        @property
+        def nuisance(self):
+            return [Nuisance("env_decoherence_scale", 1.0, self.smax, 1.0, "1", "")] + COMMON_NUISANCE[1:]
+
+    base = HYPOTHESES["QG-COH"]
     rng = np.random.default_rng(seed)
     rows = []
     for _ in range(n):
@@ -181,17 +191,11 @@ def calibration_tradeoff_study(n: int = 12, seed: int = 0) -> dict:
         dphi = abs(bmv.entangling_phase(bmv.phases_from_energies(sc.grav_energies(), t)))
         s_pred = 1 + dphi / (2 * gam * t)
         chain = MeasurementChain(readout_error_A=0.0, readout_error_B=0.0, frame=protocol_frame(sc))
-        q = copy.copy(HYPOTHESES["QG-COH"])
 
         def D_at(smax):
-            q.extra_nuisance = []
-            import qgdevs.models as M
-            saved = M.COMMON_NUISANCE[0]
-            M.COMMON_NUISANCE[0] = Nuisance("env_decoherence_scale", 1.0, smax, 1.0, "1", "")
-            try:
-                return robust_divergence(HYPOTHESES["CC-KTM"], q, sc, chain, restarts=1)["D_per_shot"]
-            finally:
-                M.COMMON_NUISANCE[0] = saved
+            q = _ScaledEnv(base.id, base.name, base.family, base.meta, [], True, base._state)
+            q.smax = smax
+            return robust_divergence(HYPOTHESES["CC-KTM"], q, sc, chain, restarts=1)["D_per_shot"]
 
         lo, hi = 1.0, 4 * s_pred
         for _ in range(18):
@@ -244,11 +248,18 @@ def run_discovery_cycle(ledger: Ledger, seed: int = 0) -> list[dict]:
                 "expected": "G^1 hbar^-1 mass^2 separation^-3 branch_separation^2 time^1 (Bose et al. 2017)"},
         status="VERIFIED_AGAINST_KNOWN_LAW" if ok else "FAILED_BLIND_RECOVERY", novelty="KNOWN"))
     near = bmv_scaling_study(regime="near", seed=seed + 1)
+    coef = near.get("correction_series", {}).get("coefficients", {})
+    # exact series 1 − (1+u)^(−1/2) = u/2 − 3u²/8 + …; the fit truncates at u⁵ over u ≤ 0.49, so only the two
+    # leading coefficients are well determined (higher ones absorb the truncation error and are not compared)
+    rel = {k: abs(coef.get(k, float("nan")) / ref - 1) for k, ref in (("u^1", 0.5), ("u^2", -0.375))}
+    near_ok = bool(rel["u^1"] < 1e-3 and rel["u^2"] < 1e-2)
     recs.append(HypothesisLedger(ledger).record(
         title="Near-field correction series of the entangling phase (parallel geometry)",
-        statement=str(near.get("correction_series", {}).get("coefficients")),
+        statement=str(coef),
         method="sparse regression (STLSQ) on (Δx/d)² library", study=near,
-        classification="KNOWN_PHYSICS_IMPLEMENTATION",
+        classification="KNOWN_PHYSICS_IMPLEMENTATION" if near_ok else "NUMERICAL_ARTEFACT",
         checks={"max_abs_error": near.get("correction_series", {}).get("max_abs_error"),
-                "reference": "binomial expansion of 1/√(d²+Δx²)"}, status="VERIFIED_AGAINST_KNOWN_LAW", novelty="KNOWN"))
+                "rel_error_leading_coefficients": rel,
+                "reference": "binomial expansion of 1/√(d²+Δx²): u/2 − 3u²/8 + 5u³/16 − …"},
+        status="VERIFIED_AGAINST_KNOWN_LAW" if near_ok else "FAILED_BLIND_RECOVERY", novelty="KNOWN"))
     return recs

@@ -73,10 +73,25 @@ def read_parquet(path: str | Path) -> tuple[dict, dict]:
     return t.to_pydict(), meta
 
 
+# Decompressed/densified size ceiling for parsed uploads. Compressed containers (npz, HDF5, Parquet) and sparse
+# Matrix Market headers can declare far more data than the upload carries ("decompression bombs").
+MAX_DECODED_BYTES = 256 * 1024 * 1024
+
+
+def _check_size(nbytes: int, what: str) -> None:
+    if nbytes > MAX_DECODED_BYTES:
+        raise ValueError(f"{what} would decode to {nbytes / 2**20:.0f} MiB (limit {MAX_DECODED_BYTES // 2**20} MiB)")
+
+
 def read_matrix_market(text: str) -> np.ndarray:
-    from scipy.io import mmread
-    return np.asarray(mmread(io.StringIO(text)).todense() if hasattr(mmread(io.StringIO(text)), "todense")
-                      else mmread(io.StringIO(text)))
+    from scipy.io import mminfo, mmread
+    rows, cols, *_ = mminfo(io.StringIO(text))
+    _check_size(16 * rows * cols, "Matrix Market matrix")  # densified as complex128 at most
+    try:
+        m = mmread(io.StringIO(text), spmatrix=False)  # SciPy ≥ 1.15 (avoids the spmatrix deprecation)
+    except TypeError:
+        m = mmread(io.StringIO(text))
+    return np.asarray(m.todense() if hasattr(m, "todense") else m)
 
 
 def parse_upload(name: str, data: bytes) -> dict:
@@ -87,6 +102,8 @@ def parse_upload(name: str, data: bytes) -> dict:
     if ext == ".csv":
         import csv
         rows = list(csv.reader(io.StringIO(data.decode())))
+        if not rows:
+            raise ValueError("empty CSV file")
         header, body = rows[0], rows[1:]
         cols = {h: [] for h in header}
         for r in body:
@@ -99,16 +116,23 @@ def parse_upload(name: str, data: bytes) -> dict:
     if ext == ".npy":
         return {"kind": "array", "content": np.load(io.BytesIO(data), allow_pickle=False)}
     if ext == ".npz":
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            _check_size(sum(i.file_size for i in zf.infolist()), "npz archive")
         z = np.load(io.BytesIO(data), allow_pickle=False)
         return {"kind": "arrays", "content": {k: z[k] for k in z.files}}
     if ext in (".h5", ".hdf5"):
         import h5py
         with h5py.File(io.BytesIO(data), "r") as f:
-            arrays = {k: f[k][()] for k in f.keys() if isinstance(f[k], h5py.Dataset)}
+            dsets = [k for k in f.keys() if isinstance(f[k], h5py.Dataset)]
+            _check_size(sum(f[k].size * f[k].dtype.itemsize for k in dsets), "HDF5 file")
+            arrays = {k: f[k][()] for k in dsets}
             attrs = dict(f.attrs)
         return {"kind": "arrays", "content": arrays, "attrs": attrs}
     if ext == ".parquet":
         import pyarrow.parquet as pq
+        md = pq.ParquetFile(io.BytesIO(data)).metadata
+        _check_size(sum(md.row_group(i).total_byte_size for i in range(md.num_row_groups)), "Parquet file")
         return {"kind": "table", "content": pq.read_table(io.BytesIO(data)).to_pydict()}
     if ext == ".mtx":
         return {"kind": "array", "content": read_matrix_market(data.decode())}
@@ -119,6 +143,10 @@ def validate_density_matrix(arr) -> dict:
     a = np.asarray(arr)
     if a.ndim != 2 or a.shape[0] != a.shape[1]:
         return {"passed": False, "reason": "not a square matrix"}
+    if a.shape[0] > 4096:  # O(n³) eigendecomposition: bounded for interactive validation
+        return {"passed": False, "reason": "matrix larger than 4096×4096: not validated interactively"}
+    if not np.all(np.isfinite(a)):
+        return {"passed": False, "reason": "matrix contains non-finite entries"}
     return check_density_matrix(a.astype(complex), tol=1e-8).as_dict()
 
 
@@ -293,8 +321,11 @@ def fetch_source(connector_id: str, store: Path, catalogue: Catalogue, client=No
                 status = getattr(getattr(e, "response", None), "status_code", None)
                 if (isinstance(e, httpx.HTTPStatusError) and status not in (429, 503)) or attempt == 3:
                     raise
-                hdr = e.response.headers.get("retry-after", 0) if status else 0
-                wait = float(hdr or 0) or c.min_interval_s * 4 ** attempt
+                hdr = e.response.headers.get("retry-after", "") if status else ""
+                try:  # Retry-After may also be an HTTP date; fall back to exponential back-off then
+                    wait = float(hdr or 0) or c.min_interval_s * 4 ** attempt
+                except ValueError:
+                    wait = c.min_interval_s * 4 ** attempt
                 time.sleep(min(wait, 120))
     finally:
         if own:

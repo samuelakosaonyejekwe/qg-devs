@@ -42,9 +42,9 @@ def python_reference(d):
 def concurrence_reference(rho):
     """Wootters concurrence with λ_i as singular values of sqrt(ρ)(Y⊗Y)sqrt(ρ)* (numpy LAPACK SVD).
 
-    qm.concurrence takes sqrt|eig(ρρ̃)|, which turns round-off-level zero eigenvalues (~1e-16) into
-    ~1e-8 errors for rank-deficient ρ (up to ~6e-7 observed on pure BMV states). It is therefore
-    compared directly only on full-rank states; elsewhere this conditioning-safe form is used.
+    An eigenvalue form sqrt|eig(ρρ̃)| turns round-off-level zero eigenvalues (~1e-16) into ~1e-8 errors for
+    rank-deficient ρ; this conditioning-safe SVD form (the one qm.concurrence now also uses) is the
+    reference, and qm.concurrence is additionally compared directly on full-rank states.
     """
     w, v = np.linalg.eigh(rho)
     w = np.where(w > 16 * np.finfo(float).eps * np.abs(w).max(), w, 0.0)

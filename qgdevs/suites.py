@@ -58,7 +58,7 @@ SUITES = [
      "maturity": "IMPLEMENTED_VERIFIED", "gaps": ["hierarchical multi-run models"]},
     {"n": 12, "slug": "falsification", "name": "Competing Gravity Models and Scientific Falsification",
      "modules": ["qgdevs.models", "qgdevs.discrimination"],
-     "capabilities": ["7 implemented hypotheses incl. Aziz–Howl classical-gravity–QFT mechanism", "nuisance-robust KL discrimination",
+     "capabilities": ["8 implemented hypotheses incl. Aziz–Howl classical-gravity–QFT mechanism and CSL collapse", "nuisance-robust KL discrimination",
                       "shots for target evidence", "explicit indistinguishability verdicts"],
      "maturity": "IMPLEMENTED_VERIFIED", "gaps": ["Aziz–Howl model PARTIALLY VERIFIED (non-perturbative completion and long-time regime of the paper not implemented)"]},
     {"n": 13, "slug": "design", "name": "Experimental Design and Optimisation", "modules": ["qgdevs.design"],

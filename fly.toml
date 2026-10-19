@@ -10,6 +10,9 @@ primary_region = "lhr"
 [env]
   QGDEVS_HOME = "/data"
   WEB_CONCURRENCY = "2"
+  # the app is reachable only through Fly's proxy: trust its X-Forwarded-For so per-visitor job limits, rate
+  # limits and job-cancel ownership see the real client address instead of one shared proxy address
+  FORWARDED_ALLOW_IPS = "*"
 
 [processes]
   app = "qgdevs-start all"

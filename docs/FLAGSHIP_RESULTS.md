@@ -1,6 +1,6 @@
 # Flagship research results — gravity-mediated entanglement
 
-Generated 2026-10-19T14:38 UTC by `tools/flagship_study.py` · QG-DEVS 0.2.0 · code `2f3a87320415ef9c…` · runtime 215.4 s. Full numbers: `docs/flagship_results.json`.
+Generated 2026-10-19T17:48 UTC by `tools/flagship_study.py` · QG-DEVS 0.2.0 · code `7ef0aba4826fdfda…` · runtime 274.9 s. Full numbers: `docs/flagship_results.json`.
 
 > **Evidence status: computational predictions only.** Nothing below is a physical measurement. Synthetic data are labelled SYNTHETIC. Gates G4 (feasibility confirmed by an experimental team), G6 (physical data) and G7 (replication) are not passed.
 
@@ -41,7 +41,7 @@ Robust discrimination (the alternative may adjust all admissible nuisance parame
 | QG-COH | SC-MF | 0.00339 | 164 | distinguishable |
 | QG-COH | CC-KTM | 0.0195 | 28.6 | distinguishable |
 | QG-COH | DP-COLL | 0.372 | 1.5 | distinguishable |
-| QG-COH | CSL-COLL | 1.03e-17 | inf | indistinguishable |
+| QG-COH | CSL-COLL | 0 | inf | indistinguishable |
 | QG-COH | NULL-NG | 0.0134 | 41.5 | distinguishable |
 | QG-COH | CG-QFT-AH | 0.00339 | 164 | distinguishable |
 | CC-KTM | QG-COH | 0.0166 | 33.5 | distinguishable |
@@ -51,7 +51,6 @@ Robust discrimination (the alternative may adjust all admissible nuisance parame
 | CC-KTM | CSL-COLL | 0 | inf | indistinguishable |
 | CC-KTM | NULL-NG | 0.0273 | 20.4 | distinguishable |
 | CC-KTM | CG-QFT-AH | 0.0242 | 23 | distinguishable |
-
 
 *Reading the CSL rows:* CSL-COLL contains QG-COH as its λ → 0 limit (and with a suitable λ it can mimic the extra dephasing of CC-KTM), so it is *nested* rather than excludable: an observed entanglement witness bounds the collapse rate to λ ≲ 1e-25 s⁻¹ at r_C = 100 nm instead of falsifying CSL outright. 'Indistinguishable' here is the correct verdict for nested models, not a failure of the experiment.
 
@@ -73,4 +72,4 @@ Overall technology readiness: TRL 1. Conceptual design only. The required parame
 
 ## 7. Honest conclusion
 
-The platform reproduces the established BMV predictions, quantifies every competing explanation it implements, and finds designs where implemented classical, semiclassical and hybrid models are statistically distinguishable from the coherent quantum model *in simulation*. It also shows (i) that distinguishing a classical measurement–feedback channel requires an independent decoherence calibration tighter than s*, (ii) that Diósi–Penrose collapse would erase the signal at these parameters, and (iii) that the required masses, splittings, gradients and charge control lie far beyond demonstrated capability. No discovery about the nature of gravity is claimed. The classical-gravity + quantum-matter mechanism of Aziz & Howl (2025) is now implemented (docs/AZIZ_HOWL_MODEL.md): at BMV parameters it predicts entanglement ~29 orders of magnitude weaker than QG-COH, with different mass, time and constituent-mass scaling.
+The platform reproduces the established BMV predictions, quantifies every competing explanation it implements, and finds designs where implemented classical, semiclassical and hybrid models are statistically distinguishable from the coherent quantum model *in simulation*. It also shows (i) that distinguishing a classical measurement–feedback channel requires an independent decoherence calibration tighter than s*, (ii) that Diósi–Penrose collapse would erase the signal at these parameters, and (iii) that the required masses, splittings, gradients and charge control lie far beyond demonstrated capability. No discovery about the nature of gravity is claimed. The classical-gravity + quantum-matter mechanism of Aziz & Howl (2025) is now implemented (docs/AZIZ_HOWL_MODEL.md): at BMV parameters it predicts entanglement ~28 orders of magnitude weaker than QG-COH (entangling-strength ratio at the Bose et al. benchmark), with different mass, time and constituent-mass scaling.

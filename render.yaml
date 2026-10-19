@@ -16,6 +16,8 @@ services:
     envVars:
       - key: QGDEVS_HOME
         value: /data
+      - key: FORWARDED_ALLOW_IPS  # only Render's proxy reaches the service: trust its X-Forwarded-For
+        value: "*"
       - key: QGDEVS_API_TOKENS
         sync: false
       - key: ANTHROPIC_API_KEY

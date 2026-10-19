@@ -58,6 +58,12 @@ def cases():
     out.append(({"geometry": "angled", "angle_deg": 30.0}, {"residual_charge_e": 1.0}))
     out.append(({"geometry": "angled", "angle_deg": 135.0, "dx_B": 120e-6}, {"residual_charge_e": 10.0,
                                                                               "include_casimir": False}))
+    # magnetic backgrounds: diamagnetic coupling under a bias field (diamond, gold) and paramagnetic osmium
+    out.append(({}, {"bias_field_T": 1.0}))
+    out.append(({"geometry": "linear", "separation": 600e-6, "dx_A": 200e-6, "dx_B": 200e-6},
+                {"material": "gold", "bias_field_T": -2.5}))
+    out.append(({"geometry": "angled", "angle_deg": 60.0, "time": 1.2}, {"material": "osmium", "bias_field_T": 0.3,
+                                                                           "include_casimir": False}))
     while len(out) < 40:
         lm = rng.uniform(-16, -12)
         m_a = 10**lm
@@ -75,7 +81,8 @@ def cases():
              "T_gas": float(rng.uniform(0.01, 20)), "T_env": float(rng.uniform(0, 30)),
              "T_int": float(rng.uniform(0, 30)) if rng.random() < 0.6 else 0.0,
              "residual_charge_e": float([0, 0, 0, 0, 0, 1, 0, 10][len(out) % 8]),
-             "include_casimir": bool(rng.random() < 0.75), "readout_error": float(rng.uniform(0, 0.1))}
+             "include_casimir": bool(rng.random() < 0.75), "readout_error": float(rng.uniform(0, 0.1)),
+             "bias_field_T": float(rng.uniform(-3, 3)) if len(out) % 4 == 1 else 0.0}
         des = bmv.BMVDesign.from_dict({**bmv.BMVDesign().__dict__, **d})
         if bmv.check_geometry(des):
             continue
@@ -108,7 +115,8 @@ def compute(dd: dict, ee: dict) -> dict:
     mat = materials.get(env.material)
     cm = mat.clausius_mossotti()
     dp_budget = dec.budget(design.mass_A, design.radius_A, design.dx_A, pressure=env.pressure, T_gas=env.T_gas,
-                           T_env=env.T_env, T_int=env.T_int, cm=cm, t=design.time, include_dp=True)
+                           T_env=env.T_env, T_int=env.T_int, cm=cm, t=design.time, include_dp=True,
+                           include_csl=True)
     # model curves: predictions_table with the scenario recomputed at design.time = t
     curve_times = [design.time * f for f in (0.2, 0.55, 1.0)]
     curves = []

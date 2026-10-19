@@ -88,12 +88,10 @@ def nbody_accelerations(pos: np.ndarray, masses: np.ndarray, softening: float = 
 
 
 def nbody_energy(pos, vel, masses) -> float:
+    pos, vel, masses = np.asarray(pos, float), np.asarray(vel, float), np.asarray(masses, float)
     ke = 0.5 * np.sum(masses * np.sum(vel**2, axis=1))
-    pe = 0.0
-    n = len(masses)
-    for i in range(n):
-        for j in range(i + 1, n):
-            pe -= G * masses[i] * masses[j] / np.linalg.norm(pos[i] - pos[j])
+    i, j = np.triu_indices(len(masses), k=1)
+    pe = -G * np.sum(masses[i] * masses[j] / np.linalg.norm(pos[i] - pos[j], axis=1))
     return float(ke + pe)
 
 

@@ -29,6 +29,13 @@ def available() -> dict:
 
 
 def bmv_entangling_phase(mA: float, mB: float, d: float, dx: float, t: float, geometry: str = "parallel") -> float:
+    import math
+    if geometry not in ("parallel", "linear"):  # interpolated into Octave source below: whitelist, never escape
+        raise ValueError(f"unsupported geometry {geometry!r}")
+    vals = [float(v) for v in (mA, mB, d, dx, t)]
+    if not all(math.isfinite(v) for v in vals):
+        raise ValueError("arguments must be finite numbers")
+    mA, mB, d, dx, t = vals
     b = backend()
     if b == "matlab":
         import matlab.engine

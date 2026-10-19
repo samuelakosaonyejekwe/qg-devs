@@ -15,8 +15,7 @@ from typing import Callable
 
 import numpy as np
 
-from . import bmv, em, qg_eft
-from .constants import hbar
+from . import bmv, qg_eft
 from .decoherence import diosi_penrose_rate
 
 
@@ -152,8 +151,11 @@ def _diosi_penrose(sc: Scenario, e: dict) -> np.ndarray:
     ph = _phases(_add(sc.grav_energies(e["mass_scale"]), sc.nongrav_energies), t)
     ph = _local_phase(ph, e["local_phase_A"], e["local_phase_B"])
     d = sc.design
-    gA = diosi_penrose_rate(d.mass_A, d.radius_A, d.dx_A, e["dp_convention"])["rate"]
-    gB = diosi_penrose_rate(d.mass_B, d.radius_B, d.dx_B, e["dp_convention"])["rate"]
+    # E_Δ ∝ m² at fixed geometry (R is the measured size), so the mass-calibration nuisance enters as s²,
+    # exactly as it does for the gravitational branch energies
+    s2 = e["mass_scale"] ** 2
+    gA = s2 * diosi_penrose_rate(d.mass_A, d.radius_A, d.dx_A, e["dp_convention"])["rate"]
+    gB = s2 * diosi_penrose_rate(d.mass_B, d.radius_B, d.dx_B, e["dp_convention"])["rate"]
     dA, dB = _env_decay(sc, e)
     return bmv.joint_state(ph, dA + gA * t, dB + gB * t)
 
@@ -166,9 +168,11 @@ def _csl(sc: Scenario, e: dict) -> np.ndarray:
     ph = _local_phase(ph, e["local_phase_A"], e["local_phase_B"])
     d = sc.design
     lam = 10.0 ** e["csl_log10_lambda"]
-    # Γ is exactly linear in λ: evaluate the (cached) integral once per geometry at λ = 1 s⁻¹
-    gA = lam * csl_rate(d.mass_A, d.radius_A, d.dx_A, 1.0)["rate"]
-    gB = lam * csl_rate(d.mass_B, d.radius_B, d.dx_B, 1.0)["rate"]
+    # Γ is exactly linear in λ: evaluate the (cached) integral once per geometry at λ = 1 s⁻¹;
+    # Γ ∝ m² at fixed geometry, so the mass-calibration nuisance enters as s²
+    s2 = e["mass_scale"] ** 2
+    gA = s2 * lam * csl_rate(d.mass_A, d.radius_A, d.dx_A, 1.0)["rate"]
+    gB = s2 * lam * csl_rate(d.mass_B, d.radius_B, d.dx_B, 1.0)["rate"]
     dA, dB = _env_decay(sc, e)
     return bmv.joint_state(ph, dA + gA * t, dB + gB * t)
 

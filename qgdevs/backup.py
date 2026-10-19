@@ -20,46 +20,50 @@ from pathlib import Path
 from .jobs import paths
 
 
-def _sha(p: Path) -> str:
-    h = hashlib.sha256()
-    with p.open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def snapshot(out_dir: Path | None = None) -> Path:
+    """Write a .tar.gz snapshot of the persistent state.
+
+    Every member is read into memory once and the manifest hash is computed from exactly those bytes, so a
+    file that changes while the snapshot runs (the ledger is appended by other processes) can never yield an
+    archive whose manifest disagrees with its content. The ledger is copied under its append lock.
+    """
+    from .evidence import Ledger
     p = paths()
     out_dir = Path(out_dir or p["home"] / "backups")
     out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     target = out_dir / f"qgdevs-{stamp}.tar.gz"
-    with tempfile.TemporaryDirectory() as td:
-        td = Path(td)
-        files: list[tuple[Path, str]] = []
+    hashes: dict[str, str] = {}
+    tmp = target.with_suffix(".partial")
+    with tarfile.open(tmp, "w:gz") as tar, tempfile.TemporaryDirectory() as td:
+
+        def add(arc: str, data: bytes) -> None:  # hash and archive the very same bytes, one file at a time
+            hashes[arc] = hashlib.sha256(data).hexdigest()
+            info = tarfile.TarInfo(arc)
+            info.size = len(data)
+            info.mode = 0o640
+            tar.addfile(info, io.BytesIO(data))
+
         for key in ("jobs", "catalogue"):
             if p[key].exists():
-                dst = td / p[key].name
+                dst = Path(td) / p[key].name
                 src = sqlite3.connect(p[key])
                 dcon = sqlite3.connect(dst)
                 src.backup(dcon)
                 dcon.close(); src.close()
-                files.append((dst, p[key].name))
+                add(p[key].name, dst.read_bytes())
         if p["ledger"].exists():
-            files.append((p["ledger"], "ledger.jsonl"))
+            add("ledger.jsonl", Ledger(p["ledger"]).snapshot_bytes())
         for key in ("vault", "store", "results"):
             for f in sorted(p[key].rglob("*")):
-                if f.is_file():
-                    files.append((f, f"{key}/{f.relative_to(p[key]).as_posix()}"))
-        manifest = {"created_utc": stamp, "files": {arc: _sha(f) for f, arc in files}}
-        with tarfile.open(target, "w:gz") as tar:
-            for f, arc in files:
-                tar.add(f, arcname=arc)
-            data = json.dumps(manifest, indent=1).encode()
-            info = tarfile.TarInfo("MANIFEST.json")
-            info.size = len(data)
-            tar.addfile(info, io.BytesIO(data))
-    keep = int(os.environ.get("QGDEVS_BACKUP_KEEP", "14"))
+                if f.is_file() and not f.name.endswith(".tmp"):
+                    add(f"{key}/{f.relative_to(p[key]).as_posix()}", f.read_bytes())
+        data = json.dumps({"created_utc": stamp, "files": hashes}, indent=1).encode()
+        info = tarfile.TarInfo("MANIFEST.json")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    tmp.replace(target)  # never leave a truncated archive under the final name
+    keep = max(1, int(os.environ.get("QGDEVS_BACKUP_KEEP", "14")))
     for old in sorted(out_dir.glob("qgdevs-*.tar.gz"))[:-keep]:
         old.unlink()
     return target
@@ -69,6 +73,8 @@ def upload(archive: Path) -> dict:
     url = os.environ.get("QGDEVS_BACKUP_S3_URL")  # e.g. s3://bucket/prefix
     if not url:
         return {"uploaded": False, "reason": "QGDEVS_BACKUP_S3_URL not configured"}
+    if not url.startswith("s3://") or len(url) <= 5:
+        return {"uploaded": False, "reason": "QGDEVS_BACKUP_S3_URL must look like s3://bucket[/prefix]"}
     import boto3
     bucket, _, prefix = url[5:].partition("/")
     s3 = boto3.client("s3", endpoint_url=os.environ.get("QGDEVS_BACKUP_S3_ENDPOINT") or None)
@@ -78,25 +84,43 @@ def upload(archive: Path) -> dict:
 
 
 def verify(archive: Path) -> dict:
+    """Check every manifest entry against the archive, and that the archive holds nothing unlisted."""
     with tarfile.open(archive, "r:gz") as tar:
         manifest = json.loads(tar.extractfile("MANIFEST.json").read())
-        bad = []
+        names = {m.name for m in tar.getmembers() if m.isfile()} - {"MANIFEST.json"}
+        bad, missing = [], []
         for arc, h in manifest["files"].items():
-            data = tar.extractfile(arc).read()
+            try:
+                data = tar.extractfile(arc).read()
+            except KeyError:
+                missing.append(arc)
+                continue
             if hashlib.sha256(data).hexdigest() != h:
                 bad.append(arc)
-    return {"valid": not bad, "corrupt": bad, "n_files": len(manifest["files"])}
+        unlisted = sorted(names - set(manifest["files"]))
+    return {"valid": not (bad or missing or unlisted), "corrupt": bad, "missing": missing, "unlisted": unlisted,
+            "n_files": len(manifest["files"])}
 
 
 def restore(archive: Path, target_home: Path) -> dict:
+    """Restore a verified snapshot into target_home. Stop the API and workers first.
+
+    Only members listed (and verified) in the manifest are extracted. Stale SQLite WAL/SHM side files of the
+    databases being replaced are removed: SQLite would otherwise replay the old write-ahead log onto the
+    restored database.
+    """
     v = verify(archive)
     if not v["valid"]:
-        raise RuntimeError(f"backup failed integrity check: {v['corrupt']}")
+        raise RuntimeError(f"backup failed integrity check: {v}")
     target_home.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive, "r:gz") as tar:
+        listed = set(json.loads(tar.extractfile("MANIFEST.json").read())["files"])
         for m in tar.getmembers():
-            if m.name == "MANIFEST.json" or m.name.startswith("/") or ".." in Path(m.name).parts:
+            if m.name not in listed or m.name.startswith("/") or ".." in Path(m.name).parts:
                 continue
+            if m.name.endswith(".db"):
+                for side in ("-wal", "-shm", "-journal"):
+                    (target_home / (m.name + side)).unlink(missing_ok=True)
             tar.extract(m, target_home, filter="data")
     from .evidence import Ledger
     led = target_home / "ledger.jsonl"

@@ -28,19 +28,23 @@ def mean_speed(T: float, m_gas: float = M_N2) -> float:
     return float(np.sqrt(8 * k_B * T / (np.pi * m_gas)))
 
 
-def gas_collision_rate(R: float, pressure: float, T_gas: float, m_gas: float = M_N2) -> dict:
+def gas_collision_rate(R: float, pressure: float, T_gas: float, m_gas: float = M_N2, dx: float | None = None) -> dict:
     """Saturated-regime collisional decoherence: every collision resolves which-path.
 
     Γ = n σ v̄ with n = P/(k_B T), σ = πR² (geometric cross-section), v̄ the mean thermal speed.
-    Valid when Δx exceeds the thermal de Broglie wavelength of the gas molecules (~1e-11 m at 1 K),
+    Valid when Δx exceeds the thermal de Broglie wavelength of the gas molecules (N₂: ~3e-10 m at 1 K, ~2e-11 m at 300 K),
     which holds for all BMV-scale superpositions. This is a conservative (upper-bound-like) estimate:
     a single collision is assumed to destroy coherence (Schlosshauer 2007, §3.4).
     """
     n = pressure / (k_B * T_gas)
     v = mean_speed(T_gas, m_gas)
     lam_gas = 2 * np.pi * hbar / np.sqrt(2 * np.pi * m_gas * k_B * T_gas)
+    if dx is None or dx > lam_gas:
+        regime = "saturated (Δx >> λ_gas)"
+    else:  # each collision then carries only partial which-path information: the rate is an upper bound
+        regime = "NOT saturated (Δx ≤ λ_gas): saturated rate shown is an upper bound"
     return {"rate": float(n * np.pi * R**2 * v), "number_density_m3": n, "mean_speed_m_s": v,
-            "gas_thermal_wavelength_m": float(lam_gas), "regime": "saturated (Δx >> λ_gas)"}
+            "gas_thermal_wavelength_m": float(lam_gas), "regime": regime}
 
 
 def blackbody_rates(R: float, dx: float, T_env: float, T_int: float, cm: complex) -> dict:
@@ -95,7 +99,7 @@ def budget(m: float, R: float, dx: float, *, pressure: float, T_gas: float, T_en
     Established environmental mechanisms only by default; hypothetical collapse models (Diósi–Penrose, CSL)
     are opt-in and flagged with "hypothetical": True so they are never mixed silently into the total."""
     items = {}
-    g = gas_collision_rate(R, pressure, T_gas, m_gas)
+    g = gas_collision_rate(R, pressure, T_gas, m_gas, dx)
     items["gas_collisions"] = g
     for k, v in blackbody_rates(R, dx, T_env, T_int, cm).items():
         items[f"blackbody_{k}"] = v

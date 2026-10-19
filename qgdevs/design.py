@@ -12,7 +12,7 @@ Constraints are reported individually so infeasible regions are explained, never
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict
 
 import numpy as np
 from scipy.optimize import differential_evolution
@@ -65,8 +65,37 @@ def scenario_for(design: bmv.BMVDesign, env: Environment) -> tuple[Scenario, dic
     if env.bias_field_T:
         for k, v in em.diamagnetic_branch_energies(design, mat.magnetic_susceptibility, (0, 0, env.bias_field_T)).items():
             ch[k]["diamagnetic"] = v
-    sc = Scenario(design, budA["total_rate"], budB["total_rate"], em.total_by_branch(ch))
-    return sc, {"decoherence_A": budA, "decoherence_B": budB, "nongrav_channels": ch}
+    # design.gamma_A/B are additional, independently specified decoherence rates (e.g. technical noise of the
+    # spin control); they add to the environmental budget instead of being silently discarded
+    sc = Scenario(design, budA["total_rate"] + design.gamma_A, budB["total_rate"] + design.gamma_B,
+                  em.total_by_branch(ch))
+    return sc, {"decoherence_A": budA, "decoherence_B": budB, "nongrav_channels": ch,
+                "extra_decoherence_rate_A": design.gamma_A, "extra_decoherence_rate_B": design.gamma_B}
+
+
+def full_prediction(design: bmv.BMVDesign, env: Environment, n_times: int = 120) -> dict:
+    """The complete flagship prediction for one design and environment (HTTP API, CLI and reproduction packages
+    all use this one function, so a reproduction re-run is directly comparable with the packaged result)."""
+    from dataclasses import replace
+    from .discrimination import predictions_table
+    issues = bmv.check_geometry(design)
+    if issues:
+        return {"admissibility_issues": issues}
+    scen, extra = scenario_for(design, env)
+    # the joint state uses the total decoherence; the input design (reported back) is left unchanged so that
+    # feeding the reported design into a new prediction does not count the environment twice
+    d_eff = replace(design, gamma_A=scen.gamma_env_A, gamma_B=scen.gamma_env_B)
+    times = np.linspace(0, design.time, min(max(int(n_times), 10), 400))
+    pred = bmv.predict(d_eff, extra_energies=scen.nongrav_energies, times=times)
+    pred["design"] = design.as_dict()
+    pred["total_decoherence_rate_A"], pred["total_decoherence_rate_B"] = scen.gamma_env_A, scen.gamma_env_B
+    pred["models"] = predictions_table(scen)
+    pred["decoherence"] = extra["decoherence_A"]
+    pred["decoherence_B"] = extra["decoherence_B"]
+    pred["nongrav_channels"] = extra["nongrav_channels"]
+    pred["branch_positions"] = bmv.branch_positions(design)
+    pred["evidence_status"] = "COMPUTATIONAL PREDICTION (model-dependent; not physical evidence)"
+    return pred
 
 
 def constraint_report(design: bmv.BMVDesign, env: Environment, bounds: DesignBounds) -> dict:
@@ -123,8 +152,11 @@ def _design_from(x, bounds: DesignBounds, base: bmv.BMVDesign) -> bmv.BMVDesign:
 
 def optimise(env: Environment = Environment(), bounds: DesignBounds = DesignBounds(), seed: int = 0,
              maxiter: int = 40, popsize: int = 12, cycle_overhead_s: float = 1.0, top_k: int = 3,
-             robust_check: bool = True) -> dict:
-    """Minimise total experiment wall time = 3 settings × shots × (t + overhead) under constraints."""
+             robust_check: bool = True, progress=None) -> dict:
+    """Minimise total experiment wall time = 3 settings × shots × (t + overhead) under constraints.
+
+    progress(fraction, message), if given, is called once per generation (the job queue uses it for progress
+    reports and to stop a cancelled run between generations)."""
     base = bmv.BMVDesign(density=materials.get(env.material).density)
     lo = [np.log10(bounds.mass[0]), bounds.separation[0], bounds.dx[0], bounds.time[0]]
     hi = [np.log10(bounds.mass[1]), bounds.separation[1], bounds.dx[1], bounds.time[1]]
@@ -149,8 +181,15 @@ def optimise(env: Environment = Environment(), bounds: DesignBounds = DesignBoun
         evaluated.append((val, list(map(float, x))))
         return val
 
+    gen = [0]
+
+    def on_generation(*_):
+        gen[0] += 1
+        if progress is not None:
+            progress(0.05 + 0.75 * gen[0] / max(maxiter, 1), f"generation {gen[0]}/{maxiter}")
+
     res = differential_evolution(objective, list(zip(lo, hi)), seed=seed, maxiter=maxiter, popsize=popsize,
-                                 tol=1e-6, polish=False)
+                                 tol=1e-6, polish=False, callback=on_generation)
     evaluated.sort(key=lambda r: r[0])
     seen, cands = [], []
     for val, x in evaluated:
@@ -183,9 +222,14 @@ def optimise(env: Environment = Environment(), bounds: DesignBounds = DesignBoun
             "objective": "log10( 3 settings × shots for 5σ witness violation × (t + overhead) )"}
 
 
+SWEEPABLE = ("separation", "dx_A", "mass_A", "time")  # dx_A / mass_A set both masses (equal-mass sweeps)
+
+
 def sweep_1d(design: bmv.BMVDesign, env: Environment, param: str, values) -> dict:
     """Prediction of every implemented hypothesis along one design parameter."""
     from .discrimination import predictions_table
+    if param not in SWEEPABLE:
+        raise ValueError(f"cannot sweep '{param}'; sweepable parameters: {SWEEPABLE}")
     rows = []
     for v in values:
         d = bmv.BMVDesign.from_dict({**design.as_dict(), param: float(v)})
@@ -210,6 +254,9 @@ def sweep_2d(design: bmv.BMVDesign, env: Environment, px: str, xs, py: str, ys, 
     from .models import HYPOTHESES
     from .quantum import negativity
     from .discrimination import protocol_frame
+    for p in (px, py):
+        if p not in SWEEPABLE:
+            raise ValueError(f"cannot sweep '{p}'; sweepable parameters: {SWEEPABLE}")
     neg = np.full((len(ys), len(xs)), np.nan)
     wit = np.full((len(ys), len(xs)), np.nan)
     for i, y in enumerate(ys):

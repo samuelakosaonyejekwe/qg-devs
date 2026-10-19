@@ -8,7 +8,6 @@
         "Reset button beside every Run: restore defaults and clear previous results before running",
         "New animated 3-D views for optomechanics, decoherence, EM backgrounds, measurement, inference, design and discovery",
         "Two more competing hypotheses: Aziz–Howl classical-gravity + quantum-matter mechanism and CSL collapse (8 in total)",
-        "Lean 4: 32 machine-checked theorems now shown on the Verification page",
         "Faster job handling: a fast lane so short jobs never wait behind long studies",
         "Lean 4: 43 machine-checked theorems — the dephasing threshold is now exact: separable for all time iff Γ ≥ |dΔφ/dt|/2",
         "New dossier requirements: electric-dipole limit, magnetic-field limit during interaction, Stern–Gerlach gradient precision",

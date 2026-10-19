@@ -26,6 +26,9 @@ streams.
 1. **Fly.io**: run `flyctl auth login`, `flyctl launch --no-deploy --copy-config`,
    `flyctl volumes create qgdevs_data --size 5`, and `flyctl secrets set QGDEVS_API_TOKENS=<token>:admin`. Then run
    `flyctl deploy`. Optionally, run `flyctl secrets set ANTHROPIC_API_KEY=… QGDEVS_BACKUP_S3_URL=s3://bucket/qgdevs …`.
+   The images set `QGDEVS_REQUIRE_TOKENS=1`: if `QGDEVS_API_TOKENS` is missing, every visitor is treated as
+   public (read and compute only) rather than granted write access. Only a local run without that variable is in
+   development mode (every request acts as a researcher).
 2. **GitHub Actions CD**:
    - Add secret `FLY_API_TOKEN` and variable `DEPLOY_FLY=true`.
    - For the static mirror, add secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, and variables

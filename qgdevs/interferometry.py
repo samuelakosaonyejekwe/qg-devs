@@ -12,9 +12,8 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.integrate import quad
 
-from .constants import hbar, G, mu_B, g_e, g_n
+from .constants import hbar, G, mu_B, g_e
 
 
 # ----------------------------------------------------------------------------- split-step Schrödinger
@@ -128,17 +127,18 @@ def sg_trajectory(t: np.ndarray, a: float, tau: float, hold: float) -> np.ndarra
 
 
 def sg_bmv_phases(m_A: float, m_B: float, d: float, tau: float, hold: float, dx_target: float,
-                  geometry: str = "parallel", n_quad: int = 2000) -> dict:
+                  geometry: str = "parallel", n_quad: int = 2000, angle_deg: float = 90.0) -> dict:
     """Time-integrated branch phases for two closed-loop SG interferometers.
 
-    Each branch is displaced by ±x(t)/... along the split axis; the separation between a mass's
-    branches is 2 x(t) with x_max = dx_target/2.
+    Each branch is displaced by ±x(t) along the split axis of the geometry (bmv.split_axis, including the
+    angled case); the separation between a mass's branches is 2 x(t) with x_max = dx_target/2.
     """
+    from .bmv import split_axis
     a = dx_target / 2 / tau**2
     total = 4 * tau + hold
     ts = np.linspace(0, total, n_quad)
     xs = sg_trajectory(ts, a, tau, hold)
-    n = np.array([0.0, 1.0, 0.0]) if geometry == "parallel" else np.array([1.0, 0.0, 0.0])
+    n = split_axis(geometry, angle_deg)
     cB = np.array([d, 0, 0])
     sign = {"L": 1, "R": -1}
     phases = {}

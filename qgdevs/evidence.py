@@ -14,10 +14,12 @@
 """
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import io
 import json
 import os
+from contextlib import contextmanager
 import platform
 import zipfile
 from dataclasses import dataclass
@@ -71,26 +73,55 @@ class Ledger:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.touch(exist_ok=True)
 
-    def entries(self) -> list[dict]:
+    @contextmanager
+    def _locked(self, exclusive: bool):
+        """Advisory lock on a sidecar file. Several API and worker processes append to the same ledger:
+        without it two writers read the same head and both commit to it, permanently breaking the chain."""
+        with open(self.path.with_name(self.path.name + ".lock"), "a") as lk:
+            fcntl.flock(lk, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+            try:
+                yield
+            finally:
+                fcntl.flock(lk, fcntl.LOCK_UN)
+
+    def _read(self) -> list[dict]:
         with self.path.open() as f:
             return [json.loads(line) for line in f if line.strip()]
+
+    def entries(self) -> list[dict]:
+        with self._locked(False):
+            return self._read()
 
     def head(self) -> str:
         e = self.entries()
         return e[-1]["entry_hash"] if e else GENESIS
 
     def append(self, kind: str, payload: dict, actor: str = "system") -> dict:
-        prev = self.head()
-        body = {"index": len(self.entries()), "timestamp_utc": now(), "kind": kind, "actor": actor,
-                "payload_sha256": sha256_bytes(canonical(payload)), "payload": payload, "prev_hash": prev}
-        body["entry_hash"] = sha256_bytes(canonical({k: v for k, v in body.items() if k != "payload"}))
-        with self.path.open("a") as f:
-            f.write(json.dumps(body, default=str) + "\n")
+        # hash the JSON-normalised payload, i.e. exactly what is stored and later re-hashed by verify()
+        payload = json.loads(json.dumps(payload, default=str))
+        with self._locked(True):
+            es = self._read()
+            prev = es[-1]["entry_hash"] if es else GENESIS
+            body = {"index": len(es), "timestamp_utc": now(), "kind": kind, "actor": actor,
+                    "payload_sha256": sha256_bytes(canonical(payload)), "payload": payload, "prev_hash": prev}
+            body["entry_hash"] = sha256_bytes(canonical({k: v for k, v in body.items() if k != "payload"}))
+            with self.path.open("a") as f:
+                f.write(json.dumps(body, default=str) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
         return body
+
+    def snapshot_bytes(self) -> bytes:
+        """Consistent copy of the ledger file (no partially appended entry), e.g. for backups."""
+        with self._locked(False):
+            return self.path.read_bytes()
 
     def verify(self) -> dict:
         prev = GENESIS
-        for i, e in enumerate(self.entries()):
+        es = self.entries()
+        for i, e in enumerate(es):
+            if e.get("index") != i:
+                return {"valid": False, "broken_at": i, "reason": "index mismatch"}
             if e["prev_hash"] != prev:
                 return {"valid": False, "broken_at": i, "reason": "prev_hash mismatch"}
             if sha256_bytes(canonical(e["payload"])) != e["payload_sha256"]:
@@ -99,7 +130,7 @@ class Ledger:
             if h != e["entry_hash"]:
                 return {"valid": False, "broken_at": i, "reason": "entry hash mismatch"}
             prev = e["entry_hash"]
-        return {"valid": True, "length": len(self.entries()), "head": prev}
+        return {"valid": True, "length": len(es), "head": prev}
 
     def find(self, kind: str, **match) -> list[dict]:
         return [e for e in self.entries() if e["kind"] == kind
@@ -142,7 +173,17 @@ class BlindVault:
             raise ValueError(f"label must be one of {DATA_LABELS}")
         if role not in ROLES:
             raise ValueError(f"role must be one of {ROLES}")
+        if prereg_id is not None and not self.ledger.find("preregistration", prereg_id=prereg_id):
+            raise ValueError(f"no preregistration with id {prereg_id!r}")
         h = sha256_bytes(data)
+        for prev in self.ledger.find("dataset_ingest", dataset_id=h[:16]):
+            pp = prev["payload"]
+            if (pp["label"], pp["role"]) != (label, role):
+                # the same bytes under a second role would let sealed blind-test data be read through the
+                # unsealed record (or make an already-read dataset look sealed)
+                raise ValueError(f"these bytes are already ingested as dataset {pp['dataset_id']} with label "
+                                 f"{pp['label']} and role {pp['role']}; re-ingestion under a different label/role "
+                                 "is refused")
         f = self.root / h
         if not f.exists():  # content-addressed: identical bytes are already stored (and read-only)
             f.write_bytes(data)
@@ -158,6 +199,10 @@ class BlindVault:
         ing = self.ledger.find("dataset_ingest", dataset_id=dataset_id)
         if not ing:
             raise KeyError("unknown dataset")
+        bound = {e["payload"].get("prereg_id") for e in ing} - {None}
+        if bound and prereg_id not in bound:
+            raise PermissionError(f"dataset was ingested under preregistration(s) {sorted(bound)}; "
+                                  "unblinding under a different preregistration is refused")
         if ing[0]["payload"]["role"] == "blind_test" and prereg[0]["index"] > ing[0]["index"]:
             # a blind-test dataset ingested before the preregistration is still valid only if it stayed sealed
             if self.ledger.find("data_access", dataset_id=dataset_id):
@@ -169,7 +214,7 @@ class BlindVault:
         if not ing:
             raise KeyError("unknown dataset")
         p = ing[0]["payload"]
-        if p["role"] == "blind_test":
+        if any(e["payload"]["role"] == "blind_test" for e in ing):  # most restrictive record governs
             if purpose in ("calibration", "selection", "training"):
                 raise PermissionError("blind-test data may not be used for calibration, model selection or training")
             if not self.ledger.find("unblinding", dataset_id=dataset_id):
@@ -225,7 +270,9 @@ def evaluate_gates(*, model_meta: dict | None, vv_report: dict | None, lean_stat
                      "literature review recorded" if literature_review else None] if x], miss)
 
     g = GATES[2]
-    vv_ok = bool(vv_report and vv_report.get("summary", {}).get("failed", 1) == 0)
+    summ = (vv_report or {}).get("summary") or {}
+    # a run must have executed benchmarks (an empty or unknown-id run is vacuous) and cover the full registry
+    vv_ok = bool(summ.get("total", 0) > 0 and summ.get("failed", 1) == 0 and vv_report.get("scope", "full") == "full")
     proved = [t for t in (lean_status or {}).get("theorems", []) if t.get("status") == "proved"]
     rec(g, "PASSED" if vv_ok and proved else ("PARTIAL" if vv_ok or proved else "NOT_PASSED"),
         [f"V&V: {vv_report['summary']}" if vv_report else None, f"{len(proved)} Lean theorems machine-checked"],
@@ -244,8 +291,11 @@ def evaluate_gates(*, model_meta: dict | None, vv_report: dict | None, lean_stat
 
     g = GATES[4]
     preregs = [e for e in entries if e["kind"] == "preregistration"]
-    rec(g, "PASSED" if preregs else "NOT_PASSED", [f"{len(preregs)} preregistration(s) in a valid ledger"]
-        if preregs and ledger.verify()["valid"] else [], [] if preregs else ["preregistration record"])
+    chain_ok = bool(ledger and ledger.verify()["valid"])
+    rec(g, "PASSED" if preregs and chain_ok else "NOT_PASSED",
+        [f"{len(preregs)} preregistration(s) in a valid ledger"] if preregs and chain_ok else [],
+        ([] if preregs else ["preregistration record"]) + ([] if chain_ok or not preregs else
+                                                           ["ledger hash chain fails verification"]))
 
     g = GATES[5]
     real = [e for e in entries if e["kind"] == "dataset_ingest" and e["payload"].get("label") == "REAL"]
@@ -311,7 +361,7 @@ def reproduction_package(*, config: dict, results: dict, ledger: Ledger | None, 
                  "3. Compare rerun.json with results.json; all deterministic outputs must match to the stated tolerances.\n\n"
                  + notes).encode()}
     if ledger:
-        files["ledger.jsonl"] = ledger.path.read_bytes()
+        files["ledger.jsonl"] = ledger.snapshot_bytes()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for name, data in files.items():
             z.writestr(name, data)

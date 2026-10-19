@@ -17,7 +17,6 @@ from scipy import signal as sps
 from scipy import stats
 
 from . import quantum as qm
-from . import bmv
 
 
 def _hash(obj) -> str:
@@ -140,7 +139,7 @@ def injection_recovery(template: np.ndarray, amplitudes: np.ndarray, n_samples: 
         det = 0
         for _ in range(trials):
             x = rng.normal(0, noise_sigma, n_samples)
-            k = rng.integers(0, n_samples - L)
+            k = rng.integers(0, n_samples - L + 1)  # every placement, including the last sample
             x[k:k + L] += A * template
             det += np.max(matched_filter_snr(x, template, noise_sigma)) > threshold
         eff.append(det / trials)

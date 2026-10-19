@@ -40,6 +40,7 @@ R["benchmark_environment"] = {"environment": env.__dict__,
                               "decoherence": {k: {"rate_s": v["rate"], "regime": v["regime"]} for k, v in
                                               extra["decoherence_A"]["mechanisms"].items()},
                               "total_rate_s": extra["decoherence_A"]["total_rate"],
+                              "dominant": extra["decoherence_A"]["dominant"],
                               "delta_phi_nongrav_rad": bmv.entangling_phase(bmv.phases_from_energies(sc.nongrav_energies, bose.time))}
 dp = dec.diosi_penrose_rate(bose.mass_A, bose.radius_A, bose.dx_A)
 R["diosi_penrose"] = {"rate_s": dp["rate"], "coherence_after_t": float(np.exp(-dp["rate"] * bose.time)),
@@ -51,6 +52,8 @@ R["csl_rate_grw_s"] = dec.csl_rate(bose.mass_A, bose.radius_A, bose.dx_A, 1e-16)
 R["max_electric_dipole_Cm"] = em.max_electric_dipole(bose, 0.05)
 R["max_bias_field_T"] = em.max_bias_field(bose, materials.get("diamond").magnetic_susceptibility, 0.05)
 R["sg_gradient_precision"] = itf.required_gradient_precision(bose.mass_A, bose.dx_A, 0.25, 2 * np.pi * 100, 10)
+from qgdevs import model_ah  # noqa: E402
+R["aziz_howl_vs_qg_log10"] = float(np.log10(model_ah.benchmark_comparison()["ratio_ah_to_qg_entangling"]))
 R["eft_one_loop_relative"] = qg_eft.eft_potential_terms(bose.mass_A, bose.mass_B, bose.separation)["quantum_relative_size"]
 R["stern_gerlach"] = {k: v for k, v in itf.sg_bmv_phases(bose.mass_A, bose.mass_B, bose.separation, 0.25, bose.time,
                                                           bose.dx_A, "linear").items() if not k.startswith("trajectory")}
@@ -98,7 +101,7 @@ def f(x, n=3):
 
 
 b, e = R["benchmark_bose2017"], R["benchmark_environment"]
-L = [f"# Flagship research results — gravity-mediated entanglement\n",
+L = ["# Flagship research results — gravity-mediated entanglement\n",
      f"Generated {R['generated_utc'][:16]} UTC by `tools/flagship_study.py` · QG-DEVS {__version__} · code `{R['code_sha256'][:16]}…` · "
      f"runtime {R['runtime_s']} s. Full numbers: `docs/flagship_results.json`.\n",
      "> **Evidence status: computational predictions only.** Nothing below is a physical measurement. Synthetic data are "
@@ -110,7 +113,7 @@ L = [f"# Flagship research results — gravity-mediated entanglement\n",
      f"PPT-witness {f(b['witness_ppt'], 4)}. This reproduces the published scheme; it is not an original result.\n",
      "## 2. What competes with the signal at the benchmark\n",
      f"* Environmental decoherence per mass (P = {env.pressure} Pa, T = {env.T_env} K): **{f(e['total_rate_s'])} s⁻¹**, "
-     f"dominated by gas collisions.",
+     f"dominated by {e['dominant'].replace('_', ' ')}.",
      f"* Casimir–Polder entangling phase: {f(e['delta_phi_nongrav_rad'])} rad "
      f"({f(abs(e['delta_phi_nongrav_rad'] / b['delta_phi_rad']) * 100)} % of the gravitational phase). Gravity dominates "
      f"Casimir by 10× only beyond {f(R['casimir_gravity_distance_10pct_m'] * 1e6)} µm.",
@@ -176,6 +179,7 @@ L += ["## 6. Optimised design under explicit constraints\n",
       "signal at these parameters, and (iii) that the required masses, splittings, gradients and charge control lie far "
       "beyond demonstrated capability. No discovery about the nature of gravity is claimed. The classical-gravity + quantum-"
       "matter mechanism of Aziz & Howl (2025) is now implemented (docs/AZIZ_HOWL_MODEL.md): at BMV parameters it predicts "
-      "entanglement ~29 orders of magnitude weaker than QG-COH, with different mass, time and constituent-mass scaling."]
+      f"entanglement ~{-R['aziz_howl_vs_qg_log10']:.0f} orders of magnitude weaker than QG-COH (entangling-strength "
+      "ratio at the Bose et al. benchmark), with different mass, time and constituent-mass scaling."]
 (ROOT / "docs" / "FLAGSHIP_RESULTS.md").write_text("\n".join(L) + "\n")
 print("done", R["runtime_s"], "s")

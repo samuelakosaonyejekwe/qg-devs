@@ -457,8 +457,16 @@ def run(ids: list[str] | None = None, include_slow: bool = False) -> dict:
             val, ref, passed, err = None, None, False, traceback.format_exc(limit=3)
         results.append({"id": b.id, "suite": b.suite, "title": b.title, "kind": b.kind, "value": val,
                         "tolerance": b.tolerance, "compare": b.compare, "passed": bool(passed),
-                        "justification": b.justification, "reference": b.reference, "error": err,
+                        "reference_value": ref, "justification": b.justification, "reference": b.reference, "error": err,
                         "seconds": round(time.perf_counter() - t0, 4)})
+    known = {b.id for b in REGISTRY}
+    for bid in ids or []:  # an unknown id is a failure, never a silently empty (vacuously passing) run
+        if bid not in known:
+            results.append({"id": bid, "suite": None, "title": "unknown benchmark id", "kind": None, "value": None,
+                            "tolerance": None, "compare": None, "passed": False, "justification": None,
+                            "reference": None, "error": f"no benchmark with id {bid!r} in the registry",
+                            "seconds": 0.0})
     n_fail = sum(not r["passed"] for r in results)
     return {"summary": {"total": len(results), "passed": len(results) - n_fail, "failed": n_fail},
+            "scope": "partial" if ids else "full", "include_slow": bool(include_slow and not ids),
             "results": results}

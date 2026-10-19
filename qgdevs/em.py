@@ -88,7 +88,8 @@ def max_charge_for(design, max_delta_phi: float, cm: float) -> float:
     hi = 1.0
     while dphi(hi) < 0 and hi < 1e12:
         hi *= 10
-    return float(brentq(dphi, hi / 10, hi)) if hi < 1e12 else float("inf")
+    # decide on the sign at the bracket end, not on the loop counter (a root at exactly 1e12 e is still a root)
+    return float(brentq(dphi, hi / 10, hi)) if dphi(hi) >= 0 else float("inf")
 
 
 # ----------------------------------------------------------------------------- further backgrounds

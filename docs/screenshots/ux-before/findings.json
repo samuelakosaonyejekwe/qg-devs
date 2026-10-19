@@ -1,0 +1,439 @@
+{
+  "base": "http://127.0.0.1:8777",
+  "accessBase": "http://127.0.0.1:8778",
+  "generated": "2026-10-19T17:02:28.880Z",
+  "access": [
+    {
+      "flow": "preregistration without token",
+      "friendlyNotice": true,
+      "rawErrorText": false
+    },
+    {
+      "flow": "dataset ingest without token",
+      "friendlyNotice": true,
+      "rawErrorText": false
+    },
+    {
+      "flow": "job limit (429)",
+      "friendlyNotice": true,
+      "refusedAtSubmission": 1,
+      "rawErrorText": false
+    }
+  ],
+  "findings": [
+    {
+      "route": "/suite/interferometry",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.49224928",
+      "screenshot": "001-desktop-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.35160663",
+      "screenshot": "002-desktop-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.44087619",
+      "screenshot": "003-desktop-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.44087619",
+      "screenshot": "004-desktop-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.49224928",
+      "screenshot": "005-desktop-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.35160663",
+      "screenshot": "006-desktop-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/decoherence",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.96925289",
+      "screenshot": "007-desktop-suite-decoherence-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/decoherence",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "div.out-value",
+      "text": "0.96925289",
+      "screenshot": "008-desktop-suite-decoherence-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "li",
+      "text": "Interleave null controls: (i) single-mass runs, (ii) masses swapped/displaced to large d, (iii) gradient off, (iv) charged-mass runs.",
+      "screenshot": "009-desktop-suite-lab-text-null-value.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "span",
+      "text": "one-sided z ≥ 5 on the preregistered witness, readout-corrected, with all null controls consistent with zero",
+      "screenshot": "010-desktop-suite-lab-text-null-value.png"
+    },
+    {
+      "route": "/suite/falsification",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "p.small.muted",
+      "text": "null",
+      "screenshot": "011-desktop-suite-falsification-text-null-value.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.054571817 × 10⁻³⁴",
+      "screenshot": "012-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "6.62607015 × 10⁻³⁴",
+      "screenshot": "013-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "2.99792458 × 10⁸",
+      "screenshot": "014-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.602176634 × 10⁻¹⁹",
+      "screenshot": "015-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "8.8541878188 × 10⁻¹²",
+      "screenshot": "016-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.25663706127 × 10⁻⁶",
+      "screenshot": "017-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.66053906892 × 10⁻²⁷",
+      "screenshot": "018-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "9.1093837139 × 10⁻³¹",
+      "screenshot": "019-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "9.2740100657 × 10⁻²⁴",
+      "screenshot": "020-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "2.00231930436",
+      "screenshot": "021-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "6.02214076 × 10²³",
+      "screenshot": "022-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.49224928",
+      "screenshot": "023-phone-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.35160663",
+      "screenshot": "024-phone-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.44087619",
+      "screenshot": "025-phone-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.44087619",
+      "screenshot": "026-phone-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.49224928",
+      "screenshot": "027-phone-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.35160663",
+      "screenshot": "028-phone-suite-interferometry-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/decoherence",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "0.96925289",
+      "screenshot": "029-phone-suite-decoherence-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/decoherence",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "div.out-value",
+      "text": "0.96925289",
+      "screenshot": "030-phone-suite-decoherence-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "li",
+      "text": "Interleave null controls: (i) single-mass runs, (ii) masses swapped/displaced to large d, (iii) gradient off, (iv) charged-mass runs.",
+      "screenshot": "031-phone-suite-lab-text-null-value.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "span",
+      "text": "one-sided z ≥ 5 on the preregistered witness, readout-corrected, with all null controls consistent with zero",
+      "screenshot": "032-phone-suite-lab-text-null-value.png"
+    },
+    {
+      "route": "/suite/falsification",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "p.small.muted",
+      "text": "null",
+      "screenshot": "033-phone-suite-falsification-text-null-value.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.054571817 × 10⁻³⁴",
+      "screenshot": "034-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "6.62607015 × 10⁻³⁴",
+      "screenshot": "035-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "2.99792458 × 10⁸",
+      "screenshot": "036-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.602176634 × 10⁻¹⁹",
+      "screenshot": "037-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "8.8541878188 × 10⁻¹²",
+      "screenshot": "038-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.25663706127 × 10⁻⁶",
+      "screenshot": "039-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.66053906892 × 10⁻²⁷",
+      "screenshot": "040-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "9.1093837139 × 10⁻³¹",
+      "screenshot": "041-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "9.2740100657 × 10⁻²⁴",
+      "screenshot": "042-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "2.00231930436",
+      "screenshot": "043-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "6.02214076 × 10²³",
+      "screenshot": "044-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "desktop",
+      "scheme": "dark",
+      "category": "text: null value",
+      "selector": "li",
+      "text": "Interleave null controls: (i) single-mass runs, (ii) masses swapped/displaced to large d, (iii) gradient off, (iv) charged-mass runs.",
+      "screenshot": "045-desktop-suite-lab-text-null-value.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "desktop",
+      "scheme": "dark",
+      "category": "text: null value",
+      "selector": "span",
+      "text": "one-sided z ≥ 5 on the preregistered witness, readout-corrected, with all null controls consistent with zero",
+      "screenshot": "046-desktop-suite-lab-text-null-value.png"
+    }
+  ]
+}

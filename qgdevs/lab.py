@@ -26,8 +26,8 @@ from datetime import datetime, timezone
 import numpy as np
 
 from . import bmv, decoherence as dec, em, materials, interferometry as itf, __version__
-from .constants import e as e_charge, G, hbar
-from .design import Environment, DesignBounds, constraint_report, scenario_for, witness_shots
+from .constants import u as u_amu
+from .design import Environment, DesignBounds, constraint_report, witness_shots
 
 CALC, LIT, EST, ASSUME, SUPPLIER = ("CALCULATED_REQUIREMENT", "LITERATURE_REFERENCE", "ESTIMATED",
                                      "UNVERIFIED_ASSUMPTION", "SUPPLIER_CONFIRMED")
@@ -35,7 +35,7 @@ CALC, LIT, EST, ASSUME, SUPPLIER = ("CALCULATED_REQUIREMENT", "LITERATURE_REFERE
 # Demonstrated capabilities used to judge technological readiness. Values are the headline figures of
 # the cited works; they are not specifications of any particular commercial instrument.
 STATE_OF_THE_ART = {
-    "matter_wave_mass_kg": {"value": 25000 * 1.66053906892e-27, "status": LIT,
+    "matter_wave_mass_kg": {"value": 25000 * u_amu, "status": LIT,
                             "source": "Fein et al., Nat. Phys. 15, 1242 (2019): interference of molecules >25,000 Da"},
     "atom_wavepacket_separation_m": {"value": 0.54, "status": LIT,
                                      "source": "Kovachy et al., Nature 528, 530 (2015): 54 cm separation of Rb-87 wave packets"},
@@ -114,7 +114,7 @@ def _readiness(design: bmv.BMVDesign, sg: dict) -> dict:
          "gap_factor_mass": mass_gap, "trl": 1 if mass_gap > 1e3 else 3},
         {"capability": "magnetic field gradient for Stern–Gerlach splitting", "required": f"{sg['required_gradient_T_per_m']:.2e} T/m",
          "demonstrated": "not established for this mass and splitting; requires dedicated engineering study", "trl": 2},
-        {"capability": "spin coherence during free evolution", "required": f"{design.time + 4 * 0.25:.2f} s total sequence",
+        {"capability": "spin coherence during free evolution", "required": f"{sg['total_time']:.2f} s total sequence",
          "demonstrated": "NV-centre electron-spin T2 is typically far below 1 s at accessible temperatures (sample dependent); "
                          "must be measured for the chosen diamond", "trl": 2},
         {"capability": "gravitational interaction between micro-scale masses",
@@ -135,7 +135,7 @@ def generate_dossier(design: bmv.BMVDesign, env: Environment = Environment(), bo
     pred = bmv.predict(design, extra_energies=None)
     ws = witness_shots(design, env)
     sg = itf.sg_bmv_phases(design.mass_A, design.mass_B, design.separation, sg_tau, design.time, design.dx_A,
-                           "parallel" if design.geometry == "parallel" else "linear")
+                           design.geometry, angle_deg=design.angle_deg)
     tol = _tolerances(design)
     envreq = _environment_requirements(design, env)
     readiness = _readiness(design, sg)
@@ -254,7 +254,8 @@ def generate_dossier(design: bmv.BMVDesign, env: Environment = Environment(), bo
                          "two Stern–Gerlach gradient assemblies", "spin control (microwave)", "optical readout",
                          "charge control", "vibration isolation", "telemetry & DAQ", "safety interlocks"],
         "coordinate_system": "origin at A's trap centre; +x towards B; split axis "
-                             + ("+y (parallel geometry)" if design.geometry == "parallel" else "+x (linear geometry)"),
+                             + {"parallel": "+y (parallel geometry)", "linear": "+x (linear geometry)"}.get(
+                                 design.geometry, f"(cos θ, sin θ, 0), θ = {design.angle_deg}° (angled geometry)"),
         "geometry": {"branch_positions_m": {k: v.tolist() for k, v in bmv.branch_positions(design).items()},
                      "radius_m": radius, "closest_surface_gap_m": rep["checks"]["surface_gap"]["value_m"]},
         "tolerances": tol,
@@ -353,16 +354,22 @@ def layout_svg(design: bmv.BMVDesign, width: int = 800) -> str:
     pos = bmv.branch_positions(design)
     xs = [p[0] for p in pos.values()]
     ys = [p[1] for p in pos.values()]
-    span = max(max(xs) - min(xs), max(ys) - min(ys), design.separation) * 1.4
-    cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
-    sc = width / span
     h = width * 0.6
+    top, bottom = 40.0, h - 60.0  # keep clear of the title line and of the dimension line
+    xspan = max(max(xs) - min(xs), design.separation)
+    yspan = max(ys) - min(ys)
+    # one scale for both axes, chosen so that every branch fits horizontally AND vertically (a tall parallel
+    # design used to be drawn partly outside the viewBox)
+    sc = width / (1.4 * xspan)
+    if yspan > 0:
+        sc = min(sc, (bottom - top) / (1.2 * yspan))
+    cx, cy = (max(xs) + min(xs)) / 2, (max(ys) + min(ys)) / 2
 
     def X(x):
         return width / 2 + (x - cx) * sc
 
     def Y(y):
-        return h / 2 - (y - cy) * sc
+        return (top + bottom) / 2 - (y - cy) * sc
 
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {h:.0f}" font-family="sans-serif" font-size="12">',
              '<rect width="100%" height="100%" fill="white"/>']

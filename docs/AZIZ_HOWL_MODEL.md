@@ -168,7 +168,7 @@ relevant parameters would be α ≫ σ² and α ≫ σd. All other conditions ho
 | QG-COH | CG-QFT-AH | 5.3 × 10⁻³ | distinguishable with ≈104 shots per setting |
 
 **Conclusion for the benchmark.**
-- The AH effect is 29 orders of magnitude below QG-COH. Observing the QG-COH-level entanglement
+- The AH effect is 3.5 × 10⁻²⁹ of QG-COH (about 28.5 orders of magnitude below). Observing the QG-COH-level entanglement
   (C ≈ 0.16, CPK witness −0.31) would therefore exclude CG-QFT-AH at this design, as it does SC-MF.
 - AH cannot be told apart from mean-field gravity here. This matches the paper's own statement that
   the mechanism is "not an issue for near-future experiments like [Bose et al.]".

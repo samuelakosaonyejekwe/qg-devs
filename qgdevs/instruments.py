@@ -13,6 +13,7 @@ REAL only when the operator attests their origin (the attestation is itself ledg
 """
 from __future__ import annotations
 
+import secrets
 import time
 from dataclasses import dataclass, field
 
@@ -39,6 +40,7 @@ class Authorisation:
     purpose: str
     issued: float
     expires: float
+    token: str = ""
 
     def valid(self, device_id: str) -> bool:
         return self.device_id == device_id and time.time() < self.expires
@@ -53,21 +55,32 @@ class InstrumentAdapter:
     connected: bool = False
     estop: bool = False
     state: dict = field(default_factory=dict)
+    _issued: dict = field(default_factory=dict, repr=False)
 
     def authorise(self, operator: str, purpose: str, minutes: float = 60) -> Authorisation:
-        if not operator or operator.lower() in ("ai", "assistant", "language-model", "system", "job"):
+        if not operator or operator.strip().lower() in ("ai", "assistant", "language-model", "system", "job"):
             raise SafetyError("authorisation must be issued by a named human operator")
-        a = Authorisation(operator, self.device_id, purpose, time.time(), time.time() + 60 * minutes)
+        if not 0 < minutes <= 24 * 60:
+            raise SafetyError("authorisation lifetime must be between 0 and 24 h")
+        a = Authorisation(operator, self.device_id, purpose, time.time(), time.time() + 60 * minutes,
+                          secrets.token_hex(16))
+        self._issued[a.token] = a
         self.ledger.append("instrument_authorisation", {"device_id": self.device_id, "operator": operator,
                                                         "purpose": purpose, "expires": a.expires}, operator)
         return a
+
+    def _authorised(self, auth) -> bool:
+        """Only authorisations issued (and ledgered) by this adapter count: a hand-built Authorisation object
+        with a plausible operator name and expiry is refused."""
+        return (isinstance(auth, Authorisation) and self._issued.get(auth.token) is auth
+                and auth.valid(self.device_id))
 
     def command(self, auth: Authorisation, name: str, value: float) -> dict:
         if self.estop:
             self._log("refused", name, value, auth, "emergency stop latched")
             raise SafetyError("emergency stop latched")
-        if auth is None or not auth.valid(self.device_id):
-            self._log("refused", name, value, auth, "missing or expired authorisation")
+        if not self._authorised(auth):
+            self._log("refused", name, value, auth, "missing, unissued or expired authorisation")
             raise SafetyError("missing or expired authorisation")
         lim = self.limits.get(name)
         if lim is None:
@@ -87,7 +100,7 @@ class InstrumentAdapter:
         self.ledger.append("instrument_estop", {"device_id": self.device_id}, actor)
 
     def reset_estop(self, auth: Authorisation) -> None:
-        if not auth.valid(self.device_id):
+        if not self._authorised(auth):
             raise SafetyError("reset requires valid authorisation")
         self.estop = False
         self.ledger.append("instrument_estop_reset", {"device_id": self.device_id}, auth.operator)
@@ -113,7 +126,7 @@ class SimulatedInstrument(InstrumentAdapter):
 
     def acquire(self, auth: Authorisation, rho: np.ndarray, settings: list[str], shots: int, seed: int) -> dict:
         from .sigproc import simulate_counts, DetectorModel
-        if self.estop or not auth.valid(self.device_id):
+        if self.estop or not self._authorised(auth):
             raise SafetyError("acquisition refused")
         rec = simulate_counts(rho, settings, shots, DetectorModel(), seed, "simulated-instrument",
                               {"device_id": self.device_id, "state": dict(self.state)})
@@ -130,7 +143,7 @@ class FileReplayInstrument(InstrumentAdapter):
 
     def ingest(self, auth: Authorisation, data: bytes, attested_real: bool, instrument_serial: str,
                calibration_ref: str) -> dict:
-        if not auth.valid(self.device_id):
+        if not self._authorised(auth):
             raise SafetyError("ingest requires authorisation")
         label = "REAL" if attested_real else "SYNTHETIC"
         rec = {"device_id": self.device_id, "label": label, "sha256": sha256_bytes(data), "bytes": len(data),

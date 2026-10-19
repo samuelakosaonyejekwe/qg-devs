@@ -7,13 +7,14 @@ interactive endpoints are bounded so that heavy work goes through the durable jo
 """
 from __future__ import annotations
 
-import io
+import hmac
 import json
+import math
 import os
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
@@ -23,8 +24,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__, bmv, constants, decoherence as dec, em, materials, models, quantum as qm
-from .jobs import HANDLERS, JobStore, paths
+from . import __version__, bmv, constants, decoherence as dec, materials, models, quantum as qm
+from .jobs import HANDLERS, JobStore, QueueLimit, paths, sanitize_public_params
 
 ROOT = Path(__file__).resolve().parent.parent
 app = FastAPI(title="QG-DEVS API", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json")
@@ -61,21 +62,29 @@ def _dumps(obj) -> str:
 
 
 # ----------------------------------------------------------------------------- security
-_rate: dict[str, deque] = defaultdict(deque)
+_rate: dict[str, deque] = defaultdict(deque)  # per process: with N uvicorn workers the effective limit is N×
+MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 
 
 @app.middleware("http")
 async def limits(request: Request, call_next):
     ip = request.client.host if request.client else "?"
-    q = _rate[ip]
     now = time.time()
+    if len(_rate) > 10_000:  # forget idle clients so the table cannot grow without bound
+        for k in [k for k, v in _rate.items() if not v or now - v[-1] > 60]:
+            del _rate[k]
+    q = _rate[ip]
     while q and now - q[0] > 60:
         q.popleft()
     if request.url.path.startswith("/api/") and request.method != "GET":
         q.append(now)
         if len(q) > int(os.environ.get("QGDEVS_RATE_PER_MIN", "120")):
             return JSONResponse({"detail": "rate limit exceeded"}, status_code=429)
-    if int(request.headers.get("content-length") or 0) > 64 * 1024 * 1024:
+    try:
+        declared = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        return JSONResponse({"detail": "invalid Content-Length header"}, status_code=400)
+    if declared > MAX_UPLOAD_BYTES:
         return JSONResponse({"detail": "payload too large"}, status_code=413)
     resp = await call_next(request)
     resp.headers["X-Content-Type-Options"] = "nosniff"
@@ -92,16 +101,27 @@ RESEARCHER_ONLY = ("Researcher access required: this action writes to the perman
                    "Enter your access token in Settings → API bearer token.")
 
 
+def _require_tokens() -> bool:
+    """Deployed images set QGDEVS_REQUIRE_TOKENS=1: a server started without QGDEVS_API_TOKENS must then treat
+    every visitor as public instead of silently granting anonymous write access to the evidence record."""
+    return os.environ.get("QGDEVS_REQUIRE_TOKENS", "0") == "1"
+
+
 def role(authorization: str | None = Header(default=None)) -> str:
-    """'public' for anonymous visitors when tokens are configured; 'researcher' in development mode."""
+    """'public' for anonymous visitors when tokens are configured; 'researcher' in local development mode."""
     toks = _tokens()
     if not toks:
-        return "researcher"  # development mode: no tokens configured
+        return "public" if _require_tokens() else "researcher"  # development mode: no tokens configured
     if not authorization:
         return "public"
-    if not authorization.startswith("Bearer ") or authorization[7:] not in toks:
+    given = authorization[7:] if authorization.startswith("Bearer ") else ""
+    match = None
+    for tok, rl in toks.items():  # constant-time comparison against every configured token
+        if hmac.compare_digest(given.encode(), tok.encode()):
+            match = rl
+    if match is None:
         raise HTTPException(403, "invalid access token (check Settings → API bearer token)")
-    return toks[authorization[7:]]
+    return match
 
 
 def need(*roles):
@@ -159,6 +179,25 @@ def _env(e: EnvIn):
     if e.material not in materials.MATERIALS:
         raise HTTPException(422, f"unknown material {e.material}")
     return Environment(**e.model_dump())
+
+
+def _hypothesis(hid: str) -> str:
+    if hid not in models.HYPOTHESES or not models.HYPOTHESES[hid].implemented:
+        raise HTTPException(422, f"unknown or unimplemented hypothesis {hid!r}; available: "
+                                 f"{sorted(h.id for h in models.implemented())}")
+    return hid
+
+
+def _finite_array(x, name: str, ndim: int | None = None) -> np.ndarray:
+    try:
+        a = np.array(x, dtype=float)
+    except (TypeError, ValueError):
+        raise HTTPException(422, f"{name}: ragged or non-numeric array")
+    if ndim is not None and a.ndim != ndim:
+        raise HTTPException(422, f"{name}: expected a {ndim}-D array, got shape {list(a.shape)}")
+    if not np.all(np.isfinite(a)):
+        raise HTTPException(422, f"{name}: values must be finite")
+    return a
 
 
 # ----------------------------------------------------------------------------- general
@@ -225,15 +264,38 @@ class LindbladIn(BaseModel):
     n_times: int = Field(50, ge=2, le=500)
 
 
+def _cmat(re, im, name: str) -> np.ndarray:
+    a = _finite_array(re, name + "_re", 2)
+    if im is not None:
+        b = _finite_array(im, name + "_im", 2)
+        if b.shape != a.shape:
+            raise HTTPException(422, f"{name}_im must have the shape of {name}_re")
+        return a + 1j * b
+    return a.astype(complex)
+
+
 @app.post("/api/quantum/lindblad")
 def lindblad(inp: LindbladIn):
-    H = np.array(inp.H_re) + 1j * np.array(inp.H_im or np.zeros_like(inp.H_re))
-    if H.shape[0] > 32 or H.shape[0] != H.shape[1]:
+    H = _cmat(inp.H_re, inp.H_im, "H")
+    d = H.shape[0]
+    if not 1 <= d <= 32 or H.shape != (d, d):
         raise HTTPException(422, "H must be square with dimension ≤ 32 (submit larger problems as jobs)")
     if not np.allclose(H, H.conj().T):
         raise HTTPException(422, "H must be Hermitian")
-    Ls = [np.array(r) + 1j * np.array((inp.L_im or [np.zeros_like(r)] * len(inp.L_re))[k]) for k, r in enumerate(inp.L_re)]
-    rho0 = np.array(inp.rho0_re) + 1j * np.array(inp.rho0_im or np.zeros_like(inp.rho0_re))
+    if len(inp.L_re) > 16:
+        raise HTTPException(422, "at most 16 Lindblad operators interactively")
+    if inp.L_im is not None and len(inp.L_im) != len(inp.L_re):
+        raise HTTPException(422, "L_im must list one matrix per L_re entry")
+    Ls = [_cmat(r, inp.L_im[k] if inp.L_im is not None else None, f"L[{k}]") for k, r in enumerate(inp.L_re)]
+    if any(L.shape != (d, d) for L in Ls):
+        raise HTTPException(422, "every Lindblad operator must have the dimension of H")
+    rho0 = _cmat(inp.rho0_re, inp.rho0_im, "rho0")
+    if rho0.shape != (d, d):
+        raise HTTPException(422, "rho0 must have the dimension of H")
+    # the Krylov propagator cost grows with ‖L‖ t; bound it so one request cannot pin a worker for hours
+    norm = np.abs(H).sum(axis=1).max() + sum(np.abs(L.conj().T @ L).sum(axis=1).max() for L in Ls)
+    if norm * inp.t_final > 1e4:
+        raise HTTPException(422, "‖H‖·t_final (plus dissipator norms) must be ≤ 1e4 interactively; submit as a job")
     chk = qm.check_density_matrix(rho0, 1e-8)
     if not chk.passed:
         raise HTTPException(422, f"initial state is not a density matrix: {chk.as_dict()}")
@@ -246,29 +308,27 @@ def lindblad(inp: LindbladIn):
 
 @app.post("/api/bmv/predict")
 def bmv_predict(sc: ScenarioIn, n_times: int = 120):
-    from .design import scenario_for
-    from .discrimination import predictions_table
-    d = sc.design.to()
-    issues = bmv.check_geometry(d)
-    env = _env(sc.environment)
-    if issues:
-        return J({"admissibility_issues": issues})
-    scen, extra = scenario_for(d, env)
-    d.gamma_A, d.gamma_B = scen.gamma_env_A, scen.gamma_env_B
-    times = np.linspace(0, d.time, min(max(n_times, 10), 400))
-    pred = bmv.predict(d, extra_energies=scen.nongrav_energies, times=times)
-    pred["models"] = predictions_table(scen)
-    pred["decoherence"] = extra["decoherence_A"]
-    pred["nongrav_channels"] = extra["nongrav_channels"]
-    pred["branch_positions"] = {k: v for k, v in bmv.branch_positions(d).items()}
-    pred["evidence_status"] = "COMPUTATIONAL PREDICTION (model-dependent; not physical evidence)"
-    return J(pred)
+    from .design import full_prediction
+    return J(full_prediction(sc.design.to(), _env(sc.environment), n_times))
+
+
+SweepParam = Literal["separation", "dx_A", "mass_A", "time"]
+# admissible ranges of the swept values (same bounds as DesignIn)
+_SWEEP_RANGE = {"separation": (1e-9, 10.0), "dx_A": (0.0, 10.0), "mass_A": (1e-27, 1e3), "time": (1e-12, 1e4)}
+
+
+def _sweep_values(name: str, values) -> list[float]:
+    lo, hi = _SWEEP_RANGE[name]
+    v = _finite_array(values, name, 1)
+    if v.size and (v.min() < lo or v.max() > hi):
+        raise HTTPException(422, f"{name} values must lie in [{lo:g}, {hi:g}]")
+    return v.tolist()
 
 
 class SweepIn(ScenarioIn):
-    px: str = "separation"
+    px: SweepParam = "separation"
     xs: list[float]
-    py: str = "dx_A"
+    py: SweepParam = "dx_A"
     ys: list[float]
     hypothesis: str = "QG-COH"
 
@@ -278,18 +338,17 @@ def bmv_sweep(s: SweepIn):
     from .design import sweep_2d
     if len(s.xs) * len(s.ys) > 2500:
         raise HTTPException(422, "grid larger than 50×50: submit as a job")
-    allowed = {"separation", "dx_A", "mass_A", "time"}
-    if s.px not in allowed or s.py not in allowed:
-        raise HTTPException(422, f"sweep parameters must be in {allowed}")
-    return J(sweep_2d(s.design.to(), _env(s.environment), s.px, s.xs, s.py, s.ys, s.hypothesis))
+    if s.px == s.py:
+        raise HTTPException(422, "px and py must differ")
+    return J(sweep_2d(s.design.to(), _env(s.environment), s.px, _sweep_values(s.px, s.xs), s.py,
+                      _sweep_values(s.py, s.ys), _hypothesis(s.hypothesis)))
 
 
 @app.post("/api/bmv/sweep1d")
-def bmv_sweep1d(sc: ScenarioIn, param: str = "separation", start: float = 2e-4, stop: float = 1e-3, n: int = 30):
+def bmv_sweep1d(sc: ScenarioIn, param: SweepParam = "separation", start: float = 2e-4, stop: float = 1e-3,
+                n: int = Query(30, ge=2, le=120)):
     from .design import sweep_1d
-    if n > 120:
-        raise HTTPException(422, "n ≤ 120")
-    return J(sweep_1d(sc.design.to(), _env(sc.environment), param, np.linspace(start, stop, n)))
+    return J(sweep_1d(sc.design.to(), _env(sc.environment), param, _sweep_values(param, np.linspace(start, stop, n))))
 
 
 @app.post("/api/decoherence/budget")
@@ -297,6 +356,7 @@ def decoherence_budget(sc: ScenarioIn, include_dp: bool = False, include_csl: bo
                        csl_log10_lambda: float = Query(-16.0, ge=-30, le=-6)):
     """Environmental decoherence budget; collapse models (hypotheses) only when explicitly requested."""
     d, e = sc.design.to(), sc.environment
+    _env(e)  # validates the material
     cm = materials.get(e.material).clausius_mossotti()
     return J(dec.budget(d.mass_A, d.radius_A, d.dx_A, pressure=e.pressure, T_gas=e.T_gas, T_env=e.T_env,
                         T_int=e.T_int, cm=cm, t=d.time, include_dp=include_dp, include_csl=include_csl,
@@ -304,10 +364,13 @@ def decoherence_budget(sc: ScenarioIn, include_dp: bool = False, include_csl: bo
 
 
 @app.post("/api/gravity/orbit")
-def gravity_orbit(M: float = 1.98847e30, a: float = 5.7909e10, e: float = 0.2056):
-    from .gravity import perihelion_precession_numeric, perihelion_precession_analytic, light_deflection_numeric, light_deflection_analytic
-    if not (0 <= e < 0.95):
-        raise HTTPException(422, "0 ≤ e < 0.95")
+def gravity_orbit(M: float = Query(1.98847e30, gt=0, le=1e42), a: float = Query(5.7909e10, gt=0, le=1e20),
+                  e: float = Query(0.2056, ge=0, lt=0.95)):
+    from .gravity import (perihelion_precession_numeric, perihelion_precession_analytic, light_deflection_numeric,
+                          light_deflection_analytic, schwarzschild_radius)
+    if a * (1 - e) < 1e3 * schwarzschild_radius(M):
+        # the event-based solvers assume a bound, weakly relativistic orbit and an escaping light ray
+        raise HTTPException(422, "periapsis a(1−e) must exceed 1000 Schwarzschild radii (weak-field regime)")
     return J({"precession_numeric_rad": perihelion_precession_numeric(M, a, e),
               "precession_analytic_rad": perihelion_precession_analytic(M, a, e),
               "deflection_numeric_rad": light_deflection_numeric(M, a * (1 - e)),
@@ -326,10 +389,20 @@ class NBodyIn(BaseModel):
 @app.post("/api/gravity/nbody")
 def gravity_nbody(b: NBodyIn):
     from .gravity import nbody_verlet, nbody_energy
-    if len(b.masses) > 64:
-        raise HTTPException(422, "≤ 64 bodies interactively")
-    ts, P, V = nbody_verlet(np.array(b.positions), np.array(b.velocities), b.masses, b.dt, b.steps, b.save_every)
-    m = np.array(b.masses)
+    n = len(b.masses)
+    if not 1 <= n <= 64:
+        raise HTTPException(422, "1 to 64 bodies interactively")
+    m = _finite_array(b.masses, "masses", 1)
+    pos, vel = _finite_array(b.positions, "positions", 2), _finite_array(b.velocities, "velocities", 2)
+    if pos.shape != vel.shape or pos.shape[0] != n or not 1 <= pos.shape[1] <= 3:
+        raise HTTPException(422, "positions and velocities must both be (n_bodies, dim) with dim ≤ 3")
+    if np.any(m <= 0) or not math.isfinite(b.dt):
+        raise HTTPException(422, "masses must be positive and dt finite")
+    if b.steps // b.save_every > 2000:
+        raise HTTPException(422, "at most 2000 saved frames (increase save_every)")
+    if b.steps * n * n > 2e7:
+        raise HTTPException(422, "steps × bodies² must be ≤ 2e7 interactively; submit larger runs as jobs")
+    ts, P, V = nbody_verlet(pos, vel, m, b.dt, b.steps, b.save_every)
     return J({"t": ts, "positions": P, "energy": [nbody_energy(p, v, m) for p, v in zip(P, V)]})
 
 
@@ -337,17 +410,16 @@ def gravity_nbody(b: NBodyIn):
 def interferometry_sg(sc: ScenarioIn, tau: float = Query(0.25, gt=0, le=100)):
     from .interferometry import sg_bmv_phases
     d = sc.design.to()
-    return J(sg_bmv_phases(d.mass_A, d.mass_B, d.separation, tau, d.time, d.dx_A,
-                           "parallel" if d.geometry == "parallel" else "linear"))
+    return J(sg_bmv_phases(d.mass_A, d.mass_B, d.separation, tau, d.time, d.dx_A, d.geometry, angle_deg=d.angle_deg))
 
 
 @app.post("/api/interferometry/wavepacket2d")
-def wavepacket2d(mass: float = 1e-25, sigma: float = 5e-7, split_k: float = 2e6, gravity: float = 9.81,
-                 t_final: float = 2e-3, frames: int = 40, n: int = 128):
+def wavepacket2d(mass: float = Query(1e-25, ge=1e-30, le=1e-15), sigma: float = Query(5e-7, ge=1e-8, le=1e-5),
+                 split_k: float = Query(2e6, ge=0, le=1e8), gravity: float = Query(9.81, ge=-1e3, le=1e3),
+                 t_final: float = Query(2e-3, gt=0, le=1.0), frames: int = Query(40, ge=1, le=120),
+                 n: int = Query(128, ge=16, le=256)):
     """2-D split-step evolution of a coherently split wave packet (two momentum branches) under gravity."""
     from .interferometry import split_step_2d
-    if n > 256 or frames > 120:
-        raise HTTPException(422, "n ≤ 256 and frames ≤ 120")
     L = 4e-5
     x = np.linspace(-L, L, n)
     X, Y = np.meshgrid(x, x)
@@ -368,6 +440,9 @@ def optomech(m: float = Query(1e-14, gt=0, le=1e3), d: float = Query(1e-4, gt=0,
              t_final: float = Query(100.0, gt=0, le=1e6), squeeze_r: float = Query(0.0, ge=0, le=5),
              coupling_scale: float = Query(1.0, ge=0, le=1e6)):
     from .optomech import evolve_coupled_oscillators
+    if omega * t_final > 2 * math.pi * 1000:
+        # the covariance ODE is integrated at rtol 1e-10: cost grows with the number of oscillation periods
+        raise HTTPException(422, "omega × t_final must be ≤ 2π × 1000 (1000 trap periods) interactively")
     return J(evolve_coupled_oscillators(m, m, d, omega, T, gamma, n_init, t_final, 200, coupling_scale, squeeze_r))
 
 
@@ -385,6 +460,8 @@ def lab_dossier(sc: ScenarioIn):
 def lab_export(fmt: Literal["stl", "svg", "scene", "json"], sc: ScenarioIn):
     from .lab import stl_ascii, layout_svg, scene_json, generate_dossier
     d = sc.design.to()
+    if fmt == "json" and bmv.check_geometry(d):
+        raise HTTPException(422, {"admissibility_issues": bmv.check_geometry(d)})
     if fmt == "stl":
         return Response(stl_ascii(d), media_type="model/stl",
                         headers={"Content-Disposition": "attachment; filename=qgdevs-apparatus.stl"})
@@ -399,8 +476,9 @@ def lab_export(fmt: Literal["stl", "svg", "scene", "json"], sc: ScenarioIn):
 class SimIn(ScenarioIn):
     model: str = "QG-COH"
     shots: int = Field(2000, ge=10, le=10_000_000)
-    seed: int = 0
-    settings: list[str] = qm.PAULI_SETTINGS
+    seed: int = Field(0, ge=0, le=2**63 - 1)
+    settings: list[Literal[tuple(qm.PAULI_SETTINGS)]] = Field(default_factory=lambda: list(qm.PAULI_SETTINGS),
+                                                             min_length=1, max_length=9)
 
 
 @app.post("/api/signal/simulate")
@@ -408,8 +486,9 @@ def signal_simulate(s: SimIn):
     from .design import scenario_for
     from .discrimination import protocol_frame
     from .sigproc import simulate_counts, DetectorModel, witness_estimate
-    if s.model not in models.HYPOTHESES or not models.HYPOTHESES[s.model].implemented:
-        raise HTTPException(422, "unknown or unimplemented model")
+    _hypothesis(s.model)
+    if len(set(s.settings)) != len(s.settings):
+        raise HTTPException(422, "measurement settings must be distinct")
     scen, _ = scenario_for(s.design.to(), _env(s.environment))
     rho = models.HYPOTHESES[s.model].state(scen)
     F = protocol_frame(scen)
@@ -417,8 +496,10 @@ def signal_simulate(s: SimIn):
                           DetectorModel(s.environment.readout_error, s.environment.readout_error), s.seed, s.model,
                           {"design": s.design.model_dump(), "environment": s.environment.model_dump()})
     if all(k in rec["counts"] for k in ("XX", "YZ", "ZY")):
+        # the witness variant is part of the preregistered protocol: fixed from the QG-COH prediction for the
+        # design, never from the (in reality unknown) model that generated the data
         sign = 1
-        e = qm.pauli_expectations(F @ rho @ F.conj().T)
+        e = qm.pauli_expectations(F @ models.HYPOTHESES["QG-COH"].state(scen) @ F.conj().T)
         if 1 - e["XX"] + e["YZ"] + e["ZY"] < 1 - e["XX"] - e["YZ"] - e["ZY"]:
             sign = -1
         rec["witness_estimate"] = witness_estimate(rec["counts"], sign, s.environment.readout_error,
@@ -435,14 +516,18 @@ def signal_tomography(c: CountsIn):
     from .sigproc import tomography_with_uncertainty
     if set(c.counts) != set(qm.PAULI_SETTINGS):
         raise HTTPException(422, "tomography requires all 9 Pauli settings")
+    for k, v in c.counts.items():
+        if len(v) != 4 or min(v) < 0 or not 0 < sum(v) <= 10**9:
+            raise HTTPException(422, f"{k}: four non-negative counts (++, +-, -+, --) with a positive total ≤ 1e9")
     return J(tomography_with_uncertainty(c.counts, n_boot=100))
 
 
 @app.post("/api/signal/injection")
-def signal_injection(noise: float = 1.0, threshold: float = 5.0, trials: int = 100):
+def signal_injection(noise: float = Query(1.0, gt=0, le=1e6), threshold: float = Query(5.0, ge=0, le=100),
+                     trials: int = Query(100, ge=1, le=300)):
     from .sigproc import injection_recovery
     tpl = np.sin(np.linspace(0, 8 * np.pi, 200)) * np.hanning(200)
-    return J(injection_recovery(tpl, np.linspace(0, 1.2, 9), 4000, noise, threshold, min(trials, 300)))
+    return J(injection_recovery(tpl, np.linspace(0, 1.2, 9), 4000, noise, threshold, trials))
 
 
 @app.post("/api/falsification/predictions")
@@ -469,33 +554,65 @@ def submit_job(j: JobIn, request: Request, r: str = Depends(role)):
     client = request.client.host if request.client else "?"
     st = JobStore()
     params = {k: v for k, v in j.params.items() if not k.startswith("_")}
-    if r == "public":
-        if j.type not in PUBLIC_JOB_TYPES:
-            raise HTTPException(401, RESEARCHER_ONLY)
-        active = [x for x in st.list(500) if x["status"] in ("queued", "running")]
-        mine = [x for x in active if (st.get(x["id"]) or {}).get("params", {}).get("_client") == client]
-        if len(mine) >= PUBLIC_MAX_ACTIVE_PER_CLIENT:
-            raise HTTPException(429, f"you already have {len(mine)} jobs running; wait for one to finish "
-                                     f"(limit {PUBLIC_MAX_ACTIVE_PER_CLIENT} per visitor)")
-        if len(active) >= PUBLIC_MAX_QUEUE:
-            raise HTTPException(503, "the job queue is busy; please try again in a few minutes")
+    if r != "public":
+        params.update({"_role": r, "_client": client})
+        return J({"id": st.submit(j.type, params), "role": r})
+    if j.type not in PUBLIC_JOB_TYPES:
+        raise HTTPException(401, RESEARCHER_ONLY)
+    try:
+        params = sanitize_public_params(j.type, params)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    once_per = None
+    if j.type == "fetch_source":
+        from .data import CONNECTORS
+        if params.get("connector") not in CONNECTORS:
+            raise HTTPException(422, f"unknown connector; available: {sorted(CONNECTORS)}")
+        # anonymous fetches of one source: at most one per hour (shared across visitors and processes)
+        once_per = (f"public-fetch-{params['connector']}", 3600.0)
     params.update({"_role": r, "_client": client})
-    return J({"id": st.submit(j.type, params), "role": r})
+    try:
+        jid = st.submit_limited(j.type, params, client, PUBLIC_MAX_ACTIVE_PER_CLIENT, PUBLIC_MAX_QUEUE,
+                                once_per=once_per)
+    except QueueLimit as e:
+        if e.kind == "interval":
+            raise HTTPException(429, "this source was fetched recently; try again later or view the catalogue")
+        if e.kind == "client":
+            raise HTTPException(429, f"you already have {e.count} jobs running; wait for one to finish "
+                                     f"(limit {PUBLIC_MAX_ACTIVE_PER_CLIENT} per visitor)")
+        raise HTTPException(503, "the job queue is busy; please try again in a few minutes")
+    return J({"id": jid, "role": r})
+
+
+def _public_error(err: str | None) -> str | None:
+    """Last line of a stored traceback: anonymous visitors do not see server file paths or source lines."""
+    if not err:
+        return err
+    lines = [x for x in err.strip().splitlines() if x.strip()]
+    return lines[-1] if lines else err
 
 
 @app.get("/api/jobs")
-def list_jobs(limit: int = 50):
-    return J({"jobs": JobStore().list(min(limit, 500)), "types": sorted(HANDLERS)})
+def list_jobs(limit: int = Query(50, ge=1, le=500), r: str = Depends(role)):
+    jobs = JobStore().list(limit)
+    if r == "public":
+        for x in jobs:
+            x["error"] = _public_error(x["error"])
+    return J({"jobs": jobs, "types": sorted(HANDLERS)})
 
 
 @app.get("/api/jobs/{jid}")
-def job(jid: str):
+def job(jid: str, r: str = Depends(role)):
     j = JobStore().get(jid)
     if not j:
         raise HTTPException(404)
     if j["status"] == "succeeded" and j["result_path"]:
         j["result"] = json.loads(Path(j["result_path"]).read_text())
     j["params"] = {k: v for k, v in j["params"].items() if not k.startswith("_")}
+    j.pop("result_path", None)
+    j.pop("worker", None)
+    if r == "public":
+        j["error"] = _public_error(j["error"])
     return J(j)
 
 
@@ -506,7 +623,8 @@ def cancel(jid: str, request: Request, r: str = Depends(role)):
     if not j:
         raise HTTPException(404)
     client = request.client.host if request.client else "?"
-    if r == "public" and j["params"].get("_client") != client:
+    if r == "public" and (j["params"].get("_client") != client or j["params"].get("_role") != "public"):
+        # a visitor behind the same proxy/NAT as a researcher must not cancel researcher or scheduler jobs
         raise HTTPException(403, "only the visitor who submitted a job (or a researcher) can cancel it")
     st.cancel(jid)
     return J({"ok": True})
@@ -522,9 +640,18 @@ def vv_registry():
 
 @app.get("/api/vv/latest")
 def vv_latest():
-    for j in JobStore().list(200):
-        if j["type"] == "vv_run" and j["status"] == "succeeded":
-            return J(json.loads((paths()["results"] / f"{j['id']}.json").read_text()) | {"job": j})
+    """Latest *complete* verification run: a run restricted to chosen benchmark ids (any visitor may submit one)
+    is not a verification of the platform and is never reported here or used by the gate evaluator."""
+    st = JobStore()
+    for j in st.list(500, status="succeeded"):
+        if j["type"] != "vv_run":
+            continue
+        full = st.get(j["id"]) or {}
+        if full.get("params", {}).get("ids"):
+            continue
+        rep = json.loads((paths()["results"] / f"{j['id']}.json").read_text())
+        rep.setdefault("scope", "full")
+        return J(rep | {"job": j})
     return J({"summary": None, "note": "no completed verification run yet; submit a vv_run job"})
 
 
@@ -544,9 +671,9 @@ def hypotheses():
 
 @app.post("/api/discovery/scaling")
 def discovery_scaling(regime: Literal["far", "near"] = "far", geometry: Literal["parallel", "linear"] = "parallel",
-                      n: int = 128, seed: int = 0):
+                      n: int = Query(128, ge=16, le=512), seed: int = Query(0, ge=0, le=2**32 - 1)):
     from .discovery import bmv_scaling_study
-    return J(bmv_scaling_study(n=min(n, 512), seed=seed, regime=regime, geometry=geometry))
+    return J(bmv_scaling_study(n=n, seed=seed, regime=regime, geometry=geometry))
 
 
 # ----------------------------------------------------------------------------- Suites 17, 18
@@ -574,14 +701,25 @@ def data_record(did: str):
     return J(rec)
 
 
+async def _read_upload(file: UploadFile, limit: int = MAX_UPLOAD_BYTES) -> bytes:
+    """Read an upload in chunks, refusing more than `limit` bytes (chunked requests carry no Content-Length,
+    so the middleware check alone does not bound them)."""
+    buf = bytearray()
+    while chunk := await file.read(1 << 20):
+        buf += chunk
+        if len(buf) > limit:
+            raise HTTPException(413, "payload too large")
+    return bytes(buf)
+
+
 @app.post("/api/data/validate")
 async def data_validate(file: UploadFile = File(...)):
     from .data import parse_upload, validate_density_matrix
-    raw = await file.read()
+    raw = await _read_upload(file)
     try:
         parsed = parse_upload(file.filename or "upload", raw)
     except Exception as e:
-        raise HTTPException(422, f"could not parse: {e}")
+        raise HTTPException(422, f"could not parse: {type(e).__name__}: {str(e)[:200]}")
     out = {"filename": file.filename, "bytes": len(raw), "kind": parsed["kind"], "sha256": __import__("hashlib").sha256(raw).hexdigest()}
     c = parsed["content"]
     if parsed["kind"] == "json":
@@ -611,7 +749,7 @@ def _ledger():
 
 
 @app.get("/api/evidence/ledger")
-def evidence_ledger(kind: str | None = None, limit: int = 200):
+def evidence_ledger(kind: str | None = None, limit: int = Query(200, ge=1, le=5000)):
     es = _ledger().entries()
     if kind:
         es = [e for e in es if e["kind"] == kind]
@@ -634,6 +772,8 @@ def preregister(p: PreregIn, r: str = Depends(need("researcher"))):
     from .evidence import preregister as prereg
     from .design import scenario_for
     from .discrimination import predictions_table
+    for h in p.hypotheses:
+        _hypothesis(h)  # a preregistration may only name implemented, registered hypotheses
     scen, _ = scenario_for(p.scenario.design.to(), _env(p.scenario.environment))
     preds = {x["id"]: x for x in predictions_table(scen) if x["id"] in p.hypotheses}
     nuis = {h: [n.__dict__ for n in models.HYPOTHESES[h].nuisance] for h in p.hypotheses if h in models.HYPOTHESES}
@@ -648,7 +788,7 @@ async def ingest_dataset(file: UploadFile = File(...), label: str = Form(...), r
                          source: str = Form(...), description: str = Form(""), prereg_id: str | None = Form(None),
                          r: str = Depends(need("researcher", "operator"))):
     from .evidence import BlindVault
-    raw = await file.read()
+    raw = await _read_upload(file)
     try:
         rec = BlindVault(paths()["vault"], _ledger()).ingest(raw, label=label, role=role, source=source,
                                                              description=description, prereg_id=prereg_id)
@@ -692,16 +832,40 @@ def gates(sc: ScenarioIn, hypothesis: str = "QG-COH"):
     from .lab import generate_dossier
     vv_rep = json.loads(vv_latest().body)
     lean = json.loads(lean_status().body)
-    native_ok = False
-    try:
-        from . import native
-        native_ok = native.available()
-    except Exception:
-        pass
-    g = evaluate_gates(model_meta=models.HYPOTHESES[hypothesis].meta, vv_report=vv_rep if vv_rep.get("summary") else None,
+    agreement = _second_implementation_agreement(sc.design.to())
+    native_ok = agreement["agrees"]
+    g = evaluate_gates(model_meta=models.HYPOTHESES[_hypothesis(hypothesis)].meta, vv_report=vv_rep if vv_rep.get("summary") else None,
                        lean_status=lean, ledger=_ledger(), dossier=generate_dossier(sc.design.to(), _env(sc.environment)),
                        literature_review=None, second_implementation_match=native_ok)
-    return J({"gates": g, "classification": classify_evidence(g, independently_reproduced=native_ok)})
+    return J({"gates": g, "classification": classify_evidence(g, independently_reproduced=native_ok),
+              "second_implementation": agreement})
+
+
+def _second_implementation_agreement(d: bmv.BMVDesign) -> dict:
+    """Compare the C++ kernel with the Python reference *for this design*. A loadable library is not evidence
+    of agreement; only matching outputs are (tolerances as in tests/test_native.py)."""
+    try:
+        from . import native
+        if not native.available():
+            return {"agrees": False, "reason": native.unavailable_reason()}
+        if bmv.check_geometry(d):
+            return {"agrees": False, "reason": "design not admissible"}
+        nat = native.bmv_point(d)
+        E = bmv.gravitational_branch_energies(d)
+        ph = bmv.phases_from_energies(E, d.time)
+        rho = bmv.joint_state(ph, d.gamma_A * d.time, d.gamma_B * d.time)
+        U = bmv.local_phase_correction(ph)
+        diffs = {"delta_phi_rel": abs(nat["delta_phi"] / bmv.entangling_phase(ph) - 1) if bmv.entangling_phase(ph) else
+                 abs(nat["delta_phi"]),
+                 "negativity_abs": abs(nat["negativity"] - qm.negativity(rho)),
+                 "concurrence_abs": abs(nat["concurrence"] - qm.concurrence(rho)),
+                 "witness_abs": abs(nat["witness_cpk_local_corrected"] - bmv.cpk_witness_best_sign(U @ rho @ U.conj().T)),
+                 "rho_max_abs": float(np.max(np.abs(nat["rho"] - rho)))}
+        ok = (diffs["delta_phi_rel"] <= 1e-9 and diffs["rho_max_abs"] <= 1e-9
+              and max(diffs["negativity_abs"], diffs["concurrence_abs"], diffs["witness_abs"]) <= 1e-8)
+        return {"agrees": bool(ok), "differences": diffs, "implementation": "C++ kernel (cpp/) vs Python (qgdevs.bmv)"}
+    except Exception as e:  # noqa: BLE001 — any failure means agreement was not demonstrated
+        return {"agrees": False, "reason": type(e).__name__}
 
 
 @app.post("/api/evidence/package")
@@ -721,8 +885,13 @@ class ThoughtIn(BaseModel):
 
 
 @app.post("/api/thought/interpret")
-def thought_interpret(t: ThoughtIn):
+def thought_interpret(t: ThoughtIn, r: str = Depends(role)):
     from .thought import interpret
+    if t.language_model != "off" and r == "public":
+        # language-model calls spend the operator's credentials: researchers only
+        cfg = interpret(t.prompt, "off")
+        cfg.domain_notes.append("language model assistance requires a researcher token; deterministic interpreter used")
+        return J(cfg.as_dict())
     return J(interpret(t.prompt, t.language_model, t.model).as_dict())
 
 
@@ -736,17 +905,31 @@ def thought_execute(t: ThoughtExecIn):
     from .thought import ThoughtConfig, Quantity, execute, finalise
     if not t.approved:
         raise HTTPException(403, "the researcher must approve the configuration before execution")
+    from .thought import FAMILIES, validate_quantities
     c = t.config
-    cfg = ThoughtConfig(prompt=c.get("prompt", ""), family=c.get("family"), category=c.get("category", "THEORETICAL"),
-                        material=c.get("material", "diamond"), geometry=c.get("geometry", "parallel"),
-                        speculative=bool(c.get("speculative")), interpreter=c.get("interpreter", "deterministic"))
+    family = c.get("family")
+    if family is not None and family not in FAMILIES:
+        raise HTTPException(422, f"unknown family {family!r}; supported: {sorted(FAMILIES)}")
+    if c.get("material", "diamond") not in materials.MATERIALS:
+        raise HTTPException(422, f"unknown material {c.get('material')!r}")
+    if c.get("geometry", "parallel") not in ("parallel", "linear", "angled"):
+        raise HTTPException(422, "geometry must be parallel, linear or angled")
+    cfg = ThoughtConfig(prompt=str(c.get("prompt", ""))[:4000], family=family,
+                        category=c.get("category", "THEORETICAL"), material=c.get("material", "diamond"),
+                        geometry=c.get("geometry", "parallel"), speculative=bool(c.get("speculative")),
+                        interpreter=c.get("interpreter", "deterministic"))
     from .units import to_si
     for k, q in (c.get("quantities") or {}).items():
         try:
-            si = q["si_value"] if q.get("unit") == "rad/s" else to_si(float(q["value"]), q["unit"].replace("µ", "u"))[0]
+            unit = str(q["unit"])
+            # rad/s has no SI scale factor: the value itself is SI (a client-supplied si_value is never trusted)
+            si = float(q["value"]) if unit == "rad/s" else to_si(float(q["value"]), unit.replace("µ", "u"))[0]
         except Exception:
             raise HTTPException(422, f"invalid quantity {k}")
-        cfg.quantities[k] = Quantity(k, float(q["value"]), q["unit"], si, q.get("source", "USER_STATED"))
+        cfg.quantities[k] = Quantity(k, float(q["value"]), unit, si, q.get("source", "USER_STATED"))
+    problems = validate_quantities(cfg)
+    if problems:
+        raise HTTPException(422, {"invalid_quantities": problems})
     cfg = finalise(cfg)
     cfg.approved = True
     return J(execute(cfg))

@@ -80,19 +80,31 @@ int qgdevs_eigvalsh(int n, const double* A, double* w) {
 }
 
 int qgdevs_negativity(const double* rho4, double* out) {
-    return guarded([&] { *out = bmv::negativity(CMat::from_data(4, 4, as_cplx(rho4))); });
+    return guarded([&] {
+        require(rho4 && out, "negativity: null pointer");
+        *out = bmv::negativity(CMat::from_data(4, 4, as_cplx(rho4)));
+    });
 }
 
 int qgdevs_concurrence(const double* rho4, double* out) {
-    return guarded([&] { *out = bmv::concurrence(CMat::from_data(4, 4, as_cplx(rho4))); });
+    return guarded([&] {
+        require(rho4 && out, "concurrence: null pointer");
+        *out = bmv::concurrence(CMat::from_data(4, 4, as_cplx(rho4)));
+    });
 }
 
 int qgdevs_purity(int n, const double* rho, double* out) {
-    return guarded([&] { *out = bmv::purity(CMat::from_data(n, n, as_cplx(rho))); });
+    return guarded([&] {
+        require(n > 0 && rho && out, "purity: invalid arguments");
+        *out = bmv::purity(CMat::from_data(n, n, as_cplx(rho)));
+    });
 }
 
 int qgdevs_cpk_witness_best_sign(const double* rho4, double* out) {
-    return guarded([&] { *out = bmv::cpk_witness_best_sign(CMat::from_data(4, 4, as_cplx(rho4))); });
+    return guarded([&] {
+        require(rho4 && out, "cpk_witness_best_sign: null pointer");
+        *out = bmv::cpk_witness_best_sign(CMat::from_data(4, 4, as_cplx(rho4)));
+    });
 }
 
 int qgdevs_lindblad_dopri(int d, const double* rho0, const double* H, int nL, const double* Ls, int nt,
@@ -128,6 +140,7 @@ int qgdevs_lindblad_rk4(int d, const double* rho0, const double* H, int nL, cons
 int qgdevs_bmv_point(const double* p, int geometry, int finite_size, double* out_quads, double* out_scalars,
                      double* out_rho) {
     return guarded([&] {
+        require(p != nullptr, "bmv_point: null parameter array");
         require(geometry >= 0 && geometry <= 2, "bmv_point: geometry must be 0, 1 or 2");
         bmv::Design d;
         d.mass_A = p[0]; d.mass_B = p[1]; d.density = p[2]; d.separation = p[3];
@@ -158,6 +171,8 @@ int qgdevs_bmv_sweep(int nm, const double* mass, int ns, const double* sep, int 
                      double* concurrence, double* witness, double* purity) {
     return guarded([&] {
         require(nm > 0 && ns > 0 && nd > 0 && nt > 0 && ng > 0, "bmv_sweep: every axis needs at least one value");
+        require(mass && sep && dx && time && gamma && delta_phi && negativity && concurrence && witness,
+                "bmv_sweep: null pointer");
         require(geometry >= 0 && geometry <= 2, "bmv_sweep: geometry must be 0, 1 or 2");
         bmv::SweepAxes ax{{mass, mass + nm}, {sep, sep + ns}, {dx, dx + nd}, {time, time + nt}, {gamma, gamma + ng}};
         const auto o = bmv::sweep(ax, static_cast<bmv::Geometry>(geometry), angle_deg, density, finite_size != 0,
@@ -173,6 +188,7 @@ int qgdevs_bmv_sweep(int nm, const double* mass, int ns, const double* sep, int 
 int qgdevs_nbody_verlet(int n, int dim, const double* pos0, const double* vel0, const double* masses, double dt,
                         long nsteps, long save_every, double* t, double* pos, double* vel) {
     return guarded([&] {
+        require(pos0 && vel0 && masses && t && pos && vel, "nbody_verlet: null pointer");
         const auto tr = nbody::verlet(n, dim, pos0, vel0, masses, dt, nsteps, save_every);
         std::copy(tr.t.begin(), tr.t.end(), t);
         std::copy(tr.pos.begin(), tr.pos.end(), pos);
@@ -181,7 +197,10 @@ int qgdevs_nbody_verlet(int n, int dim, const double* pos0, const double* vel0, 
 }
 
 int qgdevs_nbody_energy(int n, int dim, const double* pos, const double* vel, const double* masses, double* out) {
-    return guarded([&] { *out = nbody::energy(n, dim, pos, vel, masses); });
+    return guarded([&] {
+        require(n > 0 && dim > 0 && pos && vel && masses && out, "nbody_energy: invalid arguments");
+        *out = nbody::energy(n, dim, pos, vel, masses);
+    });
 }
 
 }  // extern "C"

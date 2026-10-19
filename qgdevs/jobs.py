@@ -36,12 +36,38 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+class QueueLimit(Exception):
+    def __init__(self, kind: str, count: int):
+        super().__init__(kind)
+        self.kind, self.count = kind, count
+
+
 class JobStore:
+    _initialised: set = set()  # database paths already set up by this process
+
     def __init__(self, path: Path | None = None):
         self.path = Path(path or paths()["jobs"])
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        key = str(self.path.resolve())
+        if key in JobStore._initialised and self.path.exists():
+            return
+        # Several processes (API workers, job workers) open the database at start-up. Switching to WAL needs an
+        # exclusive lock and SQLite reports SQLITE_BUSY for it without waiting on the busy timeout, so a
+        # concurrent opener used to crash with "database is locked": retry with back-off instead.
+        for attempt in range(50):
+            try:
+                self._setup()
+                break
+            except sqlite3.OperationalError as e:
+                if "locked" not in str(e) or attempt == 49:
+                    raise
+                time.sleep(0.02 * (1 + attempt))
+        JobStore._initialised.add(key)
+
+    def _setup(self) -> None:
         with self._c() as c:
-            c.execute("pragma journal_mode=wal")
+            if c.execute("pragma journal_mode").fetchone()[0].lower() != "wal":
+                c.execute("pragma journal_mode=wal")
             c.execute("""create table if not exists jobs (
                 id text primary key, type text, params text, status text, progress real, message text,
                 result_path text, error text, created text, started text, finished text, heartbeat real,
@@ -61,6 +87,43 @@ class JobStore:
                       (jid, type_, json.dumps(params), "queued", 0.0, "", None, None, utcnow(), None, None, None,
                        None, 0, max_attempts, priority, 0))
         return jid
+
+    def submit_limited(self, type_: str, params: dict, client: str, max_per_client: int, max_queue: int,
+                       priority: int = 5, max_attempts: int = 3, once_per: tuple[str, float] | None = None) -> str:
+        """Atomically enforce the public per-visitor and queue-length limits and insert the job.
+
+        Counting and inserting in one IMMEDIATE transaction closes the race in which concurrent requests served
+        by different uvicorn worker processes all pass the check before any of them inserts. Raises
+        QueueLimit(kind) with kind 'client', 'queue' or 'interval' (once_per = (name, seconds): at most one such
+        submission per interval, recorded in the schedule table only when the job is actually queued)."""
+        jid = uuid.uuid4().hex[:12]
+        with self._c() as c:
+            c.execute("begin immediate")
+            try:
+                rows = c.execute("select params from jobs where status in ('queued', 'running')").fetchall()
+                mine = sum(1 for r in rows if json.loads(r["params"]).get("_client") == client)
+                if mine >= max_per_client:
+                    raise QueueLimit("client", mine)
+                if len(rows) >= max_queue:
+                    raise QueueLimit("queue", len(rows))
+                if once_per:
+                    r = c.execute("select last_run from schedule where name=?", (once_per[0],)).fetchone()
+                    if r and time.time() - r["last_run"] < once_per[1]:
+                        raise QueueLimit("interval", 0)
+                    c.execute("insert or replace into schedule values (?,?)", (once_per[0], time.time()))
+                c.execute("insert into jobs values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                          (jid, type_, json.dumps(params), "queued", 0.0, "", None, None, utcnow(), None, None, None,
+                           None, 0, max_attempts, priority, 0))
+            except BaseException:
+                c.execute("rollback")
+                raise
+            c.execute("commit")
+        return jid
+
+    def cancel_requested(self, jid: str) -> bool:
+        with self._c() as c:
+            r = c.execute("select cancel_requested from jobs where id=?", (jid,)).fetchone()
+        return bool(r and r["cancel_requested"])
 
     def get(self, jid: str) -> dict | None:
         with self._c() as c:
@@ -105,10 +168,18 @@ class JobStore:
             r = c.execute("select cancel_requested from jobs where id=?", (jid,)).fetchone()
         return bool(r and r["cancel_requested"])
 
-    def finish(self, jid: str, status: str, result_path: str | None = None, error: str | None = None):
+    def finish(self, jid: str, status: str, result_path: str | None = None, error: str | None = None,
+               worker: str | None = None) -> bool:
+        """Record the outcome. With `worker`, only the worker that currently owns the running job may finish it:
+        a worker whose job was re-queued after a missed heartbeat (and possibly re-claimed) must not overwrite
+        the new attempt's state."""
+        q = "update jobs set status=?, finished=?, result_path=?, error=?, progress=? where id=?"
+        args = [status, utcnow(), result_path, error, 1.0 if status == "succeeded" else None, jid]
+        if worker is not None:
+            q += " and worker=? and status='running'"
+            args.append(worker)
         with self._c() as c:
-            c.execute("update jobs set status=?, finished=?, result_path=?, error=?, progress=? where id=?",
-                      (status, utcnow(), result_path, error, 1.0 if status == "succeeded" else None, jid))
+            return c.execute(q, args).rowcount == 1
 
     def cancel(self, jid: str):
         with self._c() as c:
@@ -202,7 +273,7 @@ def _h_opt(p, ctx):
     bounds = DesignBounds(**{k: tuple(v) if isinstance(v, list) else v for k, v in b.items()})
     ctx.progress(0.05, "differential evolution running")
     return optimise(env, bounds, seed=p.get("seed", 0), maxiter=p.get("maxiter", 30), popsize=p.get("popsize", 10),
-                    top_k=p.get("top_k", 3), robust_check=p.get("robust_check", True))
+                    top_k=p.get("top_k", 3), robust_check=p.get("robust_check", True), progress=ctx.progress)
 
 
 @handler("vv_run")
@@ -218,7 +289,36 @@ def _h_vv(p, ctx):
         done += vv.run([bid])["results"]
         ctx.save_checkpoint({"results": done})
     n_fail = sum(not r["passed"] for r in done)
-    return {"summary": {"total": len(done), "passed": len(done) - n_fail, "failed": n_fail}, "results": done}
+    return {"summary": {"total": len(done), "passed": len(done) - n_fail, "failed": n_fail},
+            "scope": "partial" if p.get("ids") else "full", "include_slow": bool(p.get("include_slow")),
+            "results": done}
+
+
+# Ceilings applied to anonymous (public) jobs so that one visitor cannot occupy a worker for hours.
+PUBLIC_PARAM_CAPS = {
+    "design_optimise": {"maxiter": 40, "popsize": 15, "top_k": 3},
+    "inference": {"n_steps": 20000},
+    "calibration_tradeoff": {"n": 12},
+    "discovery_cycle": {},
+    "vv_run": {},
+}
+
+
+def sanitize_public_params(type_: str, params: dict) -> dict:
+    """Clamp the cost-driving parameters of a public job (raises ValueError for unusable values)."""
+    p = dict(params)
+    for k, cap in PUBLIC_PARAM_CAPS.get(type_, {}).items():
+        if k in p:
+            if isinstance(p[k], bool) or not isinstance(p[k], int):
+                raise ValueError(f"{k} must be an integer")
+            p[k] = max(1, min(p[k], cap))
+    if type_ == "vv_run" and len(p.get("ids") or []) > 100:
+        raise ValueError("at most 100 benchmark ids")
+    if type_ == "discrimination_matrix" and len(p.get("hypotheses") or []) > 10:
+        raise ValueError("at most 10 hypotheses")
+    if type_ == "fetch_source":
+        p.pop("kwargs", None)  # anonymous fetches use each connector's default query and size
+    return p
 
 
 def _records(p) -> bool:
@@ -274,7 +374,11 @@ def _h_inf(p, ctx):
 def _h_fetch(p, ctx):
     from .data import fetch_source, Catalogue
     pp = paths()
-    return fetch_source(p["connector"], pp["store"], Catalogue(pp["catalogue"]), **p.get("kwargs", {}))
+    kw = {k: v for k, v in (p.get("kwargs") or {}).items() if k in ("query", "max_results", "rows", "size")}
+    for k in ("max_results", "rows", "size"):  # every connector API caps page size; stay within polite limits
+        if k in kw:
+            kw[k] = max(1, min(int(kw[k]), 200))
+    return fetch_source(p["connector"], pp["store"], Catalogue(pp["catalogue"]), **kw)
 
 
 @handler("dossier")
@@ -308,15 +412,19 @@ def run_job(store: JobStore, job: dict) -> None:
     try:
         fn = HANDLERS[job["type"]]
         result = fn(job["params"], ctx)
+        if store.cancel_requested(job["id"]):  # handlers that never report progress still honour a cancel
+            raise InterruptedError("cancelled by user")
         out = paths()["results"] / f"{job['id']}.json"
-        out.write_text(json.dumps(result, default=str))
-        store.finish(job["id"], "succeeded", str(out))
+        tmp = out.with_suffix(".tmp")
+        tmp.write_text(json.dumps(result, default=str))
+        tmp.replace(out)  # readers (API, backups) never see a partially written result
+        store.finish(job["id"], "succeeded", str(out), worker=job.get("worker"))
         if ctx.ckpt.exists():
             ctx.ckpt.unlink()
     except InterruptedError:
-        store.finish(job["id"], "cancelled")
+        store.finish(job["id"], "cancelled", worker=job.get("worker"))
     except Exception:
-        store.finish(job["id"], "failed", error=traceback.format_exc(limit=5))
+        store.finish(job["id"], "failed", error=traceback.format_exc(limit=5), worker=job.get("worker"))
 
 
 FAST_TYPES = ["fetch_source", "dossier", "backup", "inference"]

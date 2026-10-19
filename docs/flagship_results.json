@@ -1,7 +1,7 @@
 {
- "generated_utc": "2026-10-19T14:38:30.832603+00:00",
+ "generated_utc": "2026-10-19T17:48:46.240752+00:00",
  "version": "0.2.0",
- "code_sha256": "2f3a87320415ef9c51e7dafd03bbff9059887ad70182f375ef2cc39467b61258",
+ "code_sha256": "7ef0aba4826fdfdac3a9adeb54d884ceafd8cb77a87d89a99282f85af04ca154",
  "benchmark_bose2017": {
   "design": {
    "mass_A": 1e-14,
@@ -53,6 +53,7 @@
    }
   },
   "total_rate_s": 0.012491887032976653,
+  "dominant": "gas_collisions",
   "delta_phi_nongrav_rad": -0.01834740444545275
  },
  "diosi_penrose": {
@@ -71,6 +72,7 @@
   "visibility_min": 0.9,
   "status": "CALCULATED_REQUIREMENT (uncompensated final-pulse error, thermal Gaussian motional state)"
  },
+ "aziz_howl_vs_qg_log10": -28.460620962185445,
  "eft_one_loop_relative": 1.6835605172782962e-63,
  "stern_gerlach": {
   "phases": {
@@ -176,7 +178,7 @@
   {
    "true": "QG-COH",
    "alternative": "CSL-COLL",
-   "D_per_shot": 1.0295541808687687e-17,
+   "D_per_shot": 0.0,
    "shots_per_setting": Infinity,
    "verdict": "indistinguishable",
    "nuisance_at_bounds": []
@@ -241,7 +243,7 @@
   {
    "true": "QG-EFT1",
    "alternative": "CSL-COLL",
-   "D_per_shot": 1.0295541808687687e-17,
+   "D_per_shot": 0.0,
    "shots_per_setting": Infinity,
    "verdict": "indistinguishable",
    "nuisance_at_bounds": []
@@ -310,8 +312,8 @@
   {
    "true": "SC-MF",
    "alternative": "CSL-COLL",
-   "D_per_shot": 0.0029600032512373713,
-   "shots_per_setting": 188.0867038463052,
+   "D_per_shot": 0.0029600032512373505,
+   "shots_per_setting": 188.0867038463065,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "mass_scale"
@@ -650,11 +652,10 @@
   {
    "true": "NULL-NG",
    "alternative": "CSL-COLL",
-   "D_per_shot": 0.012261833002459277,
-   "shots_per_setting": 45.40408067765421,
+   "D_per_shot": 0.012261833002459312,
+   "shots_per_setting": 45.40408067765408,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
-    "env_decoherence_scale",
     "mass_scale",
     "local_phase_A",
     "local_phase_B"
@@ -725,8 +726,8 @@
   {
    "true": "CG-QFT-AH",
    "alternative": "CSL-COLL",
-   "D_per_shot": 0.002960003251237336,
-   "shots_per_setting": 188.08670384630742,
+   "D_per_shot": 0.002960003251237329,
+   "shots_per_setting": 188.0867038463079,
    "verdict": "distinguishable",
    "nuisance_at_bounds": [
     "mass_scale"
@@ -1000,7 +1001,7 @@
   ]
  },
  "optimised_dossier": {
-  "sha256": "c47a45736236c5f4b8df78a0c4d8e9a00654b8eef379eb7f1bfaedd93c7518bd",
+  "sha256": "3eb75272ab51a325a3de33fea1563f0552ecc9c11694494f952f3f209490d26c",
   "consistency": {
    "passed": false,
    "problems": [
@@ -1117,5 +1118,5 @@
    }
   }
  },
- "runtime_s": 215.4
+ "runtime_s": 274.9
 }

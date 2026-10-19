@@ -107,16 +107,6 @@ DEFAULTS = {  # value (SI) and the reason it is a reasonable reference value
     "frequency": (6.283185307, "rad/s", "1 Hz trap assumed"),
 }
 
-ROLE_CUES = [
-    ("branch_separation", ["superpos", "split", "branch", "delocali", "spatial separation of", "Δx", "dx"]),
-    ("separation", ["apart", "separat", "distance", "between", "away", "spaced"]),
-    ("time", ["for", "during", "duration", "interact", "evolve", "wait", "hold"]),
-    ("temperature", ["temperature", "cooled", "kelvin", "at "]),
-    ("pressure", ["pressure", "vacuum"]),
-    ("mass", ["mass", "weigh", "particle", "sphere", "object"]),
-]
-
-
 # cues that precede the number they qualify ("separated by 450 um") and cues that follow it ("450 um apart")
 LENGTH_CUES = {
     "separation": {"before": ["separated by", "separation of", "separation", "distance of", "distance", "spaced by",
@@ -127,6 +117,29 @@ LENGTH_CUES = {
                                      "branches", "Δx"],
                           "after": ["superposition", "split", "branch separation"]},
 }
+
+
+# Admissible SI ranges of every quantity role (same bounds as the HTTP API's design schema). The optomechanics
+# family integrates 100 s of covariance dynamics, so its trap frequency is limited to ≤ 10 Hz (1000 periods).
+QUANTITY_RANGES = {
+    "mass": (1e-27, 1e3, "kg"), "separation": (1e-9, 10.0, "m"), "branch_separation": (0.0, 10.0, "m"),
+    "time": (1e-12, 1e4, "s"), "temperature": (0.0, 2000.0, "K"), "pressure": (0.0, 2e5, "Pa"),
+    "frequency": (1e-6, 2 * 3.141592653589793 * 10, "rad/s"),
+}
+
+
+def validate_quantities(cfg: "ThoughtConfig") -> list[str]:
+    """Problems with a configuration's quantities (unknown roles, non-finite or out-of-range SI values)."""
+    import math
+    out = []
+    for k, q in cfg.quantities.items():
+        if k not in QUANTITY_RANGES:
+            out.append(f"unknown quantity role '{k}'")
+            continue
+        lo, hi, unit = QUANTITY_RANGES[k]
+        if not (math.isfinite(q.si_value) and lo <= q.si_value <= hi):
+            out.append(f"{k} = {q.si_value!r} {unit} outside the admissible range [{lo:g}, {hi:g}] {unit}")
+    return out
 
 
 def _assign_role(kind: str, prompt: str, start: int, end: int, taken: set[str]) -> str | None:
@@ -247,6 +260,10 @@ def execute(cfg: ThoughtConfig) -> dict:
     if cfg.family is None:
         return {"status": "NOT_COMPUTED", "reason": "no implemented model matches; theoretical thought experiment only",
                 "domain_notes": cfg.domain_notes}
+    problems = validate_quantities(cfg)
+    if problems:
+        return {"status": "NOT_COMPUTED", "reason": "invalid quantities: " + "; ".join(problems),
+                "domain_notes": cfg.domain_notes}
     from .design import Environment, scenario_for
     from .discrimination import predictions_table
     q = {k: v.si_value for k, v in cfg.quantities.items()}
@@ -326,8 +343,7 @@ def lm_status() -> dict:
     """Which providers are configured on this server (keys are never returned)."""
     has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
     return {"providers": {"anthropic": {"configured": has_anthropic, "default_model": "claude-opus-5-5"},
-                          "ollama": {"configured": bool(os.environ.get("QGDEVS_OLLAMA_URL")),
-                                     "url": os.environ.get("QGDEVS_OLLAMA_URL", "http://localhost:11434")}},
+                          "ollama": {"configured": bool(os.environ.get("QGDEVS_OLLAMA_URL"))}},
             "default": "off"}
 
 
@@ -363,13 +379,15 @@ def interpret_with_language_model(prompt: str, provider: str = "anthropic", mode
             raise RuntimeError("no Anthropic credentials configured on the server")
         client = anthropic.Anthropic()
         resp = client.beta.messages.create(
-            model=model or "claude-opus-5-5", max_tokens=4000, system=LM_SYSTEM,
+            model=model or "claude-opus-5-5", max_tokens=16000, system=LM_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
             output_config={"effort": "medium", "format": {"type": "json_schema", "schema": LM_SCHEMA}},
             betas=["server-side-fallback-2026-07-01"], fallbacks="default",
         )
         if resp.stop_reason == "refusal":
             raise RuntimeError("the language model declined this request; use the deterministic interpreter")
+        if resp.stop_reason == "max_tokens":
+            raise RuntimeError("the language model output was truncated")
         text = next(b.text for b in resp.content if b.type == "text")
         return _from_lm_json(prompt, json.loads(text), f"anthropic:{resp.model}")
     if provider == "ollama":
@@ -392,5 +410,6 @@ def interpret(prompt: str, language_model: str = "off", model: str | None = None
         return interpret_with_language_model(prompt, language_model, model)
     except Exception as exc:
         cfg = interpret_deterministic(prompt)
-        cfg.domain_notes.append(f"language model unavailable ({exc}); deterministic interpreter used")
+        # the exception class only: provider error text can carry request ids, URLs or account details
+        cfg.domain_notes.append(f"language model unavailable ({type(exc).__name__}); deterministic interpreter used")
         return cfg

@@ -20,7 +20,7 @@ Pure-state concurrence is |sin(Δφ/2)| (verified against the Wootters formula i
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 
 import numpy as np
 from scipy.optimize import minimize
@@ -94,10 +94,19 @@ def branch_distances(design: BMVDesign) -> dict[str, float]:
 
 def check_geometry(design: BMVDesign) -> list[str]:
     """Physical-admissibility problems with a design (empty list = admissible)."""
+    import math
     issues = []
     for k, v in design.as_dict().items():
-        if isinstance(v, float) and k not in ("angle_deg",) and v < 0:
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            continue
+        if not math.isfinite(v):
+            issues.append(f"{k} must be finite")  # NaN/inf would pass every comparison below silently
+        elif k != "angle_deg" and v < 0:  # ints too: JSON clients send 2, not 2.0
             issues.append(f"{k} must be non-negative")
+    if issues:
+        return issues
+    if design.geometry not in ("parallel", "linear", "angled"):
+        return [f"unknown geometry '{design.geometry}'"]
     if design.mass_A <= 0 or design.mass_B <= 0:
         issues.append("masses must be positive")
     if design.time <= 0:

@@ -233,7 +233,6 @@ def maximise(model: CouplingModel, counts: dict, fixed: dict | None = None, seed
 def likelihood_ratio_test(model: CouplingModel, counts: dict, lam_null: float = 0.0, n_boot: int = 100,
                           seed: int = 0) -> dict:
     """LRT of λ = lam_null with a parametric-bootstrap null distribution."""
-    from .sigproc import simulate_counts, DetectorModel
     full = maximise(model, counts, seed=seed)
     null = maximise(model, counts, fixed={"lambda": lam_null}, seed=seed)
     stat = 2 * (full["max_log_likelihood"] - null["max_log_likelihood"])

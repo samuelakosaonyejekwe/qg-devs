@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 
+from .constants import u as _AMU
+
 BASE = ("kg", "m", "s", "A", "K", "mol", "cd")
 
 
@@ -75,7 +77,7 @@ UNIT_SCALE = {
     # mass
     "kg": ("mass", 1.0), "g": ("mass", 1e-3), "mg": ("mass", 1e-6), "ug": ("mass", 1e-9),
     "µg": ("mass", 1e-9), "ng": ("mass", 1e-12), "pg": ("mass", 1e-15), "fg": ("mass", 1e-18),
-    "amu": ("mass", 1.66053906892e-27), "u": ("mass", 1.66053906892e-27),
+    "amu": ("mass", _AMU), "u": ("mass", _AMU),
     # time
     "s": ("time", 1.0), "ms": ("time", 1e-3), "us": ("time", 1e-6), "µs": ("time", 1e-6),
     "ns": ("time", 1e-9), "min": ("time", 60.0), "second": ("time", 1.0), "seconds": ("time", 1.0),

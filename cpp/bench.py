@@ -86,7 +86,7 @@ def main():
     print(f"native, {native.max_threads()} threads        : {tN:9.4f} s  ({npts / tN:,.0f} points/s)")
     print(f"numpy per-point loop     : {tpy:9.4f} s  ({npts / tpy:,.0f} points/s)")
     print(f"speed-up (all threads)   : {tpy / tN:9.1f} x   (1 thread: {tpy / t1:.1f} x)")
-    print(f"max |native - numpy|     : " + ", ".join(f"{k}={v:.1e}" for k, v in diffs.items()))
+    print("max |native - numpy|     : " + ", ".join(f"{k}={v:.1e}" for k, v in diffs.items()))
 
     rho0, H, Ls, times = four_qubit_problem()
     tn, (rn, st) = best_of(lambda: native.lindblad_dopri(rho0, H, Ls, times, rtol=1e-10, atol=1e-12,
