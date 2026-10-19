@@ -1,0 +1,24 @@
+# Secondary, independent cloud deployment (Render Blueprint). Same image; API + worker in one service so
+# both share the persistent disk.
+services:
+  - type: web
+    name: qg-devs
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: qgdevs-start all
+    healthCheckPath: /api/health
+    plan: starter
+    autoDeploy: true
+    disk:
+      name: qgdevs-data
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: QGDEVS_HOME
+        value: /data
+      - key: QGDEVS_API_TOKENS
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: QGDEVS_BACKUP_S3_URL
+        sync: false

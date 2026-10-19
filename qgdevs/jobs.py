@@ -264,6 +264,13 @@ def _h_dossier(p, ctx):
     return generate_dossier(d, env)
 
 
+@handler("backup")
+def _h_backup(p, ctx):
+    from .backup import snapshot, verify, upload
+    a = snapshot()
+    return {"archive": str(a), **verify(a), **upload(a)}
+
+
 SCHEDULE = [  # (name, period seconds, job type, params) — cadences match each source's publication rhythm
     ("ingest-arxiv", 86400, "fetch_source", {"connector": "arxiv"}),
     ("ingest-crossref", 86400, "fetch_source", {"connector": "crossref"}),
@@ -272,6 +279,7 @@ SCHEDULE = [  # (name, period seconds, job type, params) — cadences match each
     ("ingest-codata", 30 * 86400, "fetch_source", {"connector": "nist-codata"}),
     ("nightly-vv", 86400, "vv_run", {}),
     ("weekly-discovery", 7 * 86400, "discovery_cycle", {}),
+    ("daily-backup", 86400, "backup", {}),
 ]
 
 

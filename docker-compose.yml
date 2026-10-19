@@ -1,0 +1,25 @@
+# Self-hosted deployment (any VPS / lab server). Data persists in the qgdevs-data volume.
+services:
+  api:
+    build: .
+    image: ghcr.io/samuelakosaonyejekwe/qg-devs:latest
+    command: ["qgdevs-start", "api"]
+    ports: ["8000:8000"]
+    environment:
+      QGDEVS_API_TOKENS: ${QGDEVS_API_TOKENS:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes: ["qgdevs-data:/data"]
+    restart: unless-stopped
+  worker:
+    image: ghcr.io/samuelakosaonyejekwe/qg-devs:latest
+    command: ["qgdevs-start", "worker"]
+    environment:
+      QGDEVS_BACKUP_S3_URL: ${QGDEVS_BACKUP_S3_URL:-}
+      QGDEVS_BACKUP_S3_ENDPOINT: ${QGDEVS_BACKUP_S3_ENDPOINT:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes: ["qgdevs-data:/data"]
+    restart: unless-stopped
+    depends_on: [api]
+volumes:
+  qgdevs-data:

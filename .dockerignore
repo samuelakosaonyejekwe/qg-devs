@@ -1,0 +1,9 @@
+.venv
+.git
+var
+**/__pycache__
+**/node_modules
+web/dist
+cpp/build
+lean/.lake
+docs/screenshots

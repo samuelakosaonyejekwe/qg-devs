@@ -216,3 +216,18 @@ def test_job_queue_recovery(tmp_path, monkeypatch):
     assert st.recover_stale(60) == 1 and st.get(jid)["status"] == "queued"
     st.cancel(jid)
     assert st.get(jid)["status"] == "cancelled"
+
+
+def test_backup_restore_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("QGDEVS_HOME", str(tmp_path / "home"))
+    import importlib, qgdevs.jobs, qgdevs.backup
+    importlib.reload(qgdevs.jobs); importlib.reload(qgdevs.backup)
+    p = qgdevs.jobs.paths()
+    qgdevs.jobs.JobStore().submit("vv_run", {})
+    L = evidence.Ledger(p["ledger"]); L.append("note", {"x": 1})
+    (p["vault"] / "abc").write_bytes(b"data")
+    a = qgdevs.backup.snapshot(tmp_path / "bk")
+    assert qgdevs.backup.verify(a)["valid"]
+    r = qgdevs.backup.restore(a, tmp_path / "restored")
+    assert r["ledger_chain"]["valid"] and (tmp_path / "restored" / "vault" / "abc").read_bytes() == b"data"
+    importlib.reload(qgdevs.jobs)
