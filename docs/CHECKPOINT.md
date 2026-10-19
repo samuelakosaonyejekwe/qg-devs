@@ -25,6 +25,9 @@ _Last updated: 2026-10-19 (session in progress). If a session is interrupted, re
 - **Next (web agent):**
   - (1) KaTeX/LaTeX rendering of every equation, using `/api/equations` and the models' `tex` fields; and add katex to `web/package.json` so `tests/test_equations.py` runs;
   - (2) friendly 401/403/429/503 UX, plus an audit of every page for raw errors and layout issues.
+  - (3) URGENT 3-D legibility fixes: the density-matrix city plot's bars are near-black (cyclic colour map plus dim lighting), the legend is clipped, the camera framing clips bars and labels, and the axis title is not typeset;
+  - (4) a visible Play/Pause control and auto-play on every animated view, plus "Play all" for synchronised comparisons;
+  - (5) a visual QA pass of all views in both themes at 1440 px and 360 px.
 - **Then:** verify (pytest, `cd web && npm run typecheck && npm test && npm run build`), add a 0.2.1 entry to `qgdevs/release_notes.json`, bump the version, commit with an explicit file list, and deploy. The server build uses the full Dockerfile: `sudo docker build -t qgdevs:<ver> .` then `run` (see Live system).
 
 ## Rules
