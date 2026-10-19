@@ -333,6 +333,17 @@ def _():
     return abs(itf.kasevich_chu_phase(k, 9.81, 0.1) / itf.kasevich_chu_phase_from_paths(k, 9.81, 0.1, m=1.443e-25) - 1), 0.0
 
 
+@bench(id="S5-recombination-coherent-overlap", suite=5, title="Recombination visibility = |⟨α|β⟩| for a pure displaced Gaussian",
+       kind="analytic", tolerance=1e-12, justification="closed form exp(−|β|²/2) evaluated two ways",
+       reference="Englert, Schwinger & Scully, Found. Phys. 18, 1045 (1988)")
+def _():
+    m, w = 1e-14, 2 * np.pi * 100
+    s0 = np.sqrt(hbar / (2 * m * w))
+    dx, dp = 0.3 * s0, 0.2 * hbar / (2 * s0)
+    beta2 = 0.3**2 / 4 + 0.2**2 / 4
+    return abs(itf.recombination_visibility(m, w, 0.0, dx, dp) - np.exp(-beta2 / 2)), 0.0
+
+
 @bench(id="S6-tmsv-log-negativity", suite=6, title="Two-mode squeezed vacuum: E_N = 2r", kind="analytic",
        tolerance=1e-10, justification="closed form", reference="Vidal & Werner (2002); Adesso & Illuminati (2007)")
 def _():
@@ -354,6 +365,16 @@ def _():
 def _():
     m, R, d = 1e-14, 1e-6, 5e-6
     return abs(dec.diosi_penrose_rate(m, R, d)["E_delta_J"] / (G * m * m * (6 / (5 * R) - 1 / d)) - 1), 0.0
+
+
+@bench(id="S7-csl-point-limit", suite=7, title="CSL rate → λ(m/m0)²(1−e^{−Δx²/4r_C²}) for R ≪ r_C", kind="limiting_case",
+       tolerance=1e-5, justification="relative; residual form-factor correction is O((R/r_C)²) = 1e-6",
+       reference="Bassi et al., RMP 85, 471 (2013)")
+def _():
+    from .constants import u as amu_
+    m, dx = 1000 * amu_, 1e-7
+    an = 1e-16 * (m / amu_) ** 2 * (1 - np.exp(-dx**2 / (4e-14)))
+    return abs(dec.csl_rate(m, 1e-10, dx)["rate"] / an - 1), 0.0
 
 
 @bench(id="S8-casimir-scaling", suite=8, title="Casimir–Polder r⁻⁷ scaling", kind="property", tolerance=1e-12,

@@ -94,6 +94,12 @@ def _environment_requirements(design: bmv.BMVDesign, env: Environment, coherence
                                   "basis": "|Δφ_Coulomb + induced dipole| ≤ 0.05 rad with equal charges on both masses"
                                   + ("; even a single elementary charge exceeds the budget, so both masses must be exactly "
                                      "neutral or electrostatically screened" if qmax == 0 else "")}
+    req["max_electric_dipole"] = {"value": em.max_electric_dipole(design, 0.05), "unit": "C m", "status": CALC,
+                                  "basis": "worst-orientation dipole–dipole |Δφ| ≤ 0.05 rad (patch potentials or trapped "
+                                           "charge create such dipoles; ~10 mV patches typically exceed this)"}
+    req["max_bias_field_during_interaction"] = {"value": em.max_bias_field(design, materials.get(env.material).magnetic_susceptibility, 0.05),
+                                                "unit": "T", "status": CALC,
+                                                "basis": "induced diamagnetic dipole–dipole |Δφ| ≤ 0.05 rad (worst field axis)"}
     req["min_distance_casimir_10pct"] = {"value": em.min_distance_for_gravity_dominance(design.mass_A, design.radius_A, cm.real, 0.1),
                                          "unit": "m", "status": CALC, "basis": "|U_CP| ≤ 0.1 |U_grav| at equal distance"}
     return req
@@ -255,6 +261,10 @@ def generate_dossier(design: bmv.BMVDesign, env: Environment = Environment(), bo
         "bill_of_materials": bom,
         "engineering_analyses": {
             "magnetic": {"required_gradient_T_per_m": sg["required_gradient_T_per_m"], "status": CALC},
+            "stern_gerlach_closure": {**itf.required_gradient_precision(design.mass_A, design.dx_A, sg_tau,
+                                                                        2 * math.pi * 100.0, 10.0),
+                                      "assumed_trap_frequency_Hz": 100.0, "assumed_thermal_occupation": 10.0,
+                                      "assumption_status": ASSUME},
             "electrostatic": {"max_residual_charge_e": envreq["max_residual_charge"]["value"], "status": CALC},
             "thermal": {"note": "steady-state heat-load analysis of the cryostat not performed", "status": ASSUME},
             "structural": {"note": "not performed; requires CAD-level design", "status": ASSUME}},

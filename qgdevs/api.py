@@ -135,6 +135,7 @@ class EnvIn(BaseModel):
     residual_charge_e: float = Field(0.0, ge=0, le=1e9)
     include_casimir: bool = True
     readout_error: float = Field(0.01, ge=0, lt=0.5)
+    bias_field_T: float = Field(0.0, ge=-20, le=20)
 
 
 class ScenarioIn(BaseModel):

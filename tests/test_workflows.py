@@ -256,3 +256,36 @@ def test_backend_fixes_from_ui_testing():
     out = thought.execute(cfg)
     qg = next(r for r in out["competing_models"] if r["id"] == "QG-COH")
     assert out["prediction"]["negativity"] == pytest.approx(qg["negativity"], rel=1e-6)
+
+
+def test_csl_hypothesis_and_limits():
+    from qgdevs.decoherence import csl_rate
+    sc, _ = scenario_for(bmv.BMVDesign(geometry="linear"), Environment())
+    csl = models.get("CSL-COLL")
+    assert qm.negativity(csl.state(sc)) < 1e-12                       # GRW λ destroys BMV entanglement
+    assert qm.negativity(csl.state(sc, {"csl_log10_lambda": -30})) == pytest.approx(
+        qm.negativity(models.get("QG-COH").state(sc)), rel=1e-3)       # λ → 0 recovers QG-COH
+    r1 = csl_rate(1e-14, 8.8e-7, 250e-6, 1.0)["rate"]
+    assert csl_rate(1e-14, 8.8e-7, 250e-6, 1e-16)["rate"] == pytest.approx(1e-16 * r1, rel=1e-12)
+
+
+def test_new_background_requirements():
+    from qgdevs import em
+    d = bmv.BMVDesign(geometry="linear")
+    req = lab.generate_dossier(d)["engineering"]["environmental_requirements"]
+    p = req["max_electric_dipole"]["value"]
+    B = req["max_bias_field_during_interaction"]["value"]
+    assert 0 < p < 1e-27 and 0 < B < 1e-2
+    # at the limit the dipole channel uses at most the 0.05 rad budget along the worst axis tested
+    E = em.diamagnetic_branch_energies(d, -2.2e-5, (0, 0, B))
+    assert em._dphi_of(d, E) <= 0.05 * (1 + 1e-9)
+    # the spin–spin coupling is always included in scenarios and is tiny here
+    sc, extra = scenario_for(d, Environment())
+    assert all("spin_dipolar" in v for v in extra["nongrav_channels"].values())
+
+
+def test_recombination_requirement_monotone():
+    from qgdevs import interferometry as itf
+    a = itf.required_gradient_precision(1e-14, 250e-6, 0.25, 2 * np.pi * 100, 0)["max_relative_gradient_error"]
+    b = itf.required_gradient_precision(1e-14, 250e-6, 0.25, 2 * np.pi * 100, 10)["max_relative_gradient_error"]
+    assert 0 < b < a  # hotter motional state ⇒ tighter precision

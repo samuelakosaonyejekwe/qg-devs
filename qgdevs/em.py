@@ -89,3 +89,104 @@ def max_charge_for(design, max_delta_phi: float, cm: float) -> float:
     while dphi(hi) < 0 and hi < 1e12:
         hi *= 10
     return float(brentq(dphi, hi / 10, hi)) if hi < 1e12 else float("inf")
+
+
+# ----------------------------------------------------------------------------- further backgrounds
+def patch_dipole_rms(R: float, V_rms: float, patch_size: float) -> float:
+    """RMS electric dipole moment [C m] per Cartesian component of a conducting sphere whose surface carries
+    N = 4πR²/ℓ² independent patches of rms potential V_rms (statistical patch model, ESTIMATED).
+
+    Derivation: the l = 1 exterior multipole of a sphere with surface potential V(Ω) gives
+    p = 4πε0 R² (3/4π) ∫ V n̂ dΩ; for independent patches of solid angle ℓ²/R² the variance of each component
+    is N V_rms² ℓ⁴/(3R⁴), hence p_rms = 4πε0 R ℓ V_rms √(3/4π).
+    """
+    return float(4 * np.pi * eps0 * R * patch_size * V_rms * np.sqrt(3 / (4 * np.pi)))
+
+
+def patch_dipole_dphi_distribution(design, V_rms: float = 0.01, patch_size: float = 1e-7, n: int = 2000,
+                                   seed: int = 0) -> dict:
+    """Monte-Carlo distribution of the entangling phase from random patch dipoles on both masses
+    (orientations fixed during a run). Returns percentiles of |Δφ_patch| [rad]."""
+    from .bmv import branch_positions, entangling_phase, phases_from_energies
+    rng = np.random.default_rng(seed)
+    pA0 = patch_dipole_rms(design.radius_A, V_rms, patch_size)
+    pB0 = patch_dipole_rms(design.radius_B, V_rms, patch_size)
+    pos = branch_positions(design)
+    out = []
+    for _ in range(n):
+        pA, pB = rng.normal(0, pA0, 3), rng.normal(0, pB0, 3)
+        E = {f"{i}{j}": dipole_dipole_energy(pA, pB, pos[f"B_{j}"] - pos[f"A_{i}"]) for i in "LR" for j in "LR"}
+        out.append(abs(entangling_phase(phases_from_energies(E, design.time))))
+    out = np.array(out)
+    return {"p_rms_A_Cm": pA0, "median_abs_dphi_rad": float(np.median(out)),
+            "p95_abs_dphi_rad": float(np.percentile(out, 95)), "V_rms_V": V_rms, "patch_size_m": patch_size,
+            "status": "ESTIMATED (statistical patch model; measure V_rms and ℓ for real surfaces)"}
+
+
+def diamagnetic_moment(chi: float, R: float, B: np.ndarray) -> np.ndarray:
+    """Induced magnetic moment [A m²] of a weakly magnetic sphere (|χ| ≪ 1) in field B: m = χ V B / μ0."""
+    from .constants import mu0
+    return chi * (4 / 3 * np.pi * R**3) * np.asarray(B, float) / mu0
+
+
+def magnetic_dipole_energy(mA: np.ndarray, mB: np.ndarray, r_vec: np.ndarray) -> float:
+    from .constants import mu0
+    r = np.linalg.norm(r_vec)
+    n = r_vec / r
+    return float(mu0 / (4 * np.pi * r**3) * (np.dot(mA, mB) - 3 * np.dot(mA, n) * np.dot(mB, n)))
+
+
+def spin_dipolar_branch_energies(design, quant_axis=(0.0, 0.0, 1.0)) -> dict[str, float]:
+    """Direct magnetic dipole–dipole coupling between the two embedded electron spins, which label the branches
+    (L ↔ m_s = +½, R ↔ m_s = −½ along the quantisation axis): U_ij = (μ0/4π r_ij³)(g μ_B/2)² s_i s_j (1 − 3 cos²θ_ij),
+    secular (energy-conserving) part only. Because it depends on the branch labels it is itself ENTANGLING and must be
+    separated from gravity (e.g. by spin-echo refocusing or distance)."""
+    from .bmv import branch_positions
+    from .constants import mu0, mu_B, g_e
+    pos = branch_positions(design)
+    z = np.asarray(quant_axis, float) / np.linalg.norm(quant_axis)
+    mu = g_e * mu_B / 2
+    s = {"L": 1, "R": -1}
+    out = {}
+    for i in "LR":
+        for j in "LR":
+            rv = pos[f"B_{j}"] - pos[f"A_{i}"]
+            r = np.linalg.norm(rv)
+            c = np.dot(rv / r, z)
+            out[f"{i}{j}"] = float(mu0 / (4 * np.pi * r**3) * mu * mu * s[i] * s[j] * (1 - 3 * c * c))
+    return out
+
+
+def _dphi_of(design, E: dict) -> float:
+    from .bmv import entangling_phase, phases_from_energies
+    return abs(entangling_phase(phases_from_energies(E, design.time)))
+
+
+def max_electric_dipole(design, budget: float = 0.05) -> float:
+    """Largest equal electric dipole moment [C m] on both masses (worst-case orientation over a grid of
+    directions) keeping |Δφ_dipole| ≤ budget. Δφ ∝ p², so p_max = p₁ √(budget/Δφ(p₁))."""
+    from .bmv import branch_positions
+    pos = branch_positions(design)
+    p1, worst = 1e-27, 0.0
+    dirs = [np.array(v, float) for v in ((1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1), (0, 1, 1), (1, 1, 1))]
+    for a in dirs:
+        for b in dirs:
+            pa, pb = p1 * a / np.linalg.norm(a), p1 * b / np.linalg.norm(b)
+            E = {f"{i}{j}": dipole_dipole_energy(pa, pb, pos[f"B_{j}"] - pos[f"A_{i}"]) for i in "LR" for j in "LR"}
+            worst = max(worst, _dphi_of(design, E))
+    return float(p1 * np.sqrt(budget / worst)) if worst > 0 else float("inf")
+
+
+def diamagnetic_branch_energies(design, chi: float, B) -> dict[str, float]:
+    from .bmv import branch_positions
+    pos = branch_positions(design)
+    mA = diamagnetic_moment(chi, design.radius_A, B)
+    mB = diamagnetic_moment(chi, design.radius_B, B)
+    return {f"{i}{j}": magnetic_dipole_energy(mA, mB, pos[f"B_{j}"] - pos[f"A_{i}"]) for i in "LR" for j in "LR"}
+
+
+def max_bias_field(design, chi: float, budget: float = 0.05) -> float:
+    """Largest uniform field [T] (worst orientation of x, y, z) during the interaction keeping the induced
+    diamagnetic dipole–dipole |Δφ| ≤ budget. Δφ ∝ B², so B_max = B₁ √(budget/Δφ(B₁))."""
+    worst = max(_dphi_of(design, diamagnetic_branch_energies(design, chi, np.eye(3)[k] * 1e-3)) for k in range(3))
+    return float(1e-3 * np.sqrt(budget / worst)) if worst > 0 else float("inf")

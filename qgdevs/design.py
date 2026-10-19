@@ -34,6 +34,7 @@ class Environment:
     residual_charge_e: float = 0.0   # elementary charges on each mass
     include_casimir: bool = True
     readout_error: float = 0.01
+    bias_field_T: float = 0.0        # uniform magnetic field during the interaction (along z)
 
 
 @dataclass
@@ -58,6 +59,12 @@ def scenario_for(design: bmv.BMVDesign, env: Environment) -> tuple[Scenario, dic
     include = ("casimir", "coulomb", "induced") if env.include_casimir else ("coulomb", "induced")
     ch = em.branch_energies(design, cm.real, cm.real, env.residual_charge_e * e_charge,
                             env.residual_charge_e * e_charge, include=include)
+    # always-present NV spin–spin dipolar coupling; diamagnetic coupling when a bias field is applied
+    for k, v in em.spin_dipolar_branch_energies(design).items():
+        ch[k]["spin_dipolar"] = v
+    if env.bias_field_T:
+        for k, v in em.diamagnetic_branch_energies(design, mat.magnetic_susceptibility, (0, 0, env.bias_field_T)).items():
+            ch[k]["diamagnetic"] = v
     sc = Scenario(design, budA["total_rate"], budB["total_rate"], em.total_by_branch(ch))
     return sc, {"decoherence_A": budA, "decoherence_B": budB, "nongrav_channels": ch}
 

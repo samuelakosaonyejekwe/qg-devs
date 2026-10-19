@@ -151,3 +151,46 @@ def sg_bmv_phases(m_A: float, m_B: float, d: float, tau: float, hold: float, dx_
     return {"phases": phases, "delta_phi": dphi, "total_time": total, "acceleration": a,
             "required_gradient_T_per_m": sg_required_gradient(m_A, dx_target, tau),
             "trajectory_t": ts[::20].tolist(), "trajectory_x": xs[::20].tolist()}
+
+
+# ----------------------------------------------------------------------------- imperfect recombination
+def recombination_visibility(m: float, omega_trap: float, n_thermal: float, dx: float, dp: float) -> float:
+    """Spin-coherence visibility after imperfect closure of a Stern–Gerlach loop (Humpty-Dumpty problem;
+    Englert, Schwinger & Scully, Found. Phys. 18, 1045 (1988)).
+
+    For a thermal Gaussian motional state of the trap (occupation n̄) displaced by (δx, δp) between the two
+    spin branches at recombination, |⟨D(β)⟩| = exp[−(2n̄+1)|β|²/2] with |β|² = δx²/(4σ0²) + δp²/(4σp0²),
+    σ0 = √(ħ/2mω) and σp0 = ħ/(2σ0) the ground-state widths.
+    """
+    s0 = np.sqrt(hbar / (2 * m * omega_trap))
+    sp0 = hbar / (2 * s0)
+    beta2 = dx**2 / (4 * s0**2) + dp**2 / (4 * sp0**2)
+    return float(np.exp(-(2 * n_thermal + 1) * beta2 / 2))
+
+
+def sg_closure_error(m: float, dx_target: float, tau: float, rel_gradient_error: float) -> dict:
+    """Branch mismatch at recombination when the final gradient pulse has fractional amplitude error ε
+    (worst case: nothing compensates it). Each branch ends with δv = ε a τ and δx = ε a τ²/2 in opposite
+    directions, so between branches δx = ε a τ² and δp = 2 m ε a τ, with a = Δx/(2τ²) per branch."""
+    a = dx_target / (2 * tau**2)
+    return {"dx_m": rel_gradient_error * a * tau**2, "dp_kg_m_s": 2 * m * rel_gradient_error * a * tau,
+            "acceleration": a}
+
+
+def required_gradient_precision(m: float, dx_target: float, tau: float, omega_trap: float, n_thermal: float,
+                                visibility_min: float = 0.9) -> dict:
+    """Largest fractional gradient error ε keeping recombination visibility ≥ visibility_min.
+
+    Visibility decreases monotonically with ε, so ε is found by bisection in log ε."""
+    def vis(eps):
+        e = sg_closure_error(m, dx_target, tau, eps)
+        return recombination_visibility(m, omega_trap, n_thermal, e["dx_m"], e["dp_kg_m_s"])
+    lo, hi = -30.0, 0.0
+    if vis(1.0) >= visibility_min:
+        return {"max_relative_gradient_error": 1.0, "visibility_at_limit": vis(1.0), "visibility_min": visibility_min}
+    for _ in range(100):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if vis(10**mid) >= visibility_min else (lo, mid)
+    eps = 10**lo
+    return {"max_relative_gradient_error": eps, "visibility_at_limit": vis(eps), "visibility_min": visibility_min,
+            "status": "CALCULATED_REQUIREMENT (uncompensated final-pulse error, thermal Gaussian motional state)"}

@@ -13,6 +13,8 @@ References
 """
 from __future__ import annotations
 
+from functools import lru_cache
+
 import numpy as np
 from scipy.special import zeta
 
@@ -122,3 +124,42 @@ def max_temperature_for(R: float, dx: float, cm: complex, rate_target: float, wh
         else:
             lo = mid
     return float(lo)
+
+
+# ----------------------------------------------------------------------------- CSL collapse
+CSL_DEFAULTS = {"lambda_s": 1e-16, "r_C_m": 1e-7}  # GRW/Ghirardi–Pearle–Rimini values; Adler proposes λ ~ 1e-8 s⁻¹
+
+
+def _sphere_form_factor(q: float) -> float:
+    """Normalised Fourier transform of a uniform ball: f(q) = 3 (sin q − q cos q)/q³, f(0) = 1."""
+    if q < 1e-4:
+        return 1.0 - q * q / 10.0
+    return 3.0 * (np.sin(q) - q * np.cos(q)) / q**3
+
+
+@lru_cache(maxsize=2048)
+def csl_rate(m: float, R: float, dx: float, lambda_s: float = CSL_DEFAULTS["lambda_s"],
+             r_C: float = CSL_DEFAULTS["r_C_m"], m0: float = amu) -> dict:
+    """Mass-proportional CSL decoherence rate of a uniform sphere superposed over Δx:
+
+        Γ = λ (4π r_C²)^{3/2}/m0² ∫ d³k/(2π)³ e^{−k² r_C²} |ρ̃(k)|² (1 − cos k·Δx)
+          = λ (m/m0)² (4π r_C²)^{3/2} (4π/(2π)³) ∫₀^∞ k² e^{−k² r_C²} f(kR)² (1 − sin(kΔx)/(kΔx)) dk
+
+    (Bassi, Lochan, Satin, Singh & Ulbricht, Rev. Mod. Phys. 85, 471 (2013)). For R ≪ r_C it reduces to
+    Γ = λ (m/m0)² (1 − e^{−Δx²/4r_C²}) (verified in qgdevs.vv). λ and r_C are phenomenological parameters,
+    constrained but not fixed by experiment.
+    """
+    from scipy.integrate import quad
+    pref = lambda_s * (m / m0) ** 2 * (4 * np.pi * r_C**2) ** 1.5 * 4 * np.pi / (2 * np.pi) ** 3
+
+    def g(k):
+        kx = k * dx
+        sinc = 1.0 - kx * kx / 6.0 if kx < 1e-4 else np.sin(kx) / kx
+        return k * k * np.exp(-(k * r_C) ** 2) * _sphere_form_factor(k * R) ** 2 * (1.0 - sinc)
+
+    kmax = 8.0 / r_C
+    n_osc = max(1, int(kmax * max(R, dx) / np.pi))
+    edges = np.linspace(0, kmax, min(n_osc, 4000) + 1)
+    val = sum(quad(g, a, b, limit=200, epsabs=0, epsrel=1e-10)[0] for a, b in zip(edges[:-1], edges[1:]))
+    return {"rate": float(pref * val), "lambda_s": lambda_s, "r_C_m": r_C,
+            "regime": "point-like (R ≪ r_C)" if R < 0.1 * r_C else "extended body (form factor included)"}

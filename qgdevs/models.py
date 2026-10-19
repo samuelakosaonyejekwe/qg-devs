@@ -157,6 +157,21 @@ def _diosi_penrose(sc: Scenario, e: dict) -> np.ndarray:
     return bmv.joint_state(ph, dA + gA * t, dB + gB * t)
 
 
+def _csl(sc: Scenario, e: dict) -> np.ndarray:
+    """Coherent Newtonian interaction plus mass-proportional CSL collapse dephasing of each mass."""
+    from .decoherence import csl_rate
+    t = sc.design.time
+    ph = _phases(_add(sc.grav_energies(e["mass_scale"]), sc.nongrav_energies), t)
+    ph = _local_phase(ph, e["local_phase_A"], e["local_phase_B"])
+    d = sc.design
+    lam = 10.0 ** e["csl_log10_lambda"]
+    # Γ is exactly linear in λ: evaluate the (cached) integral once per geometry at λ = 1 s⁻¹
+    gA = lam * csl_rate(d.mass_A, d.radius_A, d.dx_A, 1.0)["rate"]
+    gB = lam * csl_rate(d.mass_B, d.radius_B, d.dx_B, 1.0)["rate"]
+    dA, dB = _env_decay(sc, e)
+    return bmv.joint_state(ph, dA + gA * t, dB + gB * t)
+
+
 def _no_branch_coupling(sc: Scenario, e: dict) -> np.ndarray:
     """Null: gravity does not couple to the branch degree of freedom at all (only non-gravitational physics)."""
     t = sc.design.time
@@ -258,6 +273,22 @@ _reg(Hypothesis(
                        "van de Kamp et al., PRA 102, 062807 (2020)"],
         "assurance": "NUMERICALLY VERIFIED", "status_note": "confounder control"},
     [], True, _no_branch_coupling))
+
+_reg(Hypothesis(
+    "CSL-COLL", "Coherent gravity with Continuous Spontaneous Localisation (CSL) collapse", "collapse", {
+        "dynamics": "QG-COH plus single-mass dephasing Γ_CSL = λ(m/m0)²(4πr_C²)^{3/2}∫d³k/(2π)³ e^{-k²r_C²}|f(kR)|²(1−cos k·Δx)",
+        "assumptions": ["mass-proportional CSL with phenomenological λ and r_C", "uniform-sphere mass density"],
+        "approximations": ["white-noise (Markovian) collapse field", "rigid-body centre-of-mass dephasing"],
+        "admissible_domain": "non-relativistic; λ and r_C within experimentally unexcluded ranges",
+        "known_limits": ["R ≪ r_C: Γ = λ(m/m0)²(1 − e^{−Δx²/4r_C²})", "λ → 0 recovers QG-COH"],
+        "entangling_by_gravity": True,
+        "references": ["Ghirardi, Pearle & Rimini, PRA 42, 78 (1990), doi:10.1103/PhysRevA.42.78",
+                       "Bassi et al., Rev. Mod. Phys. 85, 471 (2013), doi:10.1103/RevModPhys.85.471"],
+        "assurance": "NUMERICALLY VERIFIED",
+        "status_note": "λ is a free parameter (default GRW 1e-16 s⁻¹); r_C fixed at 100 nm in this registry entry"},
+    [Nuisance("csl_log10_lambda", -30.0, -10.0, -16.0, "log10(s⁻¹)",
+              "CSL collapse rate parameter λ (r_C fixed at the standard 100 nm)")],
+    True, _csl))
 
 from . import model_ah  # noqa: E402  (bottom import: model_ah imports Nuisance from this module)
 

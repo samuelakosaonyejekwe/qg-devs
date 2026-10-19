@@ -53,7 +53,7 @@ R["stern_gerlach"] = {k: v for k, v in itf.sg_bmv_phases(bose.mass_A, bose.mass_
 
 # 3. Competing-model predictions and robust discrimination at the benchmark
 R["benchmark_predictions"] = [{k: r[k] for k in ("id", "negativity", "witness_cpk", "coherence_A")} for r in predictions_table(sc)]
-M = discrimination_matrix(sc, ["QG-COH", "QG-EFT1", "SC-MF", "CC-KTM", "DP-COLL", "NULL-NG"])
+M = discrimination_matrix(sc, ["QG-COH", "QG-EFT1", "SC-MF", "CC-KTM", "DP-COLL", "CSL-COLL", "NULL-NG", "CG-QFT-AH"])
 R["benchmark_discrimination"] = [{k: r[k] for k in ("true", "alternative", "D_per_shot", "shots_per_setting", "verdict",
                                                      "nuisance_at_bounds")} for r in M["pairs"]]
 
