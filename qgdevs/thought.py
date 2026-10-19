@@ -117,22 +117,44 @@ ROLE_CUES = [
 ]
 
 
+# cues that precede the number they qualify ("separated by 450 um") and cues that follow it ("450 um apart")
+LENGTH_CUES = {
+    "separation": {"before": ["separated by", "separation of", "separation", "distance of", "distance", "spaced by",
+                              "spaced", "centre-to-centre", "center-to-center"],
+                   "after": ["apart", "away", "from each other", "separation"]},
+    "branch_separation": {"before": ["superposition of", "superposition size of", "superposition", "split by",
+                                     "splitting of", "split", "delocalised over", "delocalized over", "branch separation of",
+                                     "branches", "Δx"],
+                          "after": ["superposition", "split", "branch separation"]},
+}
+
+
 def _assign_role(kind: str, prompt: str, start: int, end: int, taken: set[str]) -> str | None:
-    """Map a length to 'separation' or 'branch_separation' by the nearest textual cue (either side)."""
+    """Map a length to 'separation' or 'branch_separation' by the closest qualifying cue.
+
+    A cue before the number must not be separated from it by another number; cues after the number are
+    penalised slightly so that "…250 um, separated by 450 um" assigns 'separated by' to 450, not 250.
+    """
     if kind in ("mass", "time", "temperature", "pressure"):
         return kind
     if kind != "separation":
         return None
     low = prompt.lower()
     best = None
-    for role in ("branch_separation", "separation"):
+    for role, cues in LENGTH_CUES.items():
         if role in taken:
             continue
-        for cue in dict(ROLE_CUES)[role]:
-            for m in re.finditer(re.escape(cue.lower()), low):
-                dist = start - m.end() if m.end() <= start else m.start() - end
-                if dist < 0 or dist > 45:
-                    continue
+        for cue in cues["before"]:
+            for m in re.finditer(re.escape(cue.lower()), low[:start]):
+                gap = low[m.end():start]
+                if len(gap) <= 30 and not re.search(r"\d", gap):
+                    dist = len(gap)
+                    if best is None or dist < best[0]:
+                        best = (dist, role)
+        for cue in cues["after"]:
+            m = re.search(re.escape(cue.lower()), low[end:end + 25])
+            if m and not re.search(r"\d", low[end:end + m.start()]):
+                dist = m.start() + 5
                 if best is None or dist < best[0]:
                     best = (dist, role)
     if best:

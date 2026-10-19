@@ -1,1 +1,8 @@
-import QGDEVS.Basic
+import QGDEVS.PhaseDecomposition
+import QGDEVS.Witness
+import QGDEVS.BranchEnergy
+import QGDEVS.DephasedState
+import QGDEVS.Concurrence
+import QGDEVS.DiosiPenrose
+import QGDEVS.GravityDominance
+import QGDEVS.DephasingThreshold
