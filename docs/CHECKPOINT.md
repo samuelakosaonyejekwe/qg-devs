@@ -29,6 +29,8 @@ _Last updated: 2026-10-19 (session in progress). If a session is interrupted, re
   - (4) a visible Play/Pause control and auto-play on every animated view, plus "Play all" for synchronised comparisons;
   - (5) a visual QA pass of all views in both themes at 1440 px and 360 px.
   - (6) Player bug: Play at the last sample does nothing (must rewind; loop on by default; start at t=0). Invisible dynamics, e.g. S06 vacuum with g~1e-10: use visible physical defaults, resolve motion in time (≥24 samples per period), show a "below display resolution" notice and an opt-in labelled MAGNIFIED deviation view; Playwright frame-diff checks.
+  - (7) S07: environmental-only default is live (commit 0b52566). UI work remaining: opt-in collapse toggles, time-window selector, trail, synced 2-D plot, legend colours.
+  - (8) RESET = exact first-visit state per route: defaults, all outputs and caches cleared, auto-run pages show their original default result at t=0. Playwright snapshot-equality test on every route.
 - **Then:** verify (pytest, `cd web && npm run typecheck && npm test && npm run build`), add a 0.2.1 entry to `qgdevs/release_notes.json`, bump the version, commit with an explicit file list, and deploy. The server build uses the full Dockerfile: `sudo docker build -t qgdevs:<ver> .` then `run` (see Live system).
 
 ## Rules
