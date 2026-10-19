@@ -1,5 +1,5 @@
 # Reverse proxy with automatic TLS and security headers. Replace the site address with your own domain.
-# CSP is report-only until the web app is verified under it (then rename to Content-Security-Policy).
+# CSP enforced (the web app is verified with 0 violations under this policy).
 63-186-135-183.sslip.io {
   encode zstd gzip
   header {
@@ -9,7 +9,7 @@
     Referrer-Policy "same-origin"
     Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
     Cross-Origin-Opener-Policy "same-origin"
-    Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+    Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
     -Server
   }
   reverse_proxy 127.0.0.1:8000 {
