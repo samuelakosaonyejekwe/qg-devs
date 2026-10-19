@@ -1,6 +1,11 @@
 # Development checkpoint and resume instructions
 
-_Last updated: 2026-10-19 (session in progress). If a session is interrupted, resume from "IN PROGRESS" below._
+_Last updated: 2026-10-19 21:10. If a session is interrupted, resume from "IN PROGRESS" below._
+
+**Resume protocol after an interruption.** Background agents die with the session; their work survives on disk.
+1. `cd /home/akosa/grqg && git status --short web/`. The web agent's UNCOMMITTED work (Tex/Equations components, Reset semantics, player and visibility fixes, hardening tests) lives in the working tree. Never `git checkout`/`reset`/`clean` it.
+2. Continue the remaining web items from the list below on top of that tree, then run `cd web && npm run typecheck && npm test && npm run build` and the Playwright scripts in `web/scripts/` (Playwright is in the session scratchpad; reinstall with `npm i playwright` in a scratch directory if needed).
+3. Release as described in item 3 (Release) and update this file.
 
 ## Live system
 
