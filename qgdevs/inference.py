@@ -90,6 +90,7 @@ def adaptive_metropolis(model: CouplingModel, counts: dict, n_steps: int = 6000,
         chain.append(th.copy())
         if i >= 500 and i % 100 == 0:
             cov = sd * np.cov(np.array(chain[i // 2:]).T) + 1e-10 * np.eye(d)
+    burn = min(burn, n_steps // 3)  # never discard the whole chain
     ch = np.array(chain[burn:])
     summ = {}
     for k, p in enumerate(model.params):

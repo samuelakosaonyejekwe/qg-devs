@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -305,7 +305,7 @@ def gravity_nbody(b: NBodyIn):
 
 
 @app.post("/api/interferometry/sg")
-def interferometry_sg(sc: ScenarioIn, tau: float = 0.25):
+def interferometry_sg(sc: ScenarioIn, tau: float = Query(0.25, gt=0, le=100)):
     from .interferometry import sg_bmv_phases
     d = sc.design.to()
     return J(sg_bmv_phases(d.mass_A, d.mass_B, d.separation, tau, d.time, d.dx_A,
@@ -333,8 +333,11 @@ def wavepacket2d(mass: float = 1e-25, sigma: float = 5e-7, split_k: float = 2e6,
 
 
 @app.post("/api/optomech/evolve")
-def optomech(m: float = 1e-14, d: float = 1e-4, omega: float = 6.283, T: float = 0.0, gamma: float = 1e-4,
-             n_init: float = 0.0, t_final: float = 100.0, squeeze_r: float = 0.0, coupling_scale: float = 1.0):
+def optomech(m: float = Query(1e-14, gt=0, le=1e3), d: float = Query(1e-4, gt=0, le=10),
+             omega: float = Query(6.283, gt=0, le=1e12), T: float = Query(0.0, ge=0, le=2000),
+             gamma: float = Query(1e-4, ge=0, le=1e9), n_init: float = Query(0.0, ge=0, le=1e9),
+             t_final: float = Query(100.0, gt=0, le=1e6), squeeze_r: float = Query(0.0, ge=0, le=5),
+             coupling_scale: float = Query(1.0, ge=0, le=1e6)):
     from .optomech import evolve_coupled_oscillators
     return J(evolve_coupled_oscillators(m, m, d, omega, T, gamma, n_init, t_final, 200, coupling_scale, squeeze_r))
 
@@ -530,6 +533,16 @@ async def data_validate(file: UploadFile = File(...)):
         raise HTTPException(422, f"could not parse: {e}")
     out = {"filename": file.filename, "bytes": len(raw), "kind": parsed["kind"], "sha256": __import__("hashlib").sha256(raw).hexdigest()}
     c = parsed["content"]
+    if parsed["kind"] == "json":
+        try:
+            arr = np.asarray(c.get("re", c) if isinstance(c, dict) else c, dtype=float)
+            if isinstance(c, dict) and "im" in c:
+                arr = arr + 1j * np.asarray(c["im"], dtype=float)
+            if arr.ndim in (1, 2):
+                parsed = {"kind": "array", "content": arr}
+                c = arr
+        except (TypeError, ValueError):
+            pass
     if parsed["kind"] == "array":
         out["shape"] = list(np.shape(c))
         if np.ndim(c) == 2 and np.shape(c)[0] == np.shape(c)[1]:
@@ -604,7 +617,9 @@ def unblind(u: UnblindIn, r: str = Depends(need("researcher"))):
     from .evidence import BlindVault
     try:
         return J(BlindVault(paths()["vault"], _ledger()).unblind(u.dataset_id, u.prereg_id, u.actor))
-    except (PermissionError, KeyError) as e:
+    except KeyError:
+        raise HTTPException(404, "unknown dataset")
+    except PermissionError as e:
         raise HTTPException(403, str(e))
 
 

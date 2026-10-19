@@ -81,10 +81,15 @@ class JobStore:
         with self._c() as c:
             return [dict(r) for r in c.execute(q, args + (limit,))]
 
-    def claim(self, worker: str) -> dict | None:
+    def claim(self, worker: str, types: list[str] | None = None) -> dict | None:
         with self._c() as c:
             c.execute("begin immediate")
-            r = c.execute("select id from jobs where status='queued' order by priority, created limit 1").fetchone()
+            q = "select id from jobs where status='queued'"
+            args: tuple = ()
+            if types:
+                q += f" and type in ({','.join('?' * len(types))})"
+                args = tuple(types)
+            r = c.execute(q + " order by priority, created limit 1", args).fetchone()
             if not r:
                 c.execute("commit")
                 return None
@@ -127,10 +132,13 @@ class JobStore:
 
     def schedule_due(self, name: str, every_s: float) -> bool:
         with self._c() as c:
+            c.execute("begin immediate")  # atomic check-and-set: safe with several worker processes
             r = c.execute("select last_run from schedule where name=?", (name,)).fetchone()
             if r and time.time() - r["last_run"] < every_s:
+                c.execute("commit")
                 return False
             c.execute("insert or replace into schedule values (?,?)", (name, time.time()))
+            c.execute("commit")
         return True
 
     def schedule_state(self) -> dict:
@@ -299,7 +307,13 @@ def run_job(store: JobStore, job: dict) -> None:
         store.finish(job["id"], "failed", error=traceback.format_exc(limit=5))
 
 
-def worker_loop(stop: threading.Event | None = None, poll_s: float = 2.0, scheduler: bool = True) -> None:
+FAST_TYPES = ["fetch_source", "dossier", "backup", "inference"]
+
+
+def worker_loop(stop: threading.Event | None = None, poll_s: float = 2.0, scheduler: bool = True,
+                types: list[str] | None = None) -> None:
+    """types=None: claim any job; otherwise only the listed types (e.g. a fast lane that never waits behind
+    multi-minute studies)."""
     store = JobStore()
     name = f"{socket.gethostname()}-{os.getpid()}"
     last_recover = 0.0
@@ -311,7 +325,7 @@ def worker_loop(stop: threading.Event | None = None, poll_s: float = 2.0, schedu
                 for sname, every, jtype, params in SCHEDULE:
                     if store.schedule_due(sname, every):
                         store.submit(jtype, params, priority=8)
-        job = store.claim(name)
+        job = store.claim(name, types)
         if job is None:
             time.sleep(poll_s)
             continue
@@ -329,4 +343,6 @@ def worker_loop(stop: threading.Event | None = None, poll_s: float = 2.0, schedu
 
 
 if __name__ == "__main__":
-    worker_loop()
+    lane = os.environ.get("QGDEVS_WORKER_LANE", "all")
+    worker_loop(scheduler=os.environ.get("QGDEVS_SCHEDULER", "1") == "1",
+                types=FAST_TYPES if lane == "fast" else None)

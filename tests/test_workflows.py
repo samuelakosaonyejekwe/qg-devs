@@ -86,7 +86,8 @@ def test_execution_requires_approval_and_uses_solvers():
     cfg.approved = True
     out = thought.execute(cfg)
     ref = bmv.predict(thought.to_design(cfg))
-    assert out["prediction"]["delta_phi_total_rad"] == ref["delta_phi_total_rad"]
+    assert out["prediction"]["delta_phi_gravity_rad"] == pytest.approx(ref["delta_phi_gravity_rad"], rel=1e-12)
+    assert out["prediction"]["delta_phi_total_rad"] != ref["delta_phi_total_rad"]  # Casimir channel included
     assert "not physical evidence" in out["evidence_status"]
 
 
@@ -231,3 +232,27 @@ def test_backup_restore_roundtrip(tmp_path, monkeypatch):
     r = qgdevs.backup.restore(a, tmp_path / "restored")
     assert r["ledger_chain"]["valid"] and (tmp_path / "restored" / "vault" / "abc").read_bytes() == b"data"
     importlib.reload(qgdevs.jobs)
+
+
+def test_fast_lane_and_atomic_schedule(tmp_path):
+    from qgdevs import jobs
+    st = jobs.JobStore(tmp_path / "j.db")
+    st.submit("calibration_tradeoff", {})
+    fid = st.submit("dossier", {})
+    assert st.claim("fast", jobs.FAST_TYPES)["id"] == fid
+    assert st.schedule_due("x", 100) and not st.schedule_due("x", 100)
+
+
+def test_backend_fixes_from_ui_testing():
+    from qgdevs import inference as inf
+    m = inf.CouplingModel(bmv.BMVDesign(geometry="linear"), qm.PAULI_SETTINGS)
+    P = m.probabilities(np.array([1.0, 0.1, 0.0, 0.0]))
+    counts = {s: np.round(P[k] * 500).astype(int).tolist() for k, s in enumerate(m.settings)}
+    assert inf.adaptive_metropolis(m, counts, n_steps=900)["n_samples"] > 0
+    charged = bmv.predict(bmv.BMVDesign(), extra_energies={k: 1e-20 for k in ("LL", "RR")} | {"LR": 0.0, "RL": 0.0})
+    assert charged["warnings"]
+    cfg = thought.interpret(PROMPT)
+    cfg.approved = True
+    out = thought.execute(cfg)
+    qg = next(r for r in out["competing_models"] if r["id"] == "QG-COH")
+    assert out["prediction"]["negativity"] == pytest.approx(qg["negativity"], rel=1e-6)

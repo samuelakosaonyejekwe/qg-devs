@@ -6,3 +6,4 @@ import QGDEVS.Concurrence
 import QGDEVS.DiosiPenrose
 import QGDEVS.GravityDominance
 import QGDEVS.DephasingThreshold
+import QGDEVS.Separability

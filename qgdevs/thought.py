@@ -257,7 +257,8 @@ def execute(cfg: ThoughtConfig) -> dict:
         env = Environment(pressure=q.get("pressure", 1e-15), T_gas=q.get("temperature", 0.15),
                           T_env=q.get("temperature", 0.15), T_int=q.get("temperature", 0.15), material=cfg.material)
         sc, extra = scenario_for(d, env)
-        out["prediction"] = bmv.predict(d)
+        d.gamma_A, d.gamma_B = sc.gamma_env_A, sc.gamma_env_B
+        out["prediction"] = bmv.predict(d, extra_energies=sc.nongrav_energies)
         out["decoherence"] = extra["decoherence_A"]
         out["competing_models"] = predictions_table(sc)
         out["next_steps"] = ["open the design in the Virtual Laboratory (Suite 9) for the full dossier",
@@ -279,6 +280,8 @@ def execute(cfg: ThoughtConfig) -> dict:
         out["assumptions_used"] = ["Rb-87 two-photon k_eff at 780 nm", "standard gravity g_n"]
     elif cfg.family == "orbit":
         from .gravity import perihelion_precession_numeric, perihelion_precession_analytic
+        out["note"] = ("orbit parameters are not parsed from prompts yet: the Mercury reference case is shown; use "
+                       "Suite 2 to set mass, semi-major axis and eccentricity")
         out["mercury_precession_rad_per_orbit"] = {"numeric": perihelion_precession_numeric(1.98847e30, 5.7909e10, 0.2056),
                                                    "analytic": perihelion_precession_analytic(1.98847e30, 5.7909e10, 0.2056)}
     return out

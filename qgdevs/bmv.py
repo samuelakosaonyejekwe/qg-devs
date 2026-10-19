@@ -269,7 +269,14 @@ def predict(design: BMVDesign, finite_size: bool = True, extra_energies: dict[st
     U = local_phase_correction(ph)
     rho_c = U @ rho @ U.conj().T
     check = qm.check_density_matrix(rho)
+    warnings = []
+    big = max(abs(v) for v in ph.values())
+    if big > 1e6:
+        warnings.append(f"branch phases reach {big:.2e} rad: Δφ mod 2π is resolved only to ~{big * 2.2e-16:.1e} rad and "
+                        "the result is dominated by non-gravitational (e.g. Coulomb) energies; entanglement measures "
+                        "are not physically meaningful here — remove the residual charge or screen it")
     out = {
+        "warnings": warnings,
         "design": design.as_dict(),
         "admissibility_issues": issues,
         "branch_distances_m": branch_distances(design),
