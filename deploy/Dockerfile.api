@@ -1,0 +1,25 @@
+# Backend image without the web stage (used when the web app is deployed separately or not yet built).
+FROM debian:bookworm-slim AS native
+RUN apt-get update && apt-get install -y --no-install-recommends g++ make && rm -rf /var/lib/apt/lists/*
+WORKDIR /src/cpp
+COPY cpp/ ./
+RUN make -j"$(nproc)" && make test
+
+FROM python:3.12-slim-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 QGDEVS_HOME=/data \
+    QGDEVS_NATIVE_LIB=/app/cpp/build/libqgdevs_native.so
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 ca-certificates tini \
+    && rm -rf /var/lib/apt/lists/* && useradd --system --uid 10001 --home /app qgdevs
+WORKDIR /app
+COPY pyproject.toml ./
+COPY qgdevs/ ./qgdevs/
+RUN pip install --no-cache-dir ".[llm]" boto3
+COPY --from=native /src/cpp/build/libqgdevs_native.so ./cpp/build/libqgdevs_native.so
+COPY lean/proof_status.json ./lean/proof_status.json
+COPY matlab/ ./matlab/
+COPY deploy/start.sh /usr/local/bin/qgdevs-start
+RUN chmod +x /usr/local/bin/qgdevs-start && mkdir -p /data && chown -R qgdevs /data
+USER qgdevs
+EXPOSE 8000
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["qgdevs-start", "all"]

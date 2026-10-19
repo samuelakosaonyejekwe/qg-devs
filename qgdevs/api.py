@@ -703,6 +703,28 @@ def instruments():
 
 # ----------------------------------------------------------------------------- web app
 DIST = ROOT / "web" / "dist"
+if not DIST.exists():
+    from fastapi.responses import HTMLResponse
+
+    @app.get("/", include_in_schema=False)
+    def interim_home():
+        from .suites import SUITES
+        rows = "".join(f"<tr><td>{x['n']}</td><td>{x['name']}</td><td>{x['maturity']}</td></tr>" for x in SUITES)
+        return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>QG-DEVS</title>
+<style>body{{font-family:system-ui,sans-serif;max-width:900px;margin:2rem auto;padding:0 16px;line-height:1.5}}
+table{{border-collapse:collapse;width:100%}}td{{border-bottom:1px solid #ddd;padding:4px 8px}}
+a{{color:#2563eb}}.note{{background:#fff7e6;border:1px solid #f0c36d;padding:8px 12px;border-radius:6px}}</style></head>
+<body><h1>QG-DEVS — Quantum Gravity Discovery and Experimental Verification System</h1>
+<p class="note">The interactive web application is being finalised. All scientific engines are live through the API below.
+Results are computational predictions, not physical evidence.</p>
+<ul><li><a href="/api/docs">Interactive API (run any suite: predictions, dossiers, discrimination, thought experiments…)</a></li>
+<li><a href="/api/health">System health</a> · <a href="/api/models">Competing hypotheses</a> · <a href="/api/vv/latest">Latest verification run</a>
+· <a href="/api/lean/status">Lean proofs</a> · <a href="/api/data/catalogue">Data catalogue</a></li>
+<li><a href="https://github.com/samuelakosaonyejekwe/qg-devs">Source, results and documentation</a></li></ul>
+<h2>The 18 suites</h2><table>{rows}</table></body></html>""")
+
+
 if DIST.exists():
     app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
 
