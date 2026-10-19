@@ -323,6 +323,27 @@ def outcome_probabilities(rho: np.ndarray, setting: str) -> np.ndarray:
     return p / p.sum()
 
 
+_SETTING_VECTORS: dict[str, np.ndarray] = {}
+
+
+def setting_vectors(settings) -> np.ndarray:
+    """Stacked outcome eigenvectors, shape (S, 4, 4): [setting, outcome, component]."""
+    out = []
+    for s in settings:
+        if s not in _SETTING_VECTORS:
+            Va, Vb = _eigvecs(s[0]), _eigvecs(s[1])
+            _SETTING_VECTORS[s] = np.array([np.kron(Va[:, a], Vb[:, b]) for a, b in [(0, 0), (0, 1), (1, 0), (1, 1)]])
+        out.append(_SETTING_VECTORS[s])
+    return np.array(out)
+
+
+def outcome_probabilities_all(rho: np.ndarray, V: np.ndarray) -> np.ndarray:
+    """Vectorised Born probabilities for many settings: p[s, k] = <v_sk| rho |v_sk>."""
+    p = np.real(np.einsum("ski,ij,skj->sk", V.conj(), rho, V))
+    p = np.clip(p, 0, None)
+    return p / p.sum(axis=1, keepdims=True)
+
+
 def apply_readout_error(p: np.ndarray, eps_a: float, eps_b: float) -> np.ndarray:
     """Independent symmetric bit-flip readout error on each qubit."""
     Ma = np.array([[1 - eps_a, eps_a], [eps_a, 1 - eps_a]])
