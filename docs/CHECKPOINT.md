@@ -30,11 +30,8 @@ _Last updated: 2026-10-19 (session in progress). If a session is interrupted, re
    - (f) 2× screenshots in light and dark into `docs/screenshots/`.
 
    Note: commit 5c0a292 accidentally included some intermediate web files; the finished update supersedes them.
-2. **Science gaps (lead developer), in order:**
-   - (i) CSL collapse model (decoherence rate for uniform spheres, Fourier form factor) plus the CSL hypothesis;
-   - (ii) patch-potential and magnetic (diamagnetic gradient) backgrounds in `em.py`;
-   - (iii) Stern–Gerlach imperfect-recombination ("Humpty-Dumpty") coherence loss in `interferometry.py`;
-   - each with V&V benchmarks and tests. Then regenerate docs (`tools/gen_docs.py --slow`) and re-run `tools/flagship_study.py`.
+2. **Science gaps — DONE (commit dd33170):** CSL-COLL hypothesis (8 hypotheses in total); patch-dipole, diamagnetic and NV spin–spin backgrounds with dossier limits (p ≤ 3.3e-29 C m, B ≤ 0.20 mT); Stern–Gerlach recombination visibility and gradient-precision requirement (≈5e-9 relative); pytest 107 passed.
+   - Running: `tools/flagship_study.py` regenerating `docs/FLAGSHIP_RESULTS.md` with all 8 hypotheses. If it was interrupted, re-run it and commit `docs/FLAGSHIP_RESULTS.md` and `docs/flagship_results.json`. Then run `tools/gen_docs.py --slow` and commit `docs/`.
 3. **Release 0.2.0:** run pytest, then `cd web && npm test && npm run build`, commit with an explicit file list (never `commit -a` while agents are editing), push, deploy (commands above), and verify live: `/`, `/api/health`, `/api/release`, `/api/lean/status` (43 proved).
 
 ## Rules
