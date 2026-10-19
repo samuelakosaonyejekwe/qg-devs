@@ -60,12 +60,13 @@ R["benchmark_discrimination"] = [{k: r[k] for k in ("true", "alternative", "D_pe
 # 4. Synthetic measurement → reconstruction → inference (closing the loop on SYNTHETIC data)
 F = protocol_frame(sc)
 from qgdevs.models import HYPOTHESES  # noqa
-rec = sigproc.simulate_counts(F @ HYPOTHESES["QG-COH"].state(sc) @ F.conj().T, qm.PAULI_SETTINGS, 2000,
-                              sigproc.DetectorModel(), 7, "QG-COH")
-R["synthetic_loop"] = {"label": rec["data_label"], "sha256": rec["sha256"],
-                       "witness": sigproc.witness_estimate(rec["counts"], -1 if R["benchmark_predictions"][0]["witness_cpk"] < 0 and
-                                                           bmv.entangling_phase(bmv.phases_from_energies(sc.grav_energies(), bose.time)) < 0 else 1,
-                                                           0.01, 0.01, n_boot=300)}
+rho_meas = F @ HYPOTHESES["QG-COH"].state(sc) @ F.conj().T
+rec = sigproc.simulate_counts(rho_meas, qm.PAULI_SETTINGS, 2000, sigproc.DetectorModel(), 7, "QG-COH")
+# preregistrable choice of witness variant: the one the model predicts to be negative (same rule as the API)
+ev = qm.pauli_expectations(rho_meas)
+sign = 1 if 1 - ev["XX"] - ev["YZ"] - ev["ZY"] <= 1 - ev["XX"] + ev["YZ"] + ev["ZY"] else -1
+R["synthetic_loop"] = {"label": rec["data_label"], "sha256": rec["sha256"], "witness_sign_variant": sign,
+                       "witness": sigproc.witness_estimate(rec["counts"], sign, 0.01, 0.01, n_boot=300)}
 m = inf.CouplingModel(bose, qm.PAULI_SETTINGS)
 post = inf.adaptive_metropolis(m, rec["counts"], n_steps=3000 if QUICK else 6000, burn=1000 if QUICK else 2000, seed=3)
 R["synthetic_loop"]["lambda_posterior"] = post["summary"]["lambda"]

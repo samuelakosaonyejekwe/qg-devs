@@ -1,0 +1,812 @@
+{
+ "generated_utc": "2026-10-19T12:40:47.949412+00:00",
+ "version": "0.1.0",
+ "code_sha256": "0e35432ec83abbab3a68b5718bebea6cddcbacbcbd8c9bc176e0a36e23170dcd",
+ "benchmark_bose2017": {
+  "design": {
+   "mass_A": 1e-14,
+   "mass_B": 1e-14,
+   "density": 3510.0,
+   "separation": 0.00045,
+   "dx_A": 0.00025,
+   "dx_B": 0.00025,
+   "geometry": "linear",
+   "angle_deg": 90.0,
+   "time": 2.5,
+   "gamma_A": 0.0,
+   "gamma_B": 0.0,
+   "radius_A": 8.794302999328026e-07,
+   "radius_B": 8.794302999328026e-07
+  },
+  "delta_phi_rad": -0.31393449257516837,
+  "concurrence_ideal": 0.15632346132359945,
+  "witness_ppt": -0.07816173066179977
+ },
+ "benchmark_environment": {
+  "environment": {
+   "pressure": 1e-15,
+   "T_gas": 0.15,
+   "T_env": 0.15,
+   "T_int": 0.15,
+   "material": "diamond",
+   "residual_charge_e": 0.0,
+   "include_casimir": true,
+   "readout_error": 0.01
+  },
+  "decoherence": {
+   "gas_collisions": {
+    "rate_s": 0.012491887032975832,
+    "regime": "saturated (\u0394x >> \u03bb_gas)"
+   },
+   "blackbody_scattering": {
+    "rate_s": 8.198079466215866e-16,
+    "regime": "long-wavelength (\u0394x << \u03bb_th)"
+   },
+   "blackbody_absorption": {
+    "rate_s": 0.0,
+    "regime": "long-wavelength (\u0394x << \u03bb_th)"
+   },
+   "blackbody_emission": {
+    "rate_s": 0.0,
+    "regime": "long-wavelength (\u0394x << \u03bb_th)"
+   }
+  },
+  "total_rate_s": 0.012491887032976653,
+  "delta_phi_nongrav_rad": -0.018347373818695435
+ },
+ "diosi_penrose": {
+  "rate_s": 86.10619705867236,
+  "coherence_after_t": 3.246268213995555e-94,
+  "E_delta_J": 9.080516868712418e-33
+ },
+ "casimir_gravity_distance_10pct_m": 0.00015694180904273291,
+ "max_residual_charge_e": 0.0,
+ "eft_one_loop_relative": 1.6835605172782962e-63,
+ "stern_gerlach": {
+  "phases": {
+   "LL": 0.49224928435786397,
+   "LR": 1.0031935108092018,
+   "RL": 0.33897926739086476,
+   "RR": 0.49224928435786397
+  },
+  "delta_phi": -0.35767420948433865,
+  "total_time": 3.5,
+  "acceleration": 0.002,
+  "required_gradient_T_per_m": 2154066.4372346494
+ },
+ "benchmark_predictions": [
+  {
+   "id": "QG-COH",
+   "negativity": 0.06500918100678978,
+   "witness_cpk": -0.2599429530074645,
+   "coherence_A": 0.9559065835506414
+  },
+  {
+   "id": "QG-EFT1",
+   "negativity": 0.06500918100678978,
+   "witness_cpk": -0.2599429530074645,
+   "coherence_A": 0.9559065835506414
+  },
+  {
+   "id": "SC-MF",
+   "negativity": 0.0,
+   "witness_cpk": 0.0428466949203877,
+   "coherence_A": 0.9692121088740823
+  },
+  {
+   "id": "CC-KTM",
+   "negativity": 0.0,
+   "witness_cpk": 0.03972354000329892,
+   "coherence_A": 0.8170439975971483
+  },
+  {
+   "id": "DP-COLL",
+   "negativity": 0.0,
+   "witness_cpk": 1.0,
+   "coherence_A": 3.1031291577295135e-94
+  },
+  {
+   "id": "NULL-NG",
+   "negativity": 0.0,
+   "witness_cpk": 0.11186982619572824,
+   "coherence_A": 0.9692121088740822
+  }
+ ],
+ "benchmark_discrimination": [
+  {
+   "true": "QG-COH",
+   "alternative": "QG-EFT1",
+   "D_per_shot": 0.0,
+   "shots_per_setting": Infinity,
+   "verdict": "indistinguishable",
+   "nuisance_at_bounds": []
+  },
+  {
+   "true": "QG-COH",
+   "alternative": "SC-MF",
+   "D_per_shot": 0.003385776366254714,
+   "shots_per_setting": 164.43414882579407,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": []
+  },
+  {
+   "true": "QG-COH",
+   "alternative": "CC-KTM",
+   "D_per_shot": 0.019468757890758383,
+   "shots_per_setting": 28.596444520164347,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "kappa_cc"
+   ]
+  },
+  {
+   "true": "QG-COH",
+   "alternative": "DP-COLL",
+   "D_per_shot": 0.3722368359615014,
+   "shots_per_setting": 1.4956533075548828,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "dp_convention"
+   ]
+  },
+  {
+   "true": "QG-COH",
+   "alternative": "NULL-NG",
+   "D_per_shot": 0.01341235225121782,
+   "shots_per_setting": 41.50929266333824,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "QG-EFT1",
+   "alternative": "QG-COH",
+   "D_per_shot": 0.0,
+   "shots_per_setting": Infinity,
+   "verdict": "indistinguishable",
+   "nuisance_at_bounds": []
+  },
+  {
+   "true": "QG-EFT1",
+   "alternative": "SC-MF",
+   "D_per_shot": 0.003385776366254714,
+   "shots_per_setting": 164.43414882579407,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": []
+  },
+  {
+   "true": "QG-EFT1",
+   "alternative": "CC-KTM",
+   "D_per_shot": 0.019468757890758383,
+   "shots_per_setting": 28.596444520164347,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "kappa_cc"
+   ]
+  },
+  {
+   "true": "QG-EFT1",
+   "alternative": "DP-COLL",
+   "D_per_shot": 0.3722368359615014,
+   "shots_per_setting": 1.4956533075548828,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "dp_convention"
+   ]
+  },
+  {
+   "true": "QG-EFT1",
+   "alternative": "NULL-NG",
+   "D_per_shot": 0.01341235225121782,
+   "shots_per_setting": 41.50929266333824,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "SC-MF",
+   "alternative": "QG-COH",
+   "D_per_shot": 0.002960003092749239,
+   "shots_per_setting": 188.08671391707523,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale"
+   ]
+  },
+  {
+   "true": "SC-MF",
+   "alternative": "QG-EFT1",
+   "D_per_shot": 0.002960003092749239,
+   "shots_per_setting": 188.08671391707523,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale"
+   ]
+  },
+  {
+   "true": "SC-MF",
+   "alternative": "CC-KTM",
+   "D_per_shot": 0.025791656112441528,
+   "shots_per_setting": 21.585944402811023,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "kappa_cc"
+   ]
+  },
+  {
+   "true": "SC-MF",
+   "alternative": "DP-COLL",
+   "D_per_shot": 0.38393450093319986,
+   "shots_per_setting": 1.4500839428245333,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "dp_convention"
+   ]
+  },
+  {
+   "true": "SC-MF",
+   "alternative": "NULL-NG",
+   "D_per_shot": 0.01032140687271598,
+   "shots_per_setting": 53.94005504920899,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "CC-KTM",
+   "alternative": "QG-COH",
+   "D_per_shot": 0.016597095857220256,
+   "shots_per_setting": 33.54425736219303,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale"
+   ]
+  },
+  {
+   "true": "CC-KTM",
+   "alternative": "QG-EFT1",
+   "D_per_shot": 0.016597095857220256,
+   "shots_per_setting": 33.54425736219303,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale"
+   ]
+  },
+  {
+   "true": "CC-KTM",
+   "alternative": "SC-MF",
+   "D_per_shot": 0.024181322445484616,
+   "shots_per_setting": 23.0234411767477,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale"
+   ]
+  },
+  {
+   "true": "CC-KTM",
+   "alternative": "DP-COLL",
+   "D_per_shot": 0.24794095027187188,
+   "shots_per_setting": 2.245442934251527,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "dp_convention"
+   ]
+  },
+  {
+   "true": "CC-KTM",
+   "alternative": "NULL-NG",
+   "D_per_shot": 0.027283977782576612,
+   "shots_per_setting": 20.40528178611526,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "DP-COLL",
+   "alternative": "QG-COH",
+   "D_per_shot": 0.5391530527406133,
+   "shots_per_setting": 1.0326144905784858,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "DP-COLL",
+   "alternative": "QG-EFT1",
+   "D_per_shot": 0.5391530527406133,
+   "shots_per_setting": 1.0326144905784858,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "DP-COLL",
+   "alternative": "SC-MF",
+   "D_per_shot": 0.6069587771525963,
+   "shots_per_setting": 0.9172571117784725,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "DP-COLL",
+   "alternative": "CC-KTM",
+   "D_per_shot": 0.12591848534572805,
+   "shots_per_setting": 4.421410036588182,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B",
+    "kappa_cc"
+   ]
+  },
+  {
+   "true": "DP-COLL",
+   "alternative": "NULL-NG",
+   "D_per_shot": 0.48227291817756246,
+   "shots_per_setting": 1.1544028990958297,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "NULL-NG",
+   "alternative": "QG-COH",
+   "D_per_shot": 0.012261832979871363,
+   "shots_per_setting": 45.404080761294516,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "NULL-NG",
+   "alternative": "QG-EFT1",
+   "D_per_shot": 0.012261832979871363,
+   "shots_per_setting": 45.404080761294516,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "NULL-NG",
+   "alternative": "SC-MF",
+   "D_per_shot": 0.009606654532791971,
+   "shots_per_setting": 57.95329196019085,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B"
+   ]
+  },
+  {
+   "true": "NULL-NG",
+   "alternative": "CC-KTM",
+   "D_per_shot": 0.024838579543224427,
+   "shots_per_setting": 22.41421470703437,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "env_decoherence_scale",
+    "mass_scale",
+    "local_phase_A",
+    "local_phase_B",
+    "kappa_cc"
+   ]
+  },
+  {
+   "true": "NULL-NG",
+   "alternative": "DP-COLL",
+   "D_per_shot": 0.3666170505868514,
+   "shots_per_setting": 1.518579820574093,
+   "verdict": "distinguishable",
+   "nuisance_at_bounds": [
+    "dp_convention"
+   ]
+  }
+ ],
+ "synthetic_loop": {
+  "label": "SYNTHETIC",
+  "sha256": "3bb898d7acb8aa9279dd0a40a8175cde81d21f065c991e240e755d5baf7af067",
+  "witness_sign_variant": 1,
+  "witness": {
+   "witness": -0.2526030820491464,
+   "stderr": 0.03380784516669195,
+   "bootstrap_ci95": [
+    -0.3192419825072888,
+    -0.18541753436068314
+   ],
+   "z_score": 7.471729736209723,
+   "p_value_one_sided": 3.9573719015272096e-14,
+   "sign_variant": 1,
+   "readout_correction_factor": 1.0412328196584757
+  },
+  "lambda_posterior": {
+   "mean": 1.0460623509555342,
+   "std": 0.07929138679394457,
+   "median": 1.0466764180003798,
+   "ci95": [
+    0.8806872561699991,
+    1.207008840990483
+   ],
+   "unit": "1"
+  },
+  "decay_posterior": {
+   "mean": 0.0266950932503133,
+   "std": 0.0033184685464756757,
+   "median": 0.026623265982498614,
+   "ci95": [
+    0.020444766040360836,
+    0.03335743149827667
+   ],
+   "unit": "1"
+  }
+ },
+ "scaling_far": {
+  "raw_exponents": {
+   "mass": 2.000000032170343,
+   "separation": -2.999795133818042,
+   "branch_separation": 1.9998172263639913,
+   "time": 1.000007221564269
+  },
+  "rational_exponents": {
+   "mass": "2",
+   "separation": "-3",
+   "branch_separation": "2",
+   "time": "1"
+  },
+  "constant_exponents": {
+   "G": "1",
+   "hbar": "-1"
+  },
+  "dimensionally_consistent": true,
+  "expression": "G^1 \u00b7 hbar^-1 \u00b7 mass^2 \u00b7 separation^-3 \u00b7 branch_separation^2 \u00b7 time^1",
+  "log_prefactor": 54.80373563504487,
+  "r2_log": 0.9999999990735761,
+  "max_rel_residual": 0.0008230494546810352
+ },
+ "calibration_tradeoff": {
+  "study": "calibration_tradeoff",
+  "rows": [
+   {
+    "mass": 1.0275941535441733e-14,
+    "separation": 0.0005851391088977805,
+    "dx": 0.00020084776086707882,
+    "time": 2.8716236178431096,
+    "gamma_env": 0.009284257518278938,
+    "delta_phi": 0.0876050797730015,
+    "s_star_numeric": 2.6348204515358447,
+    "s_star_formula": 2.642950955081257,
+    "rel_diff": 0.003076297549063856
+   },
+   {
+    "mass": 8.381590699067374e-15,
+    "separation": 0.0005483107781461325,
+    "dx": 0.00023180372250762978,
+    "time": 1.8739842191826488,
+    "gamma_env": 0.0034780728146376855,
+    "delta_phi": 0.06613794070694273,
+    "s_star_numeric": 6.049085261183635,
+    "s_star_formula": 6.073598234370482,
+    "rel_diff": 0.004035988592088202
+   },
+   {
+    "mass": 1.7927226628014723e-14,
+    "separation": 0.00046144299396578344,
+    "dx": 0.00018407861532978044,
+    "time": 2.4710717585710107,
+    "gamma_env": 0.009011399507430526,
+    "delta_phi": 0.4122857120357477,
+    "s_star_numeric": 10.236598954396628,
+    "s_star_formula": 10.257435343792777,
+    "rel_diff": 0.002031344941282745
+   },
+   {
+    "mass": 8.984582263672061e-15,
+    "separation": 0.0003402125091741494,
+    "dx": 0.00014320697693220364,
+    "time": 1.008638101690374,
+    "gamma_env": 0.00782474171011435,
+    "delta_phi": 0.06523282832196572,
+    "s_star_numeric": 5.1121542843247445,
+    "s_star_formula": 5.132671000063531,
+    "rel_diff": 0.003997278558967109
+   },
+   {
+    "mass": 1.7797732401422687e-14,
+    "separation": 0.00038412262739581193,
+    "dx": 0.00017114863778496772,
+    "time": 2.9518429995030964,
+    "gamma_env": 0.08759630568856612,
+    "delta_phi": 0.7631807285549026,
+    "s_star_numeric": 2.4717665914620257,
+    "s_star_formula": 2.4757689013050723,
+    "rel_diff": 0.0016165926637727954
+   },
+   {
+    "mass": 1.6779922118078348e-14,
+    "separation": 0.0004623680566642302,
+    "dx": 0.00017711811137583215,
+    "time": 0.9016300219378172,
+    "gamma_env": 0.09013389105107182,
+    "delta_phi": 0.11952237157893048,
+    "s_star_numeric": 1.7314405293010333,
+    "s_star_formula": 1.7353646048671454,
+    "rel_diff": 0.0022612398311607196
+   },
+   {
+    "mass": 1.037692279456616e-14,
+    "separation": 0.00033475968374123107,
+    "dx": 0.00016304367513625864,
+    "time": 2.441707785855745,
+    "gamma_env": 0.026272714809586043,
+    "delta_phi": 0.3091694499067803,
+    "s_star_numeric": 3.402918395984227,
+    "s_star_formula": 3.4097275226072417,
+    "rel_diff": 0.0019969708951430285
+   },
+   {
+    "mass": 2.6139525803531216e-14,
+    "separation": 0.0003118778629992608,
+    "dx": 0.000143019945848745,
+    "time": 1.6483397072135093,
+    "gamma_env": 0.003922151533242043,
+    "delta_phi": 1.2172368305177603,
+    "s_star_numeric": 94.96764183662245,
+    "s_star_formula": 95.13995786383286,
+    "rel_diff": 0.0018111846071766993
+   }
+  ],
+  "candidate_relationship": "s* = 1 + |\u0394\u03c6_g| / (2 \u0393_env t)",
+  "max_rel_diff": 0.004035988592088202,
+  "interpretation": "If the independent calibration only bounds environmental decoherence to within a factor s_max \u2265 s*, absence of entanglement cannot falsify the coherent quantum model, because extra environmental dephasing could mimic the classical channel."
+ },
+ "optimised": {
+  "design": {
+   "mass_A": 9.801029391683349e-14,
+   "mass_B": 9.801029391683349e-14,
+   "density": 3510.0,
+   "separation": 0.0004234252019563014,
+   "dx_A": 0.0002034216006549853,
+   "dx_B": 0.0002034216006549853,
+   "geometry": "linear",
+   "angle_deg": 90.0,
+   "time": 0.133399223119111,
+   "gamma_A": 0.0,
+   "gamma_B": 0.0,
+   "radius_A": 1.8820247132396446e-06,
+   "radius_B": 1.8820247132396446e-06
+  },
+  "log10_total_time_s": 2.230474169677023,
+  "total_time_s": 170.00988346786662,
+  "witness_shots_per_setting": 50.0,
+  "predicted_witness": -1.1022224313265072,
+  "delta_phi_grav": -1.1494298421907334,
+  "delta_phi_nongrav": -0.0476177527310392,
+  "decoherence_rate_A": 0.05721051306364796,
+  "dominant_decoherence": "gas_collisions",
+  "constraints": {
+   "geometry_admissible": {
+    "ok": true,
+    "detail": []
+   },
+   "surface_gap": {
+    "ok": true,
+    "value_m": 0.00021623955187483678,
+    "required_m": 1e-05
+   },
+   "nongravitational_phase_fraction": {
+    "ok": "True",
+    "value": 0.04142728071187283,
+    "allowed": 0.1
+   }
+  },
+  "robust_discrimination": [
+   {
+    "true": "QG-COH",
+    "alternative": "CC-KTM",
+    "D_per_shot": 0.0841390974527198,
+    "best_alt_nuisance": {
+     "env_decoherence_scale": 0.5000000000000091,
+     "mass_scale": 0.99,
+     "local_phase_A": 0.011467404032810415,
+     "local_phase_B": -0.01146739560356428,
+     "kappa_cc": 1.0
+    },
+    "nuisance_at_bounds": [
+     "env_decoherence_scale",
+     "mass_scale",
+     "kappa_cc"
+    ],
+    "shots_per_setting": 6.616867446343012,
+    "verdict": "distinguishable"
+   },
+   {
+    "true": "QG-COH",
+    "alternative": "SC-MF",
+    "D_per_shot": 0.104997699503918,
+    "best_alt_nuisance": {
+     "env_decoherence_scale": 1.9999999999999956,
+     "mass_scale": 1.0099999999999987,
+     "local_phase_A": 0.04999999999999885,
+     "local_phase_B": -0.0499999999999998
+    },
+    "nuisance_at_bounds": [
+     "env_decoherence_scale",
+     "mass_scale",
+     "local_phase_A",
+     "local_phase_B"
+    ],
+    "shots_per_setting": 5.302375742801957,
+    "verdict": "distinguishable"
+   },
+   {
+    "true": "QG-COH",
+    "alternative": "NULL-NG",
+    "D_per_shot": 0.5512439850752294,
+    "best_alt_nuisance": {
+     "env_decoherence_scale": 1.9999999999999938,
+     "mass_scale": 0.9905102011014917,
+     "local_phase_A": 0.05,
+     "local_phase_B": -0.04999999999999999
+    },
+    "nuisance_at_bounds": [
+     "env_decoherence_scale",
+     "mass_scale",
+     "local_phase_A",
+     "local_phase_B"
+    ],
+    "shots_per_setting": 1.0099652240624535,
+    "verdict": "distinguishable"
+   }
+  ]
+ },
+ "optimised_dossier": {
+  "sha256": "462d88792ac2476fb83cc2e8368815ba2a9ffeeabbd70d6dc32424e1a739b753",
+  "consistency": {
+   "passed": false,
+   "problems": [
+    "technological readiness below 4: requirements exceed demonstrated capability"
+   ]
+  },
+  "readiness": {
+   "items": [
+    {
+     "capability": "spatial superposition of the test mass",
+     "required": "9.80e-14 kg over \u0394x = 2.03e-04 m",
+     "demonstrated": "4.15e-23 kg (Fein et al., Nat. Phys. 15, 1242 (2019): interference of molecules >25,000 Da)",
+     "gap_factor_mass": 2360927141.10192,
+     "trl": 1
+    },
+    {
+     "capability": "magnetic field gradient for Stern\u2013Gerlach splitting",
+     "required": "1.72e+07 T/m",
+     "demonstrated": "not established for this mass and splitting; requires dedicated engineering study",
+     "trl": 2
+    },
+    {
+     "capability": "spin coherence during free evolution",
+     "required": "1.13 s total sequence",
+     "demonstrated": "NV-centre electron-spin T2 is typically far below 1 s at accessible temperatures (sample dependent); must be measured for the chosen diamond",
+     "trl": 2
+    },
+    {
+     "capability": "gravitational interaction between micro-scale masses",
+     "required": "9.80e-14 kg sources",
+     "demonstrated": "9e-05 kg (Westphal et al., Nature 591, 225 (2021): 90 mg gold source mass)",
+     "trl": 2
+    }
+   ],
+   "overall_trl": 1,
+   "conclusion": "Conceptual design only. The required parameters exceed demonstrated capabilities by orders of magnitude; no apparatus meeting this specification is known to exist."
+  },
+  "environmental_requirements": {
+   "max_pressure": {
+    "value": 1.3103003501939332e-14,
+    "unit": "Pa",
+    "status": "CALCULATED_REQUIREMENT",
+    "basis": "collisional \u0393 t \u2264 0.1 at T_gas = 0.15 K"
+   },
+   "max_internal_temperature": {
+    "value": null,
+    "unit": "K",
+    "status": "UNVERIFIED_ASSUMPTION",
+    "basis": "Im \u03b5 = 0 assumed for this material: emission limit not computable; measure Im \u03b5"
+   },
+   "max_environment_temperature": {
+    "value": 4.345656337672475,
+    "unit": "K",
+    "status": "CALCULATED_REQUIREMENT",
+    "basis": "black-body scattering \u0393 t \u2264 budget"
+   },
+   "max_residual_charge": {
+    "value": 0.0,
+    "unit": "e",
+    "status": "CALCULATED_REQUIREMENT",
+    "basis": "|\u0394\u03c6_Coulomb + induced dipole| \u2264 0.05 rad with equal charges on both masses; even a single elementary charge exceeds the budget, so both masses must be exactly neutral or electrostatically screened"
+   },
+   "min_distance_casimir_10pct": {
+    "value": 0.00015694180904273291,
+    "unit": "m",
+    "status": "CALCULATED_REQUIREMENT",
+    "basis": "|U_CP| \u2264 0.1 |U_grav| at equal distance"
+   }
+  },
+  "tolerances": {
+   "centre separation": {
+    "sensitivity_rad_per_unit": 9772.806457863935,
+    "tolerance": 5.116237614607239e-06,
+    "unit": "m",
+    "relative_tolerance": 0.01208297850711127,
+    "status": "CALCULATED_REQUIREMENT",
+    "basis": "|\u2202\u0394\u03c6/\u2202x| \u03b4x \u2264 0.05 rad"
+   },
+   "branch separation (each)": {
+    "sensitivity_rad_per_unit": -14691.967098023893,
+    "tolerance": 3.4032202540614953e-06,
+    "unit": "m",
+    "relative_tolerance": 0.016729886320349784,
+    "status": "CALCULATED_REQUIREMENT",
+    "basis": "|\u2202\u0394\u03c6/\u2202x| \u03b4x \u2264 0.05 rad"
+   },
+   "mass (each)": {
+    "sensitivity_rad_per_unit": -23455299865180.387,
+    "tolerance": 2.1317143795814553e-15,
+    "unit": "kg",
+    "relative_tolerance": 0.021749902937647742,
+    "status": "CALCULATED_REQUIREMENT",
+    "basis": "|\u2202\u0394\u03c6/\u2202x| \u03b4x \u2264 0.05 rad"
+   },
+   "interaction time": {
+    "sensitivity_rad_per_unit": -8.616465787758543,
+    "tolerance": 0.005802843211080262,
+    "unit": "s",
+    "relative_tolerance": 0.0434998276256748,
+    "status": "CALCULATED_REQUIREMENT",
+    "basis": "|\u2202\u0394\u03c6/\u2202x| \u03b4x \u2264 0.05 rad"
+   }
+  }
+ },
+ "runtime_s": 956.7
+}
