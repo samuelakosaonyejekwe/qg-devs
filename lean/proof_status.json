@@ -1,0 +1,427 @@
+{
+  "library": "QGDEVS",
+  "lean_toolchain": "leanprover/lean4:v4.34.1",
+  "mathlib_rev": "v4.34.1",
+  "verification_command": "./check.sh",
+  "axiom_policy": "proved items depend only on [propext, Classical.choice, Quot.sound]; no sorry/admit/axiom in sources",
+  "dashboard_rule": "FORMALLY VERIFIED may only be shown for status == 'proved'",
+  "summary": {
+    "proved": 32,
+    "partial": 0,
+    "open": 2
+  },
+  "theorems": [
+    {
+      "group": "PhaseDecomposition",
+      "lean_name": "QGDEVS.phase_decomposition_existsUnique",
+      "file": "QGDEVS/PhaseDecomposition.lean",
+      "informal_statement": "For every real phase table φ : {L,R}×{L,R} → ℝ there is exactly one (α,β,γ,δ) ∈ ℝ⁴ with φ_ij = α + β z_i + γ z_j + δ z_i z_j for all i,j, where z_L = 1, z_R = −1.",
+      "assumptions": [
+        "none (all real phase tables)"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.decompose_phases"
+    },
+    {
+      "group": "PhaseDecomposition",
+      "lean_name": "QGDEVS.phase_decomposition_delta",
+      "file": "QGDEVS/PhaseDecomposition.lean",
+      "informal_statement": "If φ_ij = α + β z_i + γ z_j + δ z_i z_j for all i,j then 4δ = φ_LL + φ_RR − φ_LR − φ_RL (= Δφ).",
+      "assumptions": [
+        "the decomposition holds"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.entangling_phase"
+    },
+    {
+      "group": "PhaseDecomposition",
+      "lean_name": "QGDEVS.phase_decomposition_coeffs",
+      "file": "QGDEVS/PhaseDecomposition.lean",
+      "informal_statement": "The unique coefficients equal the closed forms used in decompose_phases: α = Σφ/4, β = (φLL+φLR−φRL−φRR)/4, γ = (φLL−φLR+φRL−φRR)/4, δ = Δφ/4.",
+      "assumptions": [
+        "the decomposition holds"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.decompose_phases"
+    },
+    {
+      "group": "PhaseDecomposition",
+      "lean_name": "QGDEVS.entanglingPhase_local_invariant",
+      "file": "QGDEVS/PhaseDecomposition.lean",
+      "informal_statement": "Δφ is invariant under adding arbitrary local phases a_i + b_j to the table (only δ is entangling).",
+      "assumptions": [
+        "none"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "WitnessProductBound",
+      "lean_name": "QGDEVS.Witness.cpk_product_bound",
+      "file": "QGDEVS/Witness.lean",
+      "informal_statement": "For real 3-vectors a, b with ‖a‖² ≤ 1, ‖b‖² ≤ 1: a_x b_x + a_y b_z + a_z b_y ≤ 1.",
+      "assumptions": [
+        "a_x²+a_y²+a_z² ≤ 1",
+        "b_x²+b_y²+b_z² ≤ 1"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.cpk_witness_value"
+    },
+    {
+      "group": "WitnessProductBound",
+      "lean_name": "QGDEVS.Witness.cpk_product_bound_neg",
+      "file": "QGDEVS/Witness.lean",
+      "informal_statement": "Sign variant: a_x b_x − a_y b_z − a_z b_y ≤ 1 under the same hypotheses.",
+      "assumptions": [
+        "a_x²+a_y²+a_z² ≤ 1",
+        "b_x²+b_y²+b_z² ≤ 1"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.cpk_witness_best_sign"
+    },
+    {
+      "group": "WitnessProductBound",
+      "lean_name": "QGDEVS.Witness.cpk_mixture_bound",
+      "file": "QGDEVS/Witness.lean",
+      "informal_statement": "Convexity: for weights w_k ≥ 0 with Σw_k = 1 and Bloch vectors a_k, b_k in the unit ball, Σ_k w_k (a_k,x b_k,x + s(a_k,y b_k,z + a_k,z b_k,y)) ≤ 1 for s = ±1.",
+      "assumptions": [
+        "finite index set",
+        "w_k ≥ 0, Σ w_k = 1",
+        "all a_k, b_k in the closed unit ball",
+        "s ∈ {1, −1}"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "WitnessProductBound",
+      "lean_name": "QGDEVS.Witness.bloch_norm_le_one",
+      "file": "QGDEVS/Witness.lean",
+      "informal_statement": "Every 2×2 complex density matrix (PSD, trace 1) has Bloch vector r_i = Re tr(ρσ_i) with r_x²+r_y²+r_z² ≤ 1.",
+      "assumptions": [
+        "ρ positive semidefinite",
+        "tr ρ = 1"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "WitnessProductBound",
+      "lean_name": "QGDEVS.Witness.cpk_product_state_nonneg",
+      "file": "QGDEVS/Witness.lean",
+      "informal_statement": "For density matrices ρA, ρB and W_s = 1⊗1 − X⊗X − s(Y⊗Z + Z⊗Y), s = ±1: Re tr((ρA⊗ρB) W_s) ≥ 0.",
+      "assumptions": [
+        "ρA, ρB PSD with unit trace",
+        "s ∈ {1, −1}"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.cpk_witness_best_sign"
+    },
+    {
+      "group": "WitnessProductBound",
+      "lean_name": "QGDEVS.Witness.cpk_separable_nonneg",
+      "file": "QGDEVS/Witness.lean",
+      "informal_statement": "For every separable two-qubit state ρ = Σ_k w_k ρA_k ⊗ ρB_k (finite sum, w_k ≥ 0, all factors density matrices): Re tr(ρ W_s) ≥ 0 for s = ±1. Hence a negative CPK witness value certifies entanglement.",
+      "assumptions": [
+        "finite decomposition",
+        "w_k ≥ 0",
+        "ρA_k, ρB_k PSD with unit trace",
+        "s ∈ {1, −1}"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "BranchEnergyFinite",
+      "lean_name": "QGDEVS.pointEnergy_neg",
+      "file": "QGDEVS/BranchEnergy.lean",
+      "informal_statement": "U(r) = −G mA mB / r < 0 for r > 0.",
+      "assumptions": [
+        "G, mA, mB > 0",
+        "r > 0"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.gravity.point_potential_energy"
+    },
+    {
+      "group": "BranchEnergyFinite",
+      "lean_name": "QGDEVS.pointEnergy_abs_le",
+      "file": "QGDEVS/BranchEnergy.lean",
+      "informal_statement": "|U(r)| ≤ G mA mB / r_min for all r ≥ r_min > 0.",
+      "assumptions": [
+        "G, mA, mB > 0",
+        "0 < r_min ≤ r"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "BranchEnergyFinite",
+      "lean_name": "QGDEVS.branchEnergy_finite",
+      "file": "QGDEVS/BranchEnergy.lean",
+      "informal_statement": "On the admissible domain r ≥ r_min > 0: −G mA mB / r_min ≤ U(r) < 0 (finite, negative, uniformly bounded).",
+      "assumptions": [
+        "G, mA, mB > 0",
+        "0 < r_min ≤ r"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.gravitational_branch_energies (finite_size=False)"
+    },
+    {
+      "group": "BranchEnergyFinite",
+      "lean_name": "QGDEVS.branchPhase_bounds",
+      "file": "QGDEVS/BranchEnergy.lean",
+      "informal_statement": "The static branch phase φ = −U t/ħ satisfies 0 ≤ φ ≤ G mA mB t/(ħ r_min) for r ≥ r_min > 0, t ≥ 0.",
+      "assumptions": [
+        "G, mA, mB > 0",
+        "0 < r_min ≤ r",
+        "t ≥ 0",
+        "ħ > 0"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.phases_from_energies"
+    },
+    {
+      "group": "BranchEnergyFinite",
+      "lean_name": "QGDEVS.entanglingPhase_abs_le",
+      "file": "QGDEVS/BranchEnergy.lean",
+      "informal_statement": "If each branch phase lies in [0, B] then |Δφ| ≤ 2B.",
+      "assumptions": [
+        "each φ_ij ∈ [0, B]"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "BranchEnergyFinite",
+      "lean_name": "QGDEVS.pointEnergy_unbounded_near_zero",
+      "file": "QGDEVS/BranchEnergy.lean",
+      "informal_statement": "Point singularity: for every M and every ε > 0 there is 0 < r < ε with U(r) < −M (unbounded below near 0⁺).",
+      "assumptions": [
+        "G, mA, mB > 0",
+        "ε > 0"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "BranchEnergyFinite",
+      "lean_name": "QGDEVS.pointEnergy_tendsto_atBot",
+      "file": "QGDEVS/BranchEnergy.lean",
+      "informal_statement": "Point singularity (filter form): U(r) → −∞ as r → 0⁺.",
+      "assumptions": [
+        "G, mA, mB > 0"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "DephasedStatePSD",
+      "lean_name": "QGDEVS.dephasedState_posSemidef",
+      "file": "QGDEVS/DephasedState.lean",
+      "informal_statement": "The dephased BMV state ρ_{ij,kl} = ¼ e^{i(φ_ij−φ_kl)} e^{−x_A[i≠k] − x_B[j≠l]} is positive semidefinite for all real phases and x_A, x_B ≥ 0 (proof: ρ = (uu†) ∘ (D_A ⊗ D_B), Kronecker and Schur products of PSD matrices).",
+      "assumptions": [
+        "φ : {L,R}² → ℝ arbitrary",
+        "x_A ≥ 0",
+        "x_B ≥ 0"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.joint_state"
+    },
+    {
+      "group": "DephasedStatePSD",
+      "lean_name": "QGDEVS.dephasedState_isHermitian",
+      "file": "QGDEVS/DephasedState.lean",
+      "informal_statement": "The dephased BMV state is Hermitian.",
+      "assumptions": [
+        "x_A ≥ 0",
+        "x_B ≥ 0"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.joint_state"
+    },
+    {
+      "group": "DephasedStatePSD",
+      "lean_name": "QGDEVS.dephasedState_trace",
+      "file": "QGDEVS/DephasedState.lean",
+      "informal_statement": "tr ρ = 1.",
+      "assumptions": [
+        "none (all real parameters)"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.joint_state"
+    },
+    {
+      "group": "DephasedStatePSD",
+      "lean_name": "QGDEVS.dephasedState_density",
+      "file": "QGDEVS/DephasedState.lean",
+      "informal_statement": "With constant rates (x = Γ t), Γ_A, Γ_B ≥ 0 and t ≥ 0, ρ is a density matrix: PSD, Hermitian, unit trace.",
+      "assumptions": [
+        "Γ_A ≥ 0",
+        "Γ_B ≥ 0",
+        "t ≥ 0"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.joint_state"
+    },
+    {
+      "group": "PureConcurrence",
+      "lean_name": "QGDEVS.Concurrence.pure_concurrence",
+      "file": "QGDEVS/Concurrence.lean",
+      "informal_statement": "For |ψ⟩ with amplitudes e^{iφ_ij}/2, the Wootters pure-state concurrence |⟨ψ|σy⊗σy|ψ*⟩| equals |sin(Δφ/2)|, Δφ = φLL+φRR−φLR−φRL (= 4δ).",
+      "assumptions": [
+        "φ arbitrary real"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.predict: pure_state_concurrence_bound"
+    },
+    {
+      "group": "DPEnergyDifference",
+      "lean_name": "QGDEVS.dpEnergy_bounds",
+      "file": "QGDEVS/DiosiPenrose.lean",
+      "informal_statement": "For d ≥ 2R > 0: E_Δ = G m²(6/(5R) − 1/d) satisfies 0 < E_Δ < 6Gm²/(5R).",
+      "assumptions": [
+        "G > 0",
+        "m ≠ 0",
+        "R > 0",
+        "d ≥ 2R",
+        "E_Δ is taken in its closed form for non-overlapping displacement (the overlap integral of sphere_mutual_energy is not formalised)"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.gravity.gravitational_self_energy_difference"
+    },
+    {
+      "group": "DPEnergyDifference",
+      "lean_name": "QGDEVS.dpEnergy_mono",
+      "file": "QGDEVS/DiosiPenrose.lean",
+      "informal_statement": "E_Δ is non-decreasing in d on d ≥ 2R.",
+      "assumptions": [
+        "G > 0",
+        "R > 0",
+        "2R ≤ d₁ ≤ d₂"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "DPEnergyDifference",
+      "lean_name": "QGDEVS.dpRate_bounds",
+      "file": "QGDEVS/DiosiPenrose.lean",
+      "informal_statement": "Γ_DP = κ E_Δ/ħ satisfies 0 < Γ_DP < 6κGm²/(5Rħ) (finite, strictly positive collapse rate).",
+      "assumptions": [
+        "κ > 0",
+        "ħ > 0",
+        "G > 0",
+        "m ≠ 0",
+        "R > 0",
+        "d ≥ 2R"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.decoherence.diosi_penrose_rate"
+    },
+    {
+      "group": "GravityDominance",
+      "lean_name": "QGDEVS.cpRatio_strictAntiOn",
+      "file": "QGDEVS/GravityDominance.lean",
+      "informal_statement": "The ratio (23ħcR⁶cm²/(4πr⁷)) / (Gm²/r) is strictly decreasing in r on (0, ∞).",
+      "assumptions": [
+        "ħ, c, R, G > 0",
+        "cm ≠ 0 (weaker than cm > 0)",
+        "m ≠ 0"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.em"
+    },
+    {
+      "group": "GravityDominance",
+      "lean_name": "QGDEVS.cpRatio_le_iff",
+      "file": "QGDEVS/GravityDominance.lean",
+      "informal_statement": "For target T > 0 and r_min > 0 with r_min⁶ = 23ħcR⁶cm²/(4πGm²T): for all r > 0, ratio(r) ≤ T ⇔ r ≥ r_min.",
+      "assumptions": [
+        "ħ, c, R, G, T > 0",
+        "cm ≠ 0",
+        "m ≠ 0",
+        "r_min > 0",
+        "r > 0"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.em (gravity-dominance distance)"
+    },
+    {
+      "group": "GravityDominance",
+      "lean_name": "QGDEVS.rmin_existsUnique",
+      "file": "QGDEVS/GravityDominance.lean",
+      "informal_statement": "There is exactly one r_min > 0 with r_min⁶ = 23ħcR⁶cm²/(4πGm²T), namely (·)^{1/6}.",
+      "assumptions": [
+        "ħ, c, R, G, T > 0",
+        "cm ≠ 0",
+        "m ≠ 0"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.em"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.ptCore_decomp",
+      "file": "QGDEVS/DephasingThreshold.lean",
+      "informal_statement": "Explicit spectral decomposition of the phase-free core of ρ^{T_B} (Γ_A = Γ_B): eigenvalues (1+p²±2p cos(Δφ/2))/4 and (1−p²±2p sin(Δφ/2))/4 with explicit eigenvectors, p = e^{−x}.",
+      "assumptions": [
+        "none (polynomial identity in c, s, p)"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.ptB_posSemidef_iff",
+      "file": "QGDEVS/DephasingThreshold.lean",
+      "informal_statement": "Exact PPT criterion: for any real phase table and any x, ρ^{T_B} (x_A = x_B = x) is PSD iff 2e^{−x}|sin(Δφ/2)| ≤ 1 − e^{−2x} (equivalently |sin(Δφ/2)| ≤ sinh x).",
+      "assumptions": [
+        "φ arbitrary real",
+        "x_A = x_B = x"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.ptB_posSemidef_of_abs_le",
+      "file": "QGDEVS/DephasingThreshold.lean",
+      "informal_statement": "If |Δφ| ≤ 2x then ρ^{T_B} is PSD (the state is PPT).",
+      "assumptions": [
+        "x_A = x_B = x",
+        "|Δφ| ≤ 2x"
+      ],
+      "status": "proved"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": "QGDEVS.dephasing_threshold",
+      "file": "QGDEVS/DephasingThreshold.lean",
+      "informal_statement": "Time-dependent threshold: if Δφ(0) = 0, Δφ is differentiable on t ≥ 0 and |dΔφ/dt| ≤ 2Γ for all t ≥ 0, then for every t ≥ 0 the state with Γ_A = Γ_B = Γ (x = Γt) has PSD partial transpose (PPT). This is the Γ ≥ |dΔφ/dt|/2 criterion of entanglement_dephasing_threshold, stated as PPT.",
+      "assumptions": [
+        "Γ_A = Γ_B = Γ (constant rate)",
+        "Δφ(0) = 0",
+        "HasDerivAt Δφ on t ≥ 0",
+        "|dΔφ/dt| ≤ 2Γ on t ≥ 0",
+        "t ≥ 0"
+      ],
+      "status": "proved",
+      "mirrors": "qgdevs.bmv.entanglement_dephasing_threshold"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": null,
+      "file": "QGDEVS/DephasingThreshold.lean",
+      "informal_statement": "For two-qubit states, PPT implies separability (Peres 1996; Horodecki, Horodecki & Horodecki 1996). Needed to read 'PPT' as 'not entangled'.",
+      "assumptions": [
+        "2×2 systems"
+      ],
+      "status": "open",
+      "remaining_obligation": "Formalise the Peres–Horodecki theorem for 2⊗2 (requires the Størmer–Woronowicz decomposition of positive maps M2→M2); until then dephasing_threshold certifies PPT (no NPT entanglement, zero negativity), not separability.",
+      "label": "PPT ⇒ separable for 2 qubits"
+    },
+    {
+      "group": "DephasingThreshold",
+      "lean_name": null,
+      "file": "QGDEVS/DephasingThreshold.lean",
+      "informal_statement": "For a constant rate dΔφ/dt = ω ≠ 0, any Γ < |ω|/2 makes ρ^{T_B} non-PSD for small t > 0 (the threshold is sharp).",
+      "assumptions": [
+        "constant rate ω ≠ 0",
+        "Γ_A = Γ_B = Γ"
+      ],
+      "status": "open",
+      "remaining_obligation": "Using ptB_posSemidef_iff, show ∃ t > 0 with sinh(Γt) < |sin(ωt/2)| whenever 0 ≤ Γ < |ω|/2 (first-order asymptotics at t → 0⁺). Not yet formalised.",
+      "label": "minimality of Γ* = |dΔφ/dt|/2"
+    }
+  ]
+}

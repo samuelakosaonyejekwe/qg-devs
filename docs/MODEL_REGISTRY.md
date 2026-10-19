@@ -1,6 +1,6 @@
 # Scientific model registry
 
-Generated 2026-10-19 12:26 UTC from `qgdevs/models.py` (version 0.1.0). Each entry is the model's G1 (theory gate) record. No model is privileged; all are evaluated through the same measurement chain and nuisance treatment.
+Generated 2026-10-19 12:43 UTC from `qgdevs/models.py` (version 0.1.0). Each entry is the model's G1 (theory gate) record. No model is privileged; all are evaluated through the same measurement chain and nuisance treatment.
 
 ## QG-COH — Quantum-coherent gravitational interaction (linearised quantum gravity, Newtonian limit)
 

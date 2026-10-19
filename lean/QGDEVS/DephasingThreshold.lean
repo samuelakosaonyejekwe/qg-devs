@@ -65,7 +65,7 @@ theorem ptCore_decomp (c s p : ℝ) :
   ext ⟨i, j⟩ ⟨k, l⟩
   fin_cases i <;> fin_cases j <;> fin_cases k <;> fin_cases l <;>
     simp [ptCore, mIdx, r1, ev1, ev2, ev3, ev4, vecMulVec_apply, Complex.ext_iff, pow_two] <;>
-    constructor <;> ring
+    first | (constructor <;> ring) | ring
 
 lemma r1_smul_posSemidef (v : Idx → ℂ) {μ : ℝ} (hμ : 0 ≤ μ) : ((μ : ℂ) • r1 v).PosSemidef := by
   have hs : ((Real.sqrt μ : ℝ) : ℂ) * ((Real.sqrt μ : ℝ) : ℂ) = (μ : ℂ) := by
@@ -127,7 +127,7 @@ lemma exp_I_two_mul (θ m : ℝ) (hm : m = 0 ∨ m = 1 ∨ m = -1) :
   rcases hm with rfl | rfl | rfl
   · simp
   · rw [mul_comm I, Complex.exp_mul_I]
-    push_cast; ring
+    push_cast; ring_nf
   · rw [mul_comm I, Complex.exp_mul_I]
     push_cast
     simp only [mul_neg, mul_one, Complex.cos_neg, Complex.sin_neg]; ring
