@@ -12,10 +12,7 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="QG-DEVS" />
-    <script>
-      // Apply the stored theme before first paint to avoid a flash.
-      try { var t = localStorage.getItem('qg.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="app"><noscript>QG-DEVS requires JavaScript.</noscript></div>

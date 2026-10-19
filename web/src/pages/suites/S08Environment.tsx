@@ -12,6 +12,7 @@ import { fmtQ, fmtNum } from '../../lib/format';
 import type { PredictResult } from '../../lib/types';
 import { minDistanceForGravityDominance, casimirToGravityRatio, getMaterial, clausiusMossotti, radiusOf, CONSTANTS, casimirPolderEnergy, branchPositions } from '../../engine/index';
 import { Seg } from '../../components/ui';
+import { Tex, MathText } from '../../components/Tex';
 import { HeatMap } from '../../plot/Chart';
 import { View3D } from '../../components/View3D';
 import { usePlayer, PlayerControls } from '../../components/Player';
@@ -74,18 +75,18 @@ function Channels({ p }: { p: PredictResult }) {
           <Out label="Δφ gravity" value={p.delta_phi_gravity_rad} unit="rad" sig={6} prov="COMPUTED" interp="Gravitational branch energies only." />
           <Out label="Δφ total" value={p.delta_phi_total_rad} unit="rad" sig={6} prov="COMPUTED" interp="Gravity plus every non-gravitational channel included." />
           <Out label="Δφ non-gravitational (total − gravity)" value={dNg} unit="rad" sig={4} prov="COMPUTED"
-            tone={frac > 0.1 ? 'bad' : 'good'} interp={`|Δφ_ng|/|Δφ_g| = ${fmtNum(frac, 3)}. The Virtual Laboratory requires ≤ 0.1 so that a positive witness cannot be attributed to electromagnetic forces.`} />
+            tone={frac > 0.1 ? 'bad' : 'good'} interp={<><Tex tex="|\Delta\varphi_{ng}|/|\Delta\varphi_{g}|" /> = {fmtNum(frac, 3)}. The Virtual Laboratory requires <Tex tex="\le 0.1" /> so that a positive witness cannot be attributed to electromagnetic forces.</>} />
         </div>
         <h3 style={{ marginTop: '12px' }}>Per channel (derived from the returned energies)</h3>
-        <DataTable caption="Per-channel entangling phase" head={['Channel', 'Δφ_ch (rad)', 'Fraction of |Δφ_gravity|']} numeric={[1, 2]}
+        <DataTable caption="Per-channel entangling phase" head={['Channel', <><Tex tex="\Delta\varphi_{ch}" /> (rad)</>, <>Fraction of <Tex tex="|\Delta\varphi_{grav}|" /></>]} numeric={[1, 2]}
           rows={chans.map((c) => [CH_LABEL[c] ?? c, fmtNum(dphi[c], 5), fmtNum(Math.abs(dphi[c]) / Math.max(Math.abs(p.delta_phi_gravity_rad), 1e-300), 3)])} />
-        <p class="small muted">Δφ_ch = −(t/ħ)(U_LL + U_RR − U_LR − U_RL) is computed in the browser from the server's per-channel energies U_ij (t = {fmtQ(t, 's')}). A channel that shifts all four branches equally (e.g. far-field Coulomb with tiny Δx) contributes little to Δφ even when its energy is large; local phases are removed by the protocol frame.</p>
+        <p class="small muted"><MathText text="$\Delta\varphi_{ch} = -\frac{t}{\hbar}\,(U_{LL} + U_{RR} - U_{LR} - U_{RL})$ is computed in the browser from the server's per-channel energies $U_{ij}$" /> (t = {fmtQ(t, 's')}). <MathText text="A channel that shifts all four branches equally (e.g. far-field Coulomb with tiny $\Delta x$) contributes little to $\Delta\varphi$ even when its energy is large; local phases are removed by the protocol frame." /></p>
       </Card>
       <Card title="Branch energies by channel (J)">
         <DataTable caption="Non-gravitational branch energies" head={['Branch pair', 'Distance', 'Gravity U_g', ...chans.map((c) => CH_LABEL[c] ?? c)]} numeric={[1, 2, ...chans.map((_, i) => i + 3)]}
           rows={BRANCH_PAIRS.map((k) => [k, fmtQ(p.branch_distances_m[k], 'm', 5), fmtNum(p.gravitational_energies_J[k], 5), ...chans.map((c) => fmtNum(p.nongrav_channels[k]?.[c] ?? NaN, 5))])} />
         <Level min="advanced">
-          <p class="small muted">Residual charge: {fmtNum(env.residual_charge_e)} e per mass. Coulomb energy q²/(4πε₀r) and the charge–induced-dipole term −q²R³cm/(8πε₀r⁴) both enter Δφ through their difference across branch pairs.</p>
+          <p class="small muted">Residual charge: {fmtNum(env.residual_charge_e)} e per mass. <MathText text="Coulomb energy $q^2/(4\pi\varepsilon_0 r)$ and the charge–induced-dipole term $-q^2 R^3 c_m/(8\pi\varepsilon_0 r^4)$ both enter $\Delta\varphi$ through their difference across branch pairs." /></p>
         </Level>
       </Card>
     </>
@@ -109,7 +110,7 @@ function Dominance() {
   }, [d.mass_A, d.density, d.separation, e.material, ratio]);
   return (
     <Card title="Gravity-dominance distance (local engine)" actions={<ProvBadge kind="COMPUTED_LOCAL" />}>
-      <p class="small muted">Uses mass A and the material's Clausius–Mossotti factor. Equal spheres: r⁶ = 23ħcR⁶cm² / (4πGm²·ratio), from |U_CP| ≤ ratio·|U_grav| at the same distance (far-field Casimir–Polder form).</p>
+      <p class="small muted"><MathText text="Uses mass A and the material's Clausius–Mossotti factor $c_m$. Equal spheres: $r^6 = \dfrac{23\hbar c R^6 c_m^2}{4\pi G m^2\,\mathrm{ratio}}$, from $|U_{CP}| \le \mathrm{ratio}\cdot|U_{grav}|$ at the same distance (far-field Casimir–Polder form)." /></p>
       <div class="form-grid">
         <NumberField name="ratio" label="Allowed |U_CP| / |U_grav|" unit="1" value={ratio} min={0} minExclusive max={1e6} report={v.report} onChange={setRatio}
           help="Maximum tolerated ratio of Casimir–Polder to gravitational interaction energy at equal distance. 0.1 is the Virtual Laboratory default." />
@@ -127,7 +128,7 @@ function Dominance() {
             series={[{ name: '|U_CP|/|U_grav|', x: calc.rs, y: calc.ys, color: '#D55E00' }]}
             xLabel="Centre distance r" xUnit="m" yLabel="Energy ratio" logX logY cursorX={d.separation}
             hlines={[{ y: ratio, label: `allowed ratio ${fmtNum(ratio)} → r = ${fmtQ(calc.rDom, 'm', 3)}`, color: '#0072B2' }]} />
-          <p class="small muted">The vertical marker is the current centre separation; the ratio falls as r⁻⁶. The closest branch pair sits nearer than the centre distance in linear geometry.</p>
+          <p class="small muted">The vertical marker is the current centre separation; the ratio falls as <Tex tex="r^{-6}" />. The closest branch pair sits nearer than the centre distance in linear geometry.</p>
         </>
       )}
       {!v.ok && <InfoBanner kind="danger">Fix the ratio input.</InfoBanner>}
@@ -201,7 +202,7 @@ function EnergySurfaces() {
   const spec = useMemo(() => ({
     x: { label: 'x (A→B)', unit: 'm', min: calc.xs[0], max: calc.xs[calc.xs.length - 1] },
     y: { label: 'y (split axis)', unit: 'm', min: calc.ys[0], max: calc.ys[calc.ys.length - 1] },
-    z: { label: 'log10 |U| (U in J)', min: calc.zFloor, max: calc.zMax },
+    z: { label: 'log10 |U| (U in J)', tex: String.raw`\log_{10}\,|U/\mathrm{J}|`, min: calc.zFloor, max: calc.zMax },
     surfaces: [
       { name: 'gravity', xs: calc.xs, ys: calc.ys, z: calc.zg, color: '#0072B2', opacity: 0.85 },
       { name: 'Casimir–Polder', xs: calc.xs, ys: calc.ys, z: calc.zcClip, color: '#D55E00', opacity: 0.8 },
@@ -218,8 +219,9 @@ function EnergySurfaces() {
       <p class="small muted">Energy of a probe identical to B at each point of the branch plane, averaged over A's two branches (½ each — what a branch-averaged probe feels; the branch-resolved differences that entangle are in Suite 4). Gravity −G m_A m_B/r falls as 1/r, Casimir–Polder as 1/r⁷. Grid cells where the probe would touch a branch are masked; Casimir–Polder values more than 6 decades below the weakest gravitational value are not drawn. The animation sweeps the centre separation d from 0.3× to 2.5× the design value and marks B's branches.</p>
       <PlayerControls p={p} n={F} t={calc.frames.map((f) => f.d)} tUnit="m" label="Separation sweep" />
       {view === '3d' ? (
-        <View3D kind="plot3d" name="em-energy-landscape" opts={spec} label="Surfaces of log10 of gravitational and Casimir-Polder interaction energy" title={`log10|U| · d = ${fmtQ(fr.d, 'm', 3)}`} badge="COMPUTED LOCALLY"
+        <View3D kind="plot3d" name="em-energy-landscape" opts={spec} label="Surfaces of log10 of gravitational and Casimir-Polder interaction energy" title={`log10|U| · d = ${fmtQ(fr.d, 'm', 3)}`} badge="COMPUTED LOCALLY" frame={p.pos} sweepOf="separation d"
           legend={[{ label: 'gravity |U_g|', color: '#0072B2' }, { label: 'Casimir–Polder |U_CP|', color: '#D55E00' }]} playing={p.playing}
+          change={{ rel: (calc.frames[F - 1].d - calc.frames[0].d) / calc.frames[0].d, what: "B's branch positions over the separation sweep" }}
           onRecordStart={() => { p.setPos(0); p.setPlaying(true); }} frameData={() => ({ separation_m: fr.d, B_branches: fr.B, cp_over_gravity_at_B: ratioB })}
           fallback={<RatioMap calc={calc} />} />
       ) : <RatioMap calc={calc} />}

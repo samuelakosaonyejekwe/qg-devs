@@ -3,6 +3,7 @@ import { RunBar } from '../../components/Reset';
 import { useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
 import { Card, Out, ProvBadge, SyntheticBanner, EvidenceBanner, ErrorBox, DataTable, Json, Level, InfoBanner, KV, StatusBadge } from '../../components/ui';
+import { MathText } from '../../components/Tex';
 import { NumberField, SelectField, useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { JobRunner } from '../../components/JobRunner';
@@ -17,8 +18,8 @@ import { hypStyle } from '../../lib/hyp';
 import { useRun, body, PAULI_SETTINGS, CountsTable, useImplementedModels, type SimRecord } from './f2-shared';
 
 const PARAM_INFO: Record<string, string> = {
-  lambda: 'Coupling scale λ: Δφ = λ·Δφ_Newton. λ = 1 is the quantum-coherent Newtonian prediction (QG-COH); λ = 0 means gravity does not couple to the branches.',
-  decay: 'Integrated single-mass decoherence exponent Γt (same for both masses).',
+  lambda: 'Coupling scale $\\lambda$: $\\Delta\\varphi = \\lambda\\,\\Delta\\varphi_{\\mathrm{Newton}}$. $\\lambda = 1$ is the quantum-coherent Newtonian prediction (QG-COH); $\\lambda = 0$ means gravity does not couple to the branches.',
+  decay: 'Integrated single-mass decoherence exponent $\\Gamma t$ (same for both masses).',
   beta_err: 'Residual local phase error on A after the protocol frame (rad).',
   gamma_err: 'Residual local phase error on B after the protocol frame (rad).',
 };
@@ -37,15 +38,15 @@ export default function Page(_props: { suite?: number }) {
   const recDesign = rec ? (rec.generator.config as any)?.design : null;
   return (
     <div>
-      <SuiteHeader n={11} intro="Reconstructs physical parameters from measured two-qubit outcome counts. The forward model is a generic coupling family Δφ = λ·Δφ_Newton(design) with free decoherence and local-phase errors. An adaptive Metropolis sampler gives the posterior; Laplace evidences give the Bayes factor for λ free versus λ = 0; the Fisher matrix gives Cramér–Rao bounds and identifiability." />
+      <SuiteHeader n={11} intro={<MathText text="Reconstructs physical parameters from measured two-qubit outcome counts. The forward model is a generic coupling family $\Delta\varphi = \lambda\,\Delta\varphi_{\mathrm{Newton}}(\text{design})$ with free decoherence and local-phase errors. An adaptive Metropolis sampler gives the posterior; Laplace evidences give the Bayes factor for $\lambda$ free versus $\lambda = 0$; the Fisher matrix gives Cramér–Rao bounds and identifiability." />} />
       <EvidenceBanner />
       <div class="split">
         <div class="sticky-side card">
           <h2>Step 1 · Synthetic data</h2>
           <SelectField label="True (generating) hypothesis" value={model} onChange={setModel} options={models.map((m) => ({ v: m, label: `${m} — ${hypStyle(m).short}` }))}
-            help="The hypothesis used to simulate the counts. Inference does not know this: recovering λ ≈ 1 for QG-COH data and λ ≈ 0 for SC-MF/NULL-NG data (in the absence of non-gravitational phases) tests the analysis chain." />
+            help={<MathText text="The hypothesis used to simulate the counts. Inference does not know this: recovering $\lambda \approx 1$ for QG-COH data and $\lambda \approx 0$ for SC-MF/NULL-NG data (in the absence of non-gravitational phases) tests the analysis chain." />} />
           <div class="form-grid">
-            <NumberField name="shots" label="Shots per setting" unit="1" integer value={shots} min={10} max={1e7} report={v.report} onChange={setShots} help="Runs per Pauli setting (all nine settings are simulated). Posterior width shrinks as 1/√N." />
+            <NumberField name="shots" label="Shots per setting" unit="1" integer value={shots} min={10} max={1e7} report={v.report} onChange={setShots} help={<MathText text="Runs per Pauli setting (all nine settings are simulated). Posterior width shrinks as $1/\sqrt{N}$." />} />
             <NumberField name="seed" label="Simulation seed" unit="1" integer value={seed} min={0} max={2 ** 31 - 1} report={v.report} onChange={setSeed} help="Seed for the synthetic record." />
           </div>
           <ScenarioForm value={sc} onChange={(s) => scenario.set(s)} report={v.report} />
@@ -123,7 +124,7 @@ function Result({ res }: { res: any }) {
       {lam && (
         <div class="outs">
           <Out label="λ posterior mean" value={lam.mean} sig={4} unc={lam.std} prov="COMPUTED"
-            interp={`95 % interval [${fmtNum(lam.ci95[0], 3)}, ${fmtNum(lam.ci95[1], 3)}]. ${lam.ci95[0] <= 1 && lam.ci95[1] >= 1 ? 'Consistent with the Newtonian coupling λ = 1.' : 'Excludes λ = 1 at 95 %.'} ${lam.ci95[0] <= 0 && lam.ci95[1] >= 0 ? 'Does not exclude λ = 0.' : 'Excludes λ = 0 at 95 %.'}`} />
+            interp={<>95 % interval [{fmtNum(lam.ci95[0], 3)}, {fmtNum(lam.ci95[1], 3)}]. {lam.ci95[0] <= 1 && lam.ci95[1] >= 1 ? <MathText text="Consistent with the Newtonian coupling $\lambda = 1$." /> : <MathText text="Excludes $\lambda = 1$ at 95 %." />} {lam.ci95[0] <= 0 && lam.ci95[1] >= 0 ? <MathText text="Does not exclude $\lambda = 0$." /> : <MathText text="Excludes $\lambda = 0$ at 95 %." />}</>} />
           <Out label="ln Bayes factor (λ free vs λ = 0)" value={bf?.ln_B} sig={4} prov="COMPUTED"
             interp={<>Kass–Raftery: <b>{bf?.interpretation}</b>. Method: {bf?.method}; null λ = {String(bf?.null_lambda)}.</>} />
           <Out label="Acceptance rate" value={post.acceptance_rate} sig={3} prov="COMPUTED" interp={`${post.n_samples} post-burn-in samples; 0.15–0.5 indicates healthy mixing.`} />
@@ -133,7 +134,7 @@ function Result({ res }: { res: any }) {
       <Card title="Posterior summary">
         <DataTable caption="Posterior summary" head={['Parameter', 'Mean', 'Std', 'Median', '95 % interval', 'ESS', 'Cramér–Rao σ', 'Meaning']} numeric={[1, 2, 3, 5, 6]}
           rows={names.map((n) => { const s = post.summary[n]; return [<code>{n}</code>, fmtNum(s.mean, 5), fmtNum(s.std, 3), fmtNum(s.median, 5), `[${fmtNum(s.ci95[0], 4)}, ${fmtNum(s.ci95[1], 4)}]`,
-            fmtNum(post.effective_sample_size?.[n], 4), fi?.cramer_rao_std ? fmtNum(fi.cramer_rao_std[n], 3) : '—', <span class="small">{PARAM_INFO[n] ?? ''}</span>]; })} />
+            fmtNum(post.effective_sample_size?.[n], 4), fi?.cramer_rao_std ? fmtNum(fi.cramer_rao_std[n], 3) : '—', <span class="small"><MathText text={PARAM_INFO[n] ?? ''} /></span>]; })} />
         <p class="small muted">Cramér–Rao σ is the Fisher-information lower bound on the standard deviation at the posterior mean for the given shots per setting; a posterior std far above it suggests prior truncation or non-Gaussianity.</p>
       </Card>
       {samples.length > 1 && names.includes('lambda') && names.includes('decay') && names.includes('beta_err') && <ChainView names={names} samples={samples} summary={post.summary} />}
@@ -188,7 +189,7 @@ function ChainView({ names, samples, summary }: { names: string[]; samples: numb
       if (lam >= l0 && lam <= l1) { refs.push([lam, d0, b0]); notes.push({ at: [lam, d0, b0 + (b1 - b0) * 0.08], text: txt, color: col }); }
     }
     return {
-      x: { label: 'λ coupling scale', unit: '1', min: l0, max: l1 }, y: { label: 'decay Γt', unit: '1', min: d0, max: d1 }, z: { label: 'β_err', unit: 'rad', min: b0, max: b1 },
+      x: { label: 'λ coupling scale', tex: String.raw`\lambda`, min: l0, max: l1 }, y: { label: 'decay Γt', tex: String.raw`\Gamma t`, min: d0, max: d1 }, z: { label: 'β_err', tex: String.raw`\beta_{\mathrm{err}}`, unit: 'rad', min: b0, max: b1 },
       points: [
         { name: 'chain', pts: pts.slice(0, shown), color: '#56B4E9', size: 0.012 },
         { name: 'recent steps', pts: pts.slice(trailStart, shown), color: '#D55E00', size: 0.018, line: true, lineWidth: 2, highlightLast: true },

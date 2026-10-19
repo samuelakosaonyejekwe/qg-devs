@@ -92,19 +92,26 @@ await step('reset behaviour (flagship: page vs shared scenario; confirmation onl
   await p.waitForSelector('dialog.confirm-dialog', { timeout: 5000 });
   await p.screenshot({ path: path.join(OUT, 'reset-confirm-dialog.png') });
   await p.click('[data-reset-confirm]');
+  await p.waitForSelector('text=Key predictions', { timeout: 30000 }); // the page's default computation, as on first visit
+  const v1 = await p.locator('input[aria-describedby]').first().inputValue();
+  assert(v1 === '10', `page reset must restore this suite's default design (mass shows ${v1})`);
+  // leaving and returning: other pages still see the user's shared scenario (mass 20)
+  await p.click('nav.sidenav a[href="/suite/decoherence"]');
   await p.waitForTimeout(800);
-  assert(await p.locator('text=Key predictions').count() === 0, 'results still shown after page reset');
-  assert(await p.locator('input[aria-describedby]').first().inputValue() === '20', 'page reset must keep the shared scenario');
-  // shared-scenario reset: no results now → no confirmation
+  const shared = await p.evaluate(() => JSON.parse(localStorage.getItem('qg.scenario') || '{}').design?.mass_A);
+  assert(Math.abs(shared - 2e-14) < 1e-20, `shared scenario must be untouched by a page reset (got ${shared})`);
+  await p.goBack();
+  await p.waitForTimeout(800);
+  // shared-scenario reset
   await p.click('[data-reset]');
   await p.click('[data-reset-scenario]');
+  if (await p.locator('dialog.confirm-dialog').count()) await p.click('[data-reset-confirm]');
   await p.waitForTimeout(600);
-  assert(await p.locator('dialog.confirm-dialog').count() === 0, 'confirmation shown although no results were displayed');
-  const v = await p.locator('input[aria-describedby]').first().inputValue();
-  assert(v === '10', `shared scenario not restored (mass field shows ${v})`);
+  const shared2 = await p.evaluate(() => JSON.parse(localStorage.getItem('qg.scenario') || '{}').design?.mass_A);
+  assert(Math.abs(shared2 - 1e-14) < 1e-20, `shared scenario not restored (${shared2})`);
   await p.screenshot({ path: path.join(OUT, 'reset-after.png') });
   await ctx.close();
-  return 'page reset kept scenario & cleared results; scenario reset restored mass 10 pg without confirmation';
+  return 'page reset → first-visit state with default design and default result; shared scenario untouched; shared reset restores 10 pg';
 });
 
 await step('reset behaviour (Suite 1: page inputs restored, results cleared)', async () => {
@@ -237,6 +244,8 @@ await step('3-D views release GPU resources on unmount (flagship, 5 remounts)', 
   for (let i = 0; i < 5; i++) {
     await p.goto(BASE + '/suite/entanglement', { waitUntil: 'networkidle' });
     await p.waitForSelector('.view3d canvas', { timeout: 30000 });
+    // wait until every 3-D view on the page has mounted its renderer before reading GPU memory
+    await p.waitForFunction(() => [...document.querySelectorAll('.view3d')].every((e) => e.__qgHandle?.memory), null, { timeout: 60000 });
     await p.waitForTimeout(800);
     mem.push(await p.evaluate(() => [...document.querySelectorAll('.view3d')].map((e) => e.__qgHandle?.memory?.() ?? null)));
     await p.click('nav.sidenav a[href="/suite/quantum"]');
@@ -246,9 +255,15 @@ await step('3-D views release GPU resources on unmount (flagship, 5 remounts)', 
   // within one mount: playing the animation (hundreds of updates) must not accumulate GPU objects
   await p.goto(BASE + '/suite/entanglement', { waitUntil: 'networkidle' });
   await p.waitForSelector('.view3d canvas', { timeout: 30000 });
+  await p.waitForFunction(() => [...document.querySelectorAll('.view3d')].every((e) => e.__qgHandle?.memory), null, { timeout: 60000 });
   await p.waitForTimeout(800);
+  // render every view once (offscreen views upload nothing until visible), then play
+  for (const v of await p.locator('.view3d').all()) { await v.scrollIntoViewIfNeeded(); await p.waitForTimeout(500); }
+  const play = p.locator('main [data-play]').first();
+  await play.scrollIntoViewIfNeeded();
+  if ((await play.getAttribute('aria-pressed')) !== 'true') await play.click();
+  await p.waitForTimeout(1500);
   const before = await p.evaluate(() => [...document.querySelectorAll('.view3d')].map((e) => e.__qgHandle?.memory?.() ?? null));
-  await p.locator('main [data-play]').first().click();
   await p.waitForTimeout(3000);
   const after = await p.evaluate(() => [...document.querySelectorAll('.view3d')].map((e) => e.__qgHandle?.memory?.() ?? null));
   await ctx.close();

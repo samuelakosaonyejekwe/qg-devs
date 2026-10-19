@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useId, useRef, useState, useCallback } from 'preact/hooks';
 import { Tip } from './ui';
 import { UNIT_CHOICES, autoUnit, fmtQ } from '../lib/format';
+import { parseNumber, toDisplay, toSI, fmtInput } from '../lib/numparse';
 import { useStore, settings, atLeast, type Mode } from '../lib/store';
 
 /** Collects the validity of all fields in a form so the run button can be disabled while any is invalid. */
@@ -37,14 +38,19 @@ export function NumberField(p: NumberFieldProps) {
   const id = useId();
   const choices = p.unitChoices ?? UNIT_CHOICES[p.unit];
   const [du, setDu] = useState<[string, number]>(() => (choices ? autoUnit(p.value, p.unit) : [p.unit, 1]));
-  const [text, setText] = useState(() => fmtInput(p.value / du[1]));
+  const [text, setText] = useState(() => fmtInput(toDisplay(p.value, du[1])));
   const [err, setErr] = useState<string | null>(null);
   const lastSI = useRef(p.value);
   useEffect(() => {
-    if (p.value !== lastSI.current) { lastSI.current = p.value; setText(fmtInput(p.value / du[1])); setErr(null); p.report?.(p.name, null); }
+    if (p.value !== lastSI.current) { lastSI.current = p.value; setText(fmtInput(toDisplay(p.value, du[1]))); setErr(null); p.report?.(p.name, null); }
   }, [p.value]);
   useEffect(() => () => p.report?.(p.name, null), []);
   const visible = !p.level || atLeast(s.mode, p.level);
+  // A field hidden by the detail level must not keep blocking Run with an error the user cannot see:
+  // discard the invalid draft and show the stored (valid) value again when it reappears.
+  useEffect(() => {
+    if (!visible && err) { setErr(null); setText(fmtInput(toDisplay(p.value, du[1]))); p.report?.(p.name, null); }
+  }, [visible]);
 
   const validate = (si: number): string | null => {
     if (!Number.isFinite(si)) return 'Enter a finite number.';
@@ -55,9 +61,9 @@ export function NumberField(p: NumberFieldProps) {
   };
   const commit = (t: string, f = du[1]) => {
     setText(t);
-    const v = parseNum(t);
-    const si = v * f;
-    const e = t.trim() === '' ? 'Required.' : validate(si);
+    const parsed = parseNumber(t);
+    const si = parsed.ok ? toSI(parsed.value, f) : NaN;
+    const e = parsed.ok ? validate(si) : parsed.error;
     setErr(e);
     p.report?.(p.name, e);
     if (!e) { lastSI.current = si; p.onChange(si); }
@@ -74,7 +80,7 @@ export function NumberField(p: NumberFieldProps) {
           <select class="unit" aria-label={`${p.label} unit`} value={du[0]} disabled={p.disabled} onChange={(e: any) => {
             const c = choices.find((x) => x[0] === e.currentTarget.value)!;
             setDu(c);
-            if (!err) setText(fmtInput(p.value / c[1]));
+            if (!err) setText(fmtInput(toDisplay(p.value, c[1])));
           }}>{choices.map((c) => <option value={c[0]}>{c[0]}</option>)}</select>
         ) : p.unit && p.unit !== '1' ? <span class="field-range" style={{ alignSelf: 'center', paddingLeft: '4px' }}>{p.unit}</span> : null}
       </div>
@@ -83,19 +89,6 @@ export function NumberField(p: NumberFieldProps) {
       </div>
     </div>
   );
-}
-
-function parseNum(t: string): number {
-  const s = t.trim().replace(/\s/g, '').replace(/[×x]10\^?([-+−]?\d+)/i, 'e$1').replace('−', '-').replace(',', '.');
-  if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return NaN;
-  return Number(s);
-}
-function fmtInput(v: number): string {
-  if (!Number.isFinite(v)) return '';
-  if (v === 0) return '0';
-  const a = Math.abs(v);
-  if (a >= 1e-3 && a < 1e6) return String(Number(v.toPrecision(10)));
-  return v.toExponential(6).replace(/\.?0+e/, 'e').replace('e+', 'e');
 }
 
 export function SelectField<T extends string>({ label, value, options, onChange, help, level }: { label: string; value: T; options: { v: T; label: string }[]; onChange: (v: T) => void; help: ComponentChildren; level?: Mode }) {

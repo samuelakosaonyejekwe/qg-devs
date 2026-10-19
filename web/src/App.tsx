@@ -1,11 +1,10 @@
 import type { ComponentType } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { useRoute, goBack, goForward, canGoBack, canGoForward } from './lib/router';
+import { useRoute, goBack, goForward, canGoBack, canGoForward, scrollToHash } from './lib/router';
 import { resolve } from './routes';
 import { SUITES, SUITES_IN_ORDER, TOOLS, topicOf } from './lib/nav';
 import { useStore, settings, net, applyTheme, type Mode, type Theme } from './lib/store';
-import { listQueue, onQueueChange, replayQueue, type QueuedRequest } from './lib/queue';
-import { apiUrl } from './lib/api';
+import { listQueue, onQueueChange, replayQueue, sendQueuedRequest, type QueuedRequest } from './lib/queue';
 import { InstallButton } from './components/Install';
 import { UpdateDialogHost, UpdateReadyChip, WhatsNewButton } from './components/UpdateDialog';
 import { ErrorBox } from './components/ui';
@@ -99,7 +98,13 @@ export function App() {
     if (hit) { setComp(() => hit); return; }
     let alive = true;
     setComp(null);
-    def.load().then((m) => { cache.set(r.path, m.default); if (alive) setComp(() => m.default); }).catch((e) => alive && setLoadErr(e));
+    def.load().then((m) => { cache.set(r.path, m.default); if (alive) setComp(() => m.default); }).catch((e) => {
+      // a missing chunk after a deploy: reload once to pick up the new index.html
+      if (/dynamically imported module|Importing a module script failed|error loading dynamically/i.test(String(e?.message ?? e)) && navigator.onLine) {
+        try { if (!sessionStorage.getItem('qg.chunkReload')) { sessionStorage.setItem('qg.chunkReload', '1'); location.reload(); return; } } catch { /* ignore */ }
+      }
+      if (alive) setLoadErr(e);
+    });
     return () => { alive = false; };
   }, [r.path]);
 
@@ -107,6 +112,7 @@ export function App() {
   useEffect(() => {
     if (document.querySelector('[aria-modal="true"]')) return; // never steal focus from an open dialog
     const h = document.querySelector('main h1') as HTMLElement | null; if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); }
+    if (Comp && location.hash) scrollToHash(location.hash); // deep links to in-page anchors of lazily loaded pages
   }, [Comp]);
 
   // Alt+← / Alt+→ drive real browser history
@@ -125,7 +131,7 @@ export function App() {
     const refresh = () => listQueue().then((q) => setQueueN(q.filter((x: QueuedRequest) => x.status !== 'sent').length)).catch(() => setQueueN(0));
     refresh();
     const unsub = onQueueChange(refresh);
-    const replay = () => replayQueue(sendQueued).then(refresh).catch(() => undefined);
+    const replay = () => replayQueue(sendQueuedRequest).then(refresh).catch(() => undefined);
     const unNet = net.subscribe((s) => { if (s.online) replay(); });
     const onMsg = (e: MessageEvent) => { if (e.data?.type === 'SYNC_QUEUE') replay(); };
     navigator.serviceWorker?.addEventListener('message', onMsg);
@@ -181,18 +187,4 @@ function NotFound({ path }: { path: string }) {
       <ul class="tight">{SUITES.map((s) => <li><a href={`/suite/${s.slug}`}>{s.n}. {s.name}</a></li>)}</ul>
     </div>
   );
-}
-
-/** Replay one queued POST against the configured API (auth header from settings). */
-async function sendQueued(q: QueuedRequest): Promise<unknown> {
-  const h: Record<string, string> = {};
-  if (q.contentType) h['Content-Type'] = q.contentType;
-  const tok = settings.get().apiToken.trim();
-  if (tok) h.Authorization = `Bearer ${tok}`;
-  const res = await fetch(apiUrl(q.path), { method: 'POST', headers: h, body: q.body ?? undefined });
-  const text = await res.text();
-  let data: unknown = text;
-  try { data = JSON.parse(text); } catch { /* keep text */ }
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
-  return data;
 }

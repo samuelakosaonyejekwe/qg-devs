@@ -1,3 +1,5 @@
+import { Tex, MathText } from '../../components/Tex';
+import { T, F } from '../formulas-l1';
 import { RunBar } from '../../components/Reset';
 /** Suite 2 — Schwarzschild perihelion precession / light deflection and symplectic N-body integration. */
 import { useMemo, useState } from 'preact/hooks';
@@ -88,7 +90,7 @@ function Orbit() {
       <div class="split">
         <div>
           <NumberField name="M" label="Central mass M" unit="kg" value={M} min={0} max={1e40} minExclusive report={v.report} onChange={setM}
-            help="Mass of the central body (default: the Sun, 1.98847×10³⁰ kg). Precession per orbit is 6πGM/(c²a(1−e²))." />
+            help={<MathText text={T.s2_M} />} />
           <NumberField name="a" label="Semi-major axis a" unit="m" value={a} min={0} max={1e16} minExclusive report={v.report} onChange={setA}
             help="Orbit size (default: Mercury, 5.7909×10¹⁰ m). The light ray is evaluated at impact parameter b = a(1−e), the perihelion distance." />
           <NumberField name="e" label="Eccentricity e" unit="1" value={e} min={0} max={0.95} maxExclusive report={v.report} onChange={setE}
@@ -101,12 +103,12 @@ function Orbit() {
           {d && (<>
             <div class="row"><ProvBadge kind="COMPUTED" /><span class="small muted">{fmtTime(r.at)}</span></div>
             <div class="outs">
-              <Out label="Precession per orbit (numeric)" value={d.precession_numeric_rad} unit="rad" prov="COMPUTED" interp="From integrating u'' + u = GM/h² + 3GMu²/c² and locating successive maxima of u = 1/r." />
-              <Out label="Precession per orbit (analytic)" value={d.precession_analytic_rad} unit="rad" prov="COMPUTED" interp={`6πGM/(c²a(1−e²)); relative difference ${fmtNum(rel(d.precession_numeric_rad, d.precession_analytic_rad), 2)} (higher-order terms + integration error).`} />
+              <Out label="Precession per orbit (numeric)" value={d.precession_numeric_rad} unit="rad" prov="COMPUTED" interp={<MathText text={T.s2_num} />} />
+              <Out label="Precession per orbit (analytic)" value={d.precession_analytic_rad} unit="rad" prov="COMPUTED" interp={<><Tex tex={F.precAnalytic} />; relative difference {fmtNum(rel(d.precession_numeric_rad, d.precession_analytic_rad), 2)} (higher-order terms + integration error).</>} />
               <Out label="Precession rate" value={`${fmtNum(d.precession_numeric_rad * perCentury * RAD_TO_ARCSEC, 4)} ″/century`} prov="COMPUTED"
-                interp={`Numeric value × orbits per Julian century, with the Kepler period P = 2π√(a³/GM) = ${fmtQ(P, 's')} (${fmtNum(P / 86400, 4)} d). For Mercury the GR contribution is ≈ 43″/century.`} />
-              <Out label="Light deflection (numeric)" value={d.deflection_numeric_rad} unit="rad" prov="COMPUTED" interp={`Null geodesic u'' + u = 3GMu²/c² at b = a(1−e) = ${fmtQ(d.a * (1 - d.e), 'm')}; = ${fmtNum(d.deflection_numeric_rad * RAD_TO_ARCSEC, 4)}″.`} />
-              <Out label="Light deflection (weak field)" value={d.deflection_analytic_rad} unit="rad" prov="COMPUTED" interp={`4GM/(c²b); relative difference ${fmtNum(rel(d.deflection_numeric_rad, d.deflection_analytic_rad), 2)}.`} />
+                interp={<>Numeric value × orbits per Julian century, with the Kepler period <Tex tex={F.kepler} /> = {fmtQ(P, 's')} ({fmtNum(P / 86400, 4)} d). For Mercury the GR contribution is ≈ 43″/century.</>} />
+              <Out label="Light deflection (numeric)" value={d.deflection_numeric_rad} unit="rad" prov="COMPUTED" interp={<>Null geodesic <Tex tex={F.nullgeo} /> at <Tex tex={F.impact} /> = {fmtQ(d.a * (1 - d.e), 'm')}; = {fmtNum(d.deflection_numeric_rad * RAD_TO_ARCSEC, 4)}″.</>} />
+              <Out label="Light deflection (weak field)" value={d.deflection_analytic_rad} unit="rad" prov="COMPUTED" interp={<><Tex tex={F.deflection} />; relative difference {fmtNum(rel(d.deflection_numeric_rad, d.deflection_analytic_rad), 2)}.</>} />
             </div>
           </>)}
         </div>
@@ -133,6 +135,16 @@ function NBody() {
   }));
   const series = useMemo(() => d ? d.names.map((n, k) => ({ name: n, color: SERIES_COLORS[k % SERIES_COLORS.length], points: d.positions.map((p) => p[k] as V3) })) : [], [d]);
   const drift = useMemo(() => d ? d.energy.map((E) => (E - d.energy[0]) / Math.abs(d.energy[0])) : [], [d]);
+  // visibility rule: largest body displacement relative to the extent of the whole scene
+  const change = useMemo(() => {
+    if (!d) return 0;
+    let disp = 0, ext = 0;
+    for (const s of series) for (const q of s.points) {
+      disp = Math.max(disp, Math.hypot(q[0] - s.points[0][0], q[1] - s.points[0][1], q[2] - s.points[0][2]));
+      ext = Math.max(ext, Math.hypot(q[0], q[1], q[2]));
+    }
+    return ext > 0 ? disp / (2 * ext) : 0;
+  }, [series, d]);
   const setBody = (k: number, b: Partial<Body>) => setSetup({ ...setup, bodies: setup.bodies.map((x, i) => (i === k ? { ...x, ...b } : x)) });
 
   const fallback = d && (
@@ -150,7 +162,7 @@ function NBody() {
           <SelectField label="Preset" value={pid} onChange={(x) => { setPid(x); setSetup(preset(x)); }} options={PRESETS}
             help="Initial conditions are computed from G and the stated orbital data (circular orbits; figure-eight from Chenciner & Montgomery 2000, scaled to SI). The centre-of-mass drift is removed." />
           <NumberField name="dt" label="Time step Δt" unit="s" value={setup.dt} min={0} max={1e12} minExclusive report={v.report} onChange={(x) => setSetup({ ...setup, dt: x })}
-            help="Integration step. Velocity Verlet is second order and symplectic: energy errors stay bounded and scale as Δt²." />
+            help={<MathText text={T.s2_dt} />} />
           <NumberField name="steps" label="Steps" unit="1" value={setup.steps} min={1} max={200000} integer report={v.report} onChange={(x) => setSetup({ ...setup, steps: x })}
             help={`Number of steps (server limit 200 000). Simulated span = steps × Δt = ${fmtQ(setup.steps * setup.dt, 's')}.`} />
           <NumberField name="save" label="Save every" unit="1" value={setup.save} min={1} max={200000} integer report={v.report} onChange={(x) => setSetup({ ...setup, save: x })}
@@ -182,7 +194,7 @@ function NBody() {
             <Seg label="Trajectory view" value={view} onChange={setView} options={[{ v: '3d', label: '3-D' }, { v: '2d', label: '2-D (x–y)' }]} />
             <PlayerControls p={player} n={nFrames} t={d.t} label="N-body" />
             {view === '3d' ? <View3D kind="trajectories" label="Computed N-body trajectories" opts={{ series, unit: 'm' }} frame={player.pos} fallback={fallback}
-              title="N-body trajectories (velocity Verlet)" badge="COMPUTED" name="nbody" legend={series.map((s) => ({ label: s.name, color: s.color }))}
+              title={`N-body trajectories · t = ${fmtQ(interp(d.t, player.pos), 's')}`} badge="COMPUTED" name="nbody" change={{ rel: change, what: 'body positions' }} legend={series.map((s) => ({ label: s.name, color: s.color }))}
               onRecordStart={() => { player.setPos(0); player.setPlaying(true); }} playing={player.playing}
               frameData={() => ({ nearest_sample: player.frame, t_s: d.t[player.frame], positions_m: Object.fromEntries(series.map((s) => [s.name, s.points[player.frame]])), source: 'COMPUTED (server, POST /api/gravity/nbody)' })} /> : fallback}
             <div class="outs">

@@ -1,8 +1,10 @@
+import { useImplementedModels } from './f2-shared';
 import { RunBar } from '../../components/Reset';
 /** Suite 12 — Competing gravity models and scientific falsification. */
 import { useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
 import { Card, ProvBadge, EvidenceBanner, ErrorBox, Loading, SourceChip, AssuranceBadge, DataTable, Tabs, TabPanel, InfoBanner, Tip, KV } from '../../components/ui';
+import { Tex, MathText } from '../../components/Tex';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { useValidity } from '../../components/fields';
 import { JobRunner } from '../../components/JobRunner';
@@ -12,7 +14,7 @@ import { useMemo } from 'preact/hooks';
 import { apiPost, useApiGet, num } from '../../lib/api';
 import { useStore, scenario, settings, atLeast } from '../../lib/store';
 import { fmtNum } from '../../lib/format';
-import { hypStyle, IMPLEMENTED_IDS } from '../../lib/hyp';
+import { hypStyle } from '../../lib/hyp';
 import type { ModelPrediction } from '../../lib/types';
 
 interface Nuis { name: string; low: number; high: number; nominal: number; unit: string; description: string }
@@ -20,6 +22,8 @@ interface ModelMeta {
   id: string; name: string; family: string; implemented: boolean; nuisance: Nuis[]; dynamics: string; assumptions: string[];
   approximations: string[]; admissible_domain: string; known_limits: string[]; entangling_by_gravity: boolean; references: string[];
   assurance: string; status_note: string;
+  /** KaTeX-validated LaTeX from the backend (qgdevs/equations.py) */
+  tex?: { dynamics?: string[]; known_limits?: string[] };
 }
 
 function Registry() {
@@ -39,15 +43,17 @@ function Registry() {
               <div class="row"><AssuranceBadge status={m.assurance} raw={m.assurance} />{m.implemented ? <span class="badge b-ok">implemented</span> : <span class="badge b-bad">registered — not implemented</span>}</div>
             </div>
             <p style={{ margin: '4px 0' }}>{m.name}</p>
-            <p class="small muted" style={{ margin: '0 0 6px' }}>Family: {m.family} · Gravity can entangle: <b>{m.entangling_by_gravity ? 'yes' : 'no'}</b></p>
+            <p class="small muted" style={{ margin: '0 0 6px' }}>Family: {FAMILY_LABEL[String(m.family)] ?? String(m.family)} · Gravity can entangle: <b>{m.entangling_by_gravity ? 'yes' : 'no'}</b></p>
             {!m.implemented && <InfoBanner kind="danger">{m.status_note}</InfoBanner>}
             {m.implemented && <p class="small">{m.status_note}</p>}
-            <KV rows={[['Dynamics', <code>{m.dynamics}</code>], ['Domain', m.admissible_domain]]} />
+            <KV rows={[['Dynamics', <ModelTex lines={m.tex?.dynamics} plain={m.dynamics} />], ['Domain', m.admissible_domain]]} />
             {atLeast(s.mode, 'advanced') && (<>
               <details><summary class="small">Assumptions, approximations, known limits</summary>
                 <h4 class="small">Assumptions</h4><ul class="tight small">{m.assumptions.map((a) => <li>{a}</li>)}</ul>
                 {m.approximations.length > 0 && <><h4 class="small">Approximations</h4><ul class="tight small">{m.approximations.map((a) => <li>{a}</li>)}</ul></>}
-                {m.known_limits.length > 0 && <><h4 class="small">Known limits</h4><ul class="tight small">{m.known_limits.map((a) => <li>{a}</li>)}</ul></>}
+                {(m.tex?.known_limits?.length || m.known_limits.length > 0) && <><h4 class="small">Known limits</h4>{m.tex?.known_limits?.length
+                  ? <ul class="tight small tex-list">{m.tex.known_limits.map((t, i) => <li><Tex tex={t} display alt={m.known_limits[i]} /></li>)}</ul>
+                  : <ul class="tight small">{m.known_limits.map((a) => <li>{a}</li>)}</ul>}</>}
               </details>
               <details><summary class="small">Nuisance parameters ({m.nuisance.length})</summary>
                 <DataTable head={['Name', 'Low', 'Nominal', 'High', 'Unit', 'Meaning']} numeric={[1, 2, 3]}
@@ -87,16 +93,17 @@ function Predictions() {
         {!res && !err && <p class="muted">Compute the observable predictions of every implemented hypothesis at nominal nuisance for the scenario on the left.</p>}
         {res && (<>
           <Card title="Predictions side by side" actions={<ProvBadge kind="COMPUTED" />}>
-            <DataTable head={['Hypothesis', 'Negativity', 'Concurrence', <>CPK witness ⟨W⟩ <Tip text="⟨W⟩ < 0 certifies entanglement (three settings XX, YZ, ZY in the protocol frame fixed from the nominal gravitational local phases)." /></>, 'Purity', 'Coherence A', 'Coherence B', 'Entanglement certified?']}
+            <DataTable head={['Hypothesis', 'Negativity', 'Concurrence', <>CPK witness <Tex tex="\langle W\rangle" /> <Tip text={<MathText text="$\langle W\rangle < 0$ certifies entanglement (three settings $XX$, $YZ$, $ZY$ in the protocol frame fixed from the nominal gravitational local phases)." />} /></>, 'Purity', 'Coherence A', 'Coherence B', 'Entanglement certified?']}
               numeric={[1, 2, 3, 4, 5, 6]}
               rows={p.map((r) => [<span><span class="swatch" style={{ background: hypStyle(r.id).color }} /> <code>{r.id}</code></span>, fmtNum(r.negativity, 5), fmtNum(r.concurrence, 5), fmtNum(r.witness_cpk, 5), fmtNum(r.purity, 6), fmtNum(r.coherence_A, 6), fmtNum(r.coherence_B, 6), r.witness_cpk < 0 ? <span class="badge b-ok">yes (W&lt;0)</span> : <span class="badge b-neutral">no</span>])} />
-            <p class="small muted">Interpretation: hypotheses whose witness is negative predict certifiable entanglement; a measured ⟨W⟩ &lt; 0 would disfavour those predicting ⟨W⟩ ≥ 0 <em>within their stated assumptions</em>. Overlapping predictions (e.g. QG-COH vs QG-EFT1) cannot be told apart by this design.</p>
+            <p class="small muted">Interpretation: hypotheses whose witness is negative predict certifiable entanglement; a measured <Tex tex="\langle W\rangle < 0" /> would disfavour those predicting <Tex tex="\langle W\rangle \ge 0" /> <em>within their stated assumptions</em>. Overlapping predictions (e.g. QG-COH vs QG-EFT1) cannot be told apart by this design.</p>
+            <HypothesisDynamics ids={p.map((r) => r.id)} />
             {res.registered_not_implemented.length > 0 && <p class="small"><span class="badge b-bad">no prediction</span> Registered but not implemented: {res.registered_not_implemented.map((m) => <code>{m.id} </code>)} — no claim that observed entanglement excludes all classical-gravity models is possible while these remain unimplemented.</p>}
           </Card>
           <Card title="Predicted witness by hypothesis">
             <BarChart name="witness-by-hypothesis" desc="CPK witness predicted by each hypothesis" xLabel="⟨W⟩ (CPK, protocol frame) — shown as |⟨W⟩| on log axis" logX unit=""
               items={p.map((r) => ({ label: `${r.id} (${r.witness_cpk < 0 ? '−' : '+'})`, value: Math.abs(r.witness_cpk), color: hypStyle(r.id).color }))} />
-            <p class="small muted">Bar length is |⟨W⟩| on a logarithmic axis; the sign (in the label) decides whether entanglement is certified.</p>
+            <p class="small muted">Bar length is <Tex tex="|\langle W\rangle|" /> on a logarithmic axis; the sign (in the label) decides whether entanglement is certified.</p>
           </Card>
           <Card title="Predictions in 3-D (hypothesis × observable)" actions={<ProvBadge kind="COMPUTED" />}>
             <Predictions3D p={p} />
@@ -111,6 +118,11 @@ function Predictions() {
   );
 }
 
+const FAMILY_LABEL: Record<string, string> = {
+  null: 'null hypothesis (no gravitational coupling)', quantum: 'quantum (gravity as a quantum mediator)', semiclassical: 'semiclassical (mean-field gravity)',
+  hybrid: 'classical–quantum hybrid', collapse: 'objective collapse', classical: 'classical',
+};
+
 interface Pair { true: string; alternative: string; D_per_shot: number; best_alt_nuisance: Record<string, number>; nuisance_at_bounds: string[]; shots_per_setting: number | string; verdict: string }
 interface DiscResult { hypotheses: string[]; settings: string[]; ln_bayes_target: number; max_feasible_shots: number; pairs: Pair[] }
 
@@ -121,8 +133,8 @@ const OBS: { key: keyof ModelPrediction; label: string }[] = [
 function Predictions3D({ p }: { p: ModelPrediction[] }) {
   const ids = p.map((r) => r.id);
   const opts = useMemo(() => ({
-    x: { label: 'Hypothesis', cats: ids }, y: { label: 'Observable', cats: OBS.map((o) => o.label) },
-    z: { label: 'Predicted value', unit: '1', min: Math.min(0, ...p.map((r) => r.witness_cpk)), max: Math.max(1, ...p.map((r) => r.coherence_A)) },
+    x: { label: 'Hypothesis', cats: ids }, y: { label: 'Observable', cats: OBS.map((o) => o.label), catsTex: [String.raw`\mathcal{N}`, 'C', String.raw`\langle W\rangle`, String.raw`c_A`] },
+    z: { label: 'Predicted value', tex: String.raw`\text{prediction}`, min: Math.min(0, ...p.map((r) => r.witness_cpk)), max: Math.max(1, ...p.map((r) => r.coherence_A)) },
     bars: p.flatMap((r, i) => OBS.map((o, j) => ({ xi: i, yi: j, h: r[o.key] as number, color: hypStyle(r.id).color }))),
   }), [p]);
   return (
@@ -142,7 +154,7 @@ function Disc3D({ r, z }: { r: DiscResult; z: (number | null)[][] }) {
   const cap = top + 1; // indistinguishable pairs drawn as capped ghost bars above every finite value
   const opts = useMemo(() => ({
     x: { label: 'True hypothesis', cats: ids }, y: { label: 'Alternative', cats: ids },
-    z: { label: 'log10 shots per setting', unit: '1', min: 0, max: Math.ceil(cap) },
+    z: { label: 'log10 shots per setting', tex: String.raw`\log_{10} N_{\text{shots}}`, min: 0, max: Math.ceil(cap) },
     bars: ids.flatMap((t, i) => ids.map((a, j) => {
       if (i === j) return null;
       const v = z[i][j];
@@ -186,6 +198,7 @@ function DiscMatrix({ r }: { r: DiscResult }) {
 }
 
 function Discrimination() {
+  const HYP_IDS = useImplementedModels(); // live registry (server implements more models than the local engine)
   const sc = useStore(scenario);
   const v = useValidity();
   const [sel, setSel] = useState<string[]>(['QG-COH', 'QG-EFT1', 'SC-MF', 'CC-KTM', 'DP-COLL', 'NULL-NG']);
@@ -195,7 +208,7 @@ function Discrimination() {
         <h2>Scenario &amp; hypotheses</h2>
         <ScenarioForm value={sc} onChange={(x) => scenario.set(x)} report={v.report} />
         <fieldset class="fieldset"><legend>Hypotheses to compare</legend>
-          {IMPLEMENTED_IDS.map((id) => (
+          {HYP_IDS.map((id) => (
             <label class="row small" style={{ marginBottom: '4px' }}><input type="checkbox" checked={sel.includes(id)} onChange={(e: any) => setSel(e.currentTarget.checked ? [...sel, id] : sel.filter((x) => x !== id))} /><span class="swatch" style={{ background: hypStyle(id).color }} /><code>{id}</code> {hypStyle(id).short}</label>
           ))}
           {sel.length < 2 && <p class="field-error">Select at least two hypotheses.</p>}
@@ -206,7 +219,7 @@ function Discrimination() {
         <Card title="Robust discrimination matrix">
           <JobRunner scenario type="discrimination_matrix" label="Run discrimination job" disabled={!v.ok || sel.length < 2}
             note={`Server job (nuisance-robust KL optimisation, ${sel.length * (sel.length - 1)} ordered pairs); typically tens of seconds. Readout error from the environment applies to both masses.`}
-            params={() => ({ design: sc.design, environment: sc.environment, hypotheses: IMPLEMENTED_IDS.filter((i) => sel.includes(i)) })}>
+            params={() => ({ design: sc.design, environment: sc.environment, hypotheses: HYP_IDS.filter((i) => sel.includes(i)) })}>
             {(r: DiscResult) => <><ProvBadge kind="COMPUTED" /><DiscMatrix r={r} /></>}
           </JobRunner>
         </Card>
@@ -227,5 +240,28 @@ export default function Page(_props: { suite?: number }) {
         <TabPanel id="disc" active={tab}><Discrimination /></TabPanel>
       </div>
     </div>
+  );
+}
+
+/** Model dynamics as typeset LaTeX (backend tex); the plain-text form stays available as tooltip. */
+function ModelTex({ lines, plain }: { lines?: string[]; plain: string }) {
+  if (!lines?.length) return <code>{plain}</code>;
+  return <div class="tex-lines">{lines.map((t) => <Tex tex={t} display alt={plain} />)}</div>;
+}
+
+/** Dynamics of every hypothesis in the comparison, from the registry's LaTeX. */
+function HypothesisDynamics({ ids }: { ids: string[] }) {
+  const r = useApiGet<ModelMeta[]>('/api/models');
+  if (!r.data) return null;
+  const rows = ids.map((id) => r.data!.find((m) => m.id === id)).filter((m): m is ModelMeta => !!m);
+  return (
+    <details class="small" style={{ marginTop: '8px' }}>
+      <summary>Dynamics of each hypothesis (typeset from the model registry)</summary>
+      <dl class="eq-list">
+        {rows.map((m) => (
+          <div class="eq-item"><dt><span class="swatch" style={{ background: hypStyle(m.id).color }} /> {m.id}</dt><dd><ModelTex lines={m.tex?.dynamics} plain={m.dynamics} /></dd></div>
+        ))}
+      </dl>
+    </details>
   );
 }

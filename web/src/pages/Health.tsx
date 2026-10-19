@@ -1,6 +1,7 @@
 /** System health: server status, connectivity, service-worker caches, local storage and device capabilities. */
 import { useEffect, useState } from 'preact/hooks';
 import { useApiGet, apiGet, apiBase } from '../lib/api';
+import type { HealthInfo } from '../lib/api';
 import { useStore, net } from '../lib/store';
 import { Card, ErrorBox, Loading, SourceChip, StatusBadge, KV, DataTable, PageHead, Btn } from '../components/ui';
 import { fmtTime, fmtDuration, fmtQ } from '../lib/format';
@@ -28,7 +29,7 @@ function Latency() {
 }
 
 export default function Page(_props: any) {
-  const h = useApiGet<any>('/api/health');
+  const h = useApiGet<HealthInfo>('/api/health');
   const n = useStore(net);
   const [ci, setCi] = useState<CacheInfo | null | 'none'>(null);
   const [swState, setSwState] = useState('checking');

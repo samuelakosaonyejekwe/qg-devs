@@ -1,3 +1,5 @@
+import { Tex, MathText } from '../components/Tex';
+import { F, NOTATION_L1 } from './formulas-l1';
 import { APP_VERSION, openWhatsNew } from '../components/UpdateDialog';
 /** Help & tutorials: suites, evidence ladder, gates, assurance and provenance legends, experiment categories, offline use. */
 import { useSuites } from '../components/SuiteHeader';
@@ -8,14 +10,14 @@ const SUITE_HELP: Record<number, { what: string; outputs: string; endpoints: str
   1: { what: 'Open-system quantum dynamics: Lindblad master equation for a user-defined Hamiltonian, jump operators and initial state.', outputs: 'Populations, purity and density-matrix checks versus time; Bloch-sphere trajectory for one qubit.', endpoints: 'POST /api/quantum/lindblad' },
   2: { what: 'Classical general-relativistic tests and Newtonian N-body integration.', outputs: 'Perihelion precession and light deflection (numeric vs analytic), N-body trajectories and energy drift.', endpoints: 'POST /api/gravity/orbit, POST /api/gravity/nbody' },
   3: { what: 'Low-energy quantum gravity: linearised (Newtonian-limit) operator potential and the one-loop EFT correction of Bjerrum-Bohr, Donoghue & Holstein.', outputs: 'Model registry entries (QG-COH, QG-EFT1) and the relative size of the one-loop quantum correction.', endpoints: 'GET /api/models (correction computed locally from the published formula)' },
-  4: { what: 'Flagship: two masses in spatial superposition interacting gravitationally (Bose et al.; Marletto & Vedral).', outputs: 'Entangling phase Δφ, concurrence, negativity, CPK and PPT witnesses, decoherence budget, non-gravitational channels, competing-model predictions, time series, 3-D apparatus.', endpoints: 'POST /api/bmv/predict' },
+  4: { what: 'Flagship: two masses in spatial superposition interacting gravitationally (Bose et al.; Marletto & Vedral).', outputs: 'Entangling phase $\\Delta\\varphi$, concurrence, negativity, CPK and PPT witnesses, decoherence budget, non-gravitational channels, competing-model predictions, time series, 3-D apparatus.', endpoints: 'POST /api/bmv/predict' },
   5: { what: 'Matter-wave interferometry: closed-loop Stern–Gerlach trajectories and 2-D split-step wave-packet evolution.', outputs: 'SG phases and required magnetic gradient; animated probability density.', endpoints: 'POST /api/interferometry/sg, POST /api/interferometry/wavepacket2d' },
   6: { what: 'Gravitationally coupled mechanical oscillators in Gaussian states.', outputs: 'Logarithmic negativity versus time, coupling rate, bath occupation.', endpoints: 'POST /api/optomech/evolve' },
-  7: { what: 'Environmental decoherence of one superposed mass: gas collisions, black-body scattering/absorption/emission, Diósi–Penrose collapse.', outputs: 'Rates, Γt and coherence factor per mechanism; dominant mechanism.', endpoints: 'POST /api/decoherence/budget' },
+  7: { what: 'Environmental decoherence of one superposed mass: gas collisions, black-body scattering/absorption/emission, Diósi–Penrose collapse.', outputs: 'Rates, $\\Gamma t$ and coherence factor $e^{-\\Gamma t}$ per mechanism; dominant mechanism.', endpoints: 'POST /api/decoherence/budget' },
   8: { what: 'Electromagnetic confounders that can mimic gravitational entanglement.', outputs: 'Casimir–Polder, Coulomb and induced-dipole branch energies; gravity-dominance distance.', endpoints: 'POST /api/bmv/predict (nongrav_channels)' },
   9: { what: 'Virtual laboratory: a complete laboratory protocol and conceptual engineering specification derived from the design.', outputs: 'Protocol, bill of materials with statuses, tolerances, environmental requirements, readiness (TRL), safety, consistency check, STL/SVG/JSON exports.', endpoints: 'POST /api/lab/dossier, POST /api/lab/export/{fmt}, GET /api/instruments' },
   10: { what: 'Synthetic measurement records and estimators.', outputs: 'SYNTHETIC counts, witness estimate with bootstrap CI, tomography, injection–recovery efficiency.', endpoints: 'POST /api/signal/simulate, /api/signal/tomography, /api/signal/injection' },
-  11: { what: 'Inverse problem: infer the gravitational coupling λ and nuisance parameters from counts.', outputs: 'Posterior samples and summaries, Bayes factor, Fisher information and Cramér–Rao bounds.', endpoints: 'inference job (POST /api/jobs)' },
+  11: { what: 'Inverse problem: infer the gravitational coupling $\\lambda$ and nuisance parameters from counts.', outputs: 'Posterior samples and summaries, Bayes factor, Fisher information and Cramér–Rao bounds.', endpoints: 'inference job (POST /api/jobs)' },
   12: { what: 'Competing hypotheses for two-mass experiments and their robust discrimination.', outputs: 'Registry, predictions table, matrix of shots required (with explicit “indistinguishable” cells).', endpoints: 'GET /api/models, POST /api/falsification/predictions, discrimination_matrix job' },
   13: { what: 'Constrained design optimisation and parameter sweeps.', outputs: 'Ranked designs, 1-D sweeps of every hypothesis, 2-D heat maps of negativity and witness with inadmissible regions marked.', endpoints: 'design_optimise job, POST /api/bmv/sweep1d, POST /api/bmv/sweep2d' },
   14: { what: 'Automated discovery of scaling laws and a hypothesis ledger.', outputs: 'Dimensionally consistent power law with exponents and residuals; ledger entries with classification and novelty status.', endpoints: 'POST /api/discovery/scaling, GET /api/discovery/hypotheses, discovery_cycle / calibration_tradeoff jobs' },
@@ -63,10 +65,12 @@ const PROV_TEXT: [string, string][] = [
   ['CACHED', 'Served from the offline cache with its cache time; may be out of date.'],
 ];
 
+const NOTATION: [string, string][] = NOTATION_L1;
+
 const TOC: [string, string][] = [
   ['suites', 'The 18 suites'], ['categories', 'Thought, computational, virtual and physical experiments'], ['ladder', 'Evidence ladder'],
   ['gates', 'Acceptance gates G1–G7'], ['assurance', 'Assurance statuses'], ['provenance', 'Provenance badges'], ['modes', 'Detail levels'],
-  ['whatsnew', "What's new"], ['offline', 'Offline use and installation'], ['keys', 'Keyboard shortcuts'], ['tutorials', 'Tutorials'],
+  ['whatsnew', "What's new"], ['notation', 'Mathematical notation'], ['offline', 'Offline use and installation'], ['keys', 'Keyboard shortcuts'], ['tutorials', 'Tutorials'],
 ];
 
 export default function Page(_props: any) {
@@ -85,7 +89,7 @@ export default function Page(_props: any) {
               const info = r.data?.find((x) => x.n === s.n);
               const h = SUITE_HELP[s.n];
               return (
-                <tr><td>{s.n}</td><td><a href={`/suite/${s.slug}`}>{s.name}</a></td><td>{h.what}</td><td>{h.outputs}</td><td class="small"><code>{h.endpoints}</code></td>
+                <tr><td>{s.n}</td><td><a href={`/suite/${s.slug}`}>{s.name}</a></td><td><MathText text={h.what} /></td><td><MathText text={h.outputs} /></td><td class="small"><code>{h.endpoints}</code></td>
                   <td>{info ? <><MaturityBadge m={info.maturity} /><div class="small muted">{info.gaps.join('; ') || 'no gaps declared'}</div></> : '—'}</td></tr>
               );
             })}</tbody>
@@ -123,6 +127,11 @@ export default function Page(_props: any) {
         <ul class="clean">{PROV_TEXT.map(([k, t]) => <li style={{ padding: '5px 0' }}><ProvBadge kind={k} /> — {t}</li>)}</ul>
       </Card>
 
+      <Card id="notation" title="Mathematical notation">
+        <p class="small muted">Equations are typeset with KaTeX (with MathML for screen readers). Each suite page lists its governing equations, served by the backend (GET /api/equations) and bundled for offline use.</p>
+        <dl class="kv">{NOTATION.map(([sym, what]) => <><dt><Tex tex={sym} /></dt><dd><MathText text={what} /></dd></>)}</dl>
+      </Card>
+
       <Card id="modes" title="Detail levels">
         <p><b>Beginner</b>, <b>Advanced</b> and <b>Expert</b> change only how many inputs and how much detail are shown. Calculations are identical at every level; hidden inputs keep their values and are always used. Change the level in the header or in <a href="/settings">Settings</a>.</p>
       </Card>
@@ -153,7 +162,7 @@ export default function Page(_props: any) {
 
       <Card id="tutorials" title="Tutorials">
         <h3>1. Run your first BMV prediction</h3>
-        <ol class="tight"><li>Open <a href="/suite/entanglement">Suite 4</a>. The reference design (Bose et al. 2017) is pre-filled.</li><li>Adjust mass, separation, branch separation and time; each input shows its unit, admissible range and an explanation (ⓘ).</li><li>Read Δφ, negativity and the CPK witness (⟨W⟩ &lt; 0 certifies entanglement), then the decoherence budget and its dominant mechanism.</li><li>Play the apparatus animation; the phase dial follows the computed Δφ(t).</li></ol>
+        <ol class="tight"><li>Open <a href="/suite/entanglement">Suite 4</a>. The reference design (Bose et al. 2017) is pre-filled.</li><li>Adjust mass, separation, branch separation and time; each input shows its unit, admissible range and an explanation (ⓘ).</li><li>Read <Tex tex={F.dphi} />, negativity and the CPK witness (<Tex tex={F.wNeg} /> certifies entanglement), then the decoherence budget and its dominant mechanism.</li><li>Play the apparatus animation; the phase dial follows the computed <Tex tex={F.dphiT} />.</li></ol>
         <h3>2. Compare hypotheses</h3>
         <ol class="tight"><li>On the flagship page, open “Competing hypotheses”: QG-COH, SC-MF, CC-KTM, DP-COLL and NULL-NG side by side.</li><li>Inspect negativity(t) and witness(t) curves; colours are the same for each hypothesis on every chart.</li><li>For how many shots are needed to tell them apart, run the discrimination matrix in <a href="/suite/falsification">Suite 12</a>.</li></ol>
         <h3>3. From thought experiment to preregistration</h3>

@@ -4,6 +4,7 @@
  * Axis ticks use SI prefixes (µm, ms, fJ …) or a common ×10ⁿ factor; values themselves are never altered.
  */
 import { fmtNum, pickPrefix, sup, fmtQ } from '../lib/format';
+import { MAP_STOPS } from '../lib/colormaps';
 import type { ChartTheme, Painter } from './painter';
 
 // ----------------------------------------------------------------------------- scales & ticks
@@ -217,9 +218,9 @@ const DIVERGING = ['#08519c', '#3182bd', '#6baed6', '#bdd7e7', '#f7f7f7', '#fdd0
 const CIVIDIS = ['#00224e', '#123570', '#3b496c', '#575d6d', '#707173', '#8a8678', '#a59c74', '#c3b369', '#e1cc55', '#fee838'];
 // cyclic map for phases (matplotlib "twilight")
 const TWILIGHT = ['#e2d9e2', '#a6bfcb', '#6d94c4', '#5f5eb0', '#4f2871', '#2f1434', '#601f4c', '#9e3651', '#c47067', '#d6afa2', '#e2d9e2'];
-export type Palette = 'viridis' | 'magma' | 'diverging' | 'cividis' | 'twilight';
+export type Palette = 'viridis' | 'magma' | 'diverging' | 'cividis' | 'twilight' | 'phase';
 function hexToRgb(h: string): [number, number, number] { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
-const PAL: Record<Palette, [number, number, number][]> = { viridis: VIRIDIS.map(hexToRgb), magma: MAGMA.map(hexToRgb), diverging: DIVERGING.map(hexToRgb), cividis: CIVIDIS.map(hexToRgb), twilight: TWILIGHT.map(hexToRgb) };
+const PAL: Record<Palette, [number, number, number][]> = { viridis: VIRIDIS.map(hexToRgb), magma: MAGMA.map(hexToRgb), diverging: DIVERGING.map(hexToRgb), cividis: CIVIDIS.map(hexToRgb), twilight: TWILIGHT.map(hexToRgb), phase: MAP_STOPS.phase };
 export function colorAt(pal: Palette, t: number): [number, number, number] {
   const c = PAL[pal];
   const x = Math.min(1, Math.max(0, t)) * (c.length - 1);

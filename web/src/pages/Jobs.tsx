@@ -130,7 +130,7 @@ function OfflineQueue() {
         <div class="row">
           <Btn busy={busy} disabled={!n.online || !items?.some((q) => q.status !== 'sent')} onClick={async () => {
             setBusy(true); setMsg('');
-            try { const r = await replayQueue(sendQueuedRequest); setMsg(`${r.sent} sent, ${r.failed} failed.`); } catch (e) { setErr(e); } finally { setBusy(false); load(); }
+            try { const r = await replayQueue(sendQueuedRequest, { includePermanent: true }); setMsg(`${r.sent} sent, ${r.failed} failed.`); } catch (e) { setErr(e); } finally { setBusy(false); load(); }
           }}>Retry all</Btn>
         </div>
       </div>

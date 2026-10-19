@@ -1,21 +1,6 @@
 /** Helpers shared by the Dashboard, Jobs, Health, Settings and Help pages. */
-import { apiUrl } from '../lib/api';
-import { settings } from '../lib/store';
-import type { QueuedRequest } from '../lib/queue';
 
-/** Replay one queued POST against the configured API (bearer token from Settings, if any). */
-export async function sendQueuedRequest(q: QueuedRequest): Promise<unknown> {
-  const h: Record<string, string> = {};
-  if (q.contentType) h['Content-Type'] = q.contentType;
-  const tok = settings.get().apiToken.trim();
-  if (tok) h.Authorization = `Bearer ${tok}`;
-  const res = await fetch(apiUrl(q.path), { method: 'POST', headers: h, body: q.body ?? undefined });
-  const text = await res.text();
-  let data: unknown = text;
-  try { data = JSON.parse(text); } catch { /* keep text */ }
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
-  return data;
-}
+export { sendQueuedRequest } from '../lib/queue';
 
 export function downloadJSON(obj: unknown, filename: string) {
   const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });

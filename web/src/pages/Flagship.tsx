@@ -1,3 +1,5 @@
+import { Tex, MathText } from '../components/Tex';
+import { T, F } from './formulas-l1';
 import { RunBar, useAfterReset } from '../components/Reset';
 /**
  * Flagship workflow — Suite 4 (gravity-mediated entanglement) and the Experiment Builder.
@@ -18,7 +20,7 @@ import { useValidity } from '../components/fields';
 import { Card, Out, EvidenceBanner, ErrorBox, Btn, Switch, Seg, DataTable, Json, Level, ProvBadge, SourceChip, Tip, InfoBanner } from '../components/ui';
 import { SuiteHeader } from '../components/SuiteHeader';
 import { LinePlot, BarChart, HeatMap } from '../plot/Chart';
-import { colorAt, rgb } from '../plot/charts';
+import { mapCss, phaseT } from '../lib/colormaps';
 import { View3D } from '../components/View3D';
 import { usePlayer, PlayerControls, interp, type PlayerState } from '../components/Player';
 import { fmtQ, fmtNum, fmtTime, humanKey } from '../lib/format';
@@ -88,7 +90,7 @@ export default function Flagship({ variant = 'suite' }: { variant?: 'suite' | 'b
           <p class="muted" style={{ maxWidth: '90ch' }}>Design a two-mass gravity-mediated-entanglement experiment (Bose–Marletto–Vedral type), predict what every competing hypothesis expects, save the design as a project on this device and continue to the virtual laboratory, model discrimination and preregistration.</p>
         </header>
       ) : (
-        <SuiteHeader n={4} intro="Two masses, each in a spatial superposition of two branches, interact gravitationally for a time t. Branch-dependent interaction energies U_ij produce phases φ_ij = −U_ij t/ħ; only the combination Δφ = φ_LL + φ_RR − φ_LR − φ_RL entangles. Environmental decoherence and electromagnetic forces compete with the effect." />
+        <SuiteHeader n={4} intro={<MathText text={T.fl_intro} />} />
       )}
 
       <div class="split">
@@ -141,20 +143,20 @@ function Results({ r, prov, mode }: { r: Result; prov: 'COMPUTED' | 'COMPUTED_LO
         {maxPhase > 1e6 && <InfoBanner kind="danger">Branch phases reach {fmtNum(maxPhase, 3)} rad (usually from residual charge). Float64 resolves such phases only to ~{fmtNum(maxPhase * 2.2e-16, 2)} rad, so entanglement measures below are numerically unreliable in this regime.</InfoBanner>}
         <div class="outs">
           <Out label="Entangling phase Δφ (total)" value={dphi} unit="rad" prov={prov} sig={5}
-            interp={<>Only Δφ entangles. Maximal entanglement needs |Δφ| = π; here |Δφ|/π = {fmtNum(Math.abs(dphi) / Math.PI, 3)}. Non-gravitational share: {fmtNum(nongravShare * 100, 3)} %.</>} />
+            interp={<>Only <Tex tex={F.dphi} /> entangles. Maximal entanglement needs <Tex tex={F.absDphiPi} />; here <Tex tex={F.absDphiOverPi} /> = {fmtNum(Math.abs(dphi) / Math.PI, 3)}. Non-gravitational share: {fmtNum(nongravShare * 100, 3)} %.</>} />
           <Out label="Δφ from gravity alone" value={dphiG} unit="rad" prov={prov} sig={5}
             unc={urG != null ? Math.abs(dphiG) * urG : null}
-            interp={urG != null ? <>Uncertainty propagated from CODATA 2022 u<sub>r</sub>(G) = {fmtNum(urG, 3)} only (Δφ ∝ G); design values treated as exact.</> : 'Gravitational contribution (finite-size uniform spheres).'} />
+            interp={urG != null ? <>Uncertainty propagated from CODATA 2022 <Tex tex={F.urG} /> = {fmtNum(urG, 3)} only (<Tex tex={F.dphiPropG} />); design values treated as exact.</> : 'Gravitational contribution (finite-size uniform spheres).'} />
           <Out label="Concurrence C" value={d.concurrence} prov={prov} sig={5} tone={d.concurrence > 0 ? 'good' : null}
-            interp={<>0 = separable, 1 = maximal. Pure-state bound |sin(Δφ/2)| = {fmtNum(d.pure_state_concurrence_bound, 4)}; decoherence reduces C below it.</>} />
+            interp={<>0 = separable, 1 = maximal. Pure-state bound <Tex tex={F.sinBound} /> = {fmtNum(d.pure_state_concurrence_bound, 4)}; decoherence reduces C below it.</>} />
           <Out label="Negativity N" value={d.negativity} prov={prov} sig={5} tone={d.negativity > 0 ? 'good' : null}
             interp={<>N &gt; 0 ⇔ entangled for two qubits (PPT criterion); maximum 0.5. Log-negativity {fmtNum(d.log_negativity, 4)}.</>} />
           <Out label="CPK witness ⟨W⟩ (local Z corrected)" value={W} prov={prov} sig={5} tone={W < 0 ? 'good' : 'bad'}
             interp={W < 0 ? 'Negative: certifies entanglement with three local settings (XX, YZ, ZY).' : 'Not negative: this witness does not certify entanglement for this design.'} />
           <Out label="Optimal PPT witness" value={d.witness_ppt.value} prov={prov} sig={5} tone={d.witness_ppt.certifies_entanglement ? 'good' : null}
-            interp={<>Most negative eigenvalue of ρ<sup>T_B</sup>{d.witness_ppt.settings_required ? `; settings needed: ${d.witness_ppt.settings_required.join(', ')}` : ''}.</>} />
+            interp={<>Most negative eigenvalue of <Tex tex={F.rhoTB} />{d.witness_ppt.settings_required ? `; settings needed: ${d.witness_ppt.settings_required.join(', ')}` : ''}.</>} />
           <Out label="Purity tr ρ²" value={d.purity} prov={prov} sig={5}
-            interp={<>1 = pure. Environmental decoherence: Γt = {fmtNum(d.decoherence.total_gamma_t, 3)} per mass (dominant: {humanKey(d.decoherence.dominant ?? '—')}).</>} />
+            interp={<>1 = pure. Environmental decoherence: <Tex tex={F.gammaT} /> = {fmtNum(d.decoherence.total_gamma_t, 3)} per mass (dominant: {humanKey(d.decoherence.dominant ?? '—')}).</>} />
           <Out label="State check" value={d.state_check.passed ? 'passed' : 'FAILED'} tone={d.state_check.passed ? 'good' : 'bad'} prov={prov}
             interp={<>trace {fmtNum(d.state_check.trace, 12)}, min eigenvalue {fmtNum(d.state_check.min_eigenvalue, 3)}, tolerance {fmtNum(d.state_check.tolerance, 2)}.</>} />
         </div>
@@ -186,8 +188,8 @@ function Results({ r, prov, mode }: { r: Result; prov: 'COMPUTED' | 'COMPUTED_LO
       <Card title="Branch geometry, energies and phases" level="advanced" actions={<ProvBadge kind={prov} />}>
         <DataTable caption="Branch data" head={['Branch', 'Distance r_ij', 'U_grav', 'U_total', 'Phase φ_ij']} numeric={[1, 2, 3, 4]}
           rows={BRANCHES.map((k) => [k, fmtQ(d.branch_distances_m[k], 'm', 6), fmtQ(d.gravitational_energies_J[k], 'J', 6), fmtQ(d.total_energies_J[k], 'J', 6), `${fmtNum(d.phases_rad[k], 8)} rad`])} />
-        <p class="small" style={{ marginTop: '8px' }}>Decomposition φ_ij = α + β z_i + γ z_j + (Δφ/4) z_i z_j: α = {fmtNum(d.phase_decomposition.alpha, 6)}, β = {fmtNum(d.phase_decomposition.beta, 6)}, γ = {fmtNum(d.phase_decomposition.gamma, 6)}, Δφ = {fmtNum(d.phase_decomposition.delta_phi, 6)} rad. β and γ are local and removed by Z rotations before the witness is measured.</p>
-        <p class="small muted">Radii: R_A = {fmtQ(d.design.radius_A, 'm')}, R_B = {fmtQ(d.design.radius_B, 'm')}; environmental Γ used: Γ_A = {fmtQ(d.design.gamma_A, '')} s⁻¹, Γ_B = {fmtQ(d.design.gamma_B, '')} s⁻¹.</p>
+        <p class="small" style={{ marginTop: '8px' }}>Decomposition <Tex tex={F.decomp} />: <Tex tex={F.alpha} /> = {fmtNum(d.phase_decomposition.alpha, 6)}, <Tex tex={F.beta} /> = {fmtNum(d.phase_decomposition.beta, 6)}, <Tex tex={F.gamma} /> = {fmtNum(d.phase_decomposition.gamma, 6)}, <Tex tex={F.dphi} /> = {fmtNum(d.phase_decomposition.delta_phi, 6)} rad. <Tex tex={F.beta} /> and <Tex tex={F.gamma} /> are local and removed by <Tex tex="Z" /> rotations before the witness is measured.</p>
+        <p class="small muted">Radii: <Tex tex={F.RA} /> = {fmtQ(d.design.radius_A, 'm')}, <Tex tex={F.RB} /> = {fmtQ(d.design.radius_B, 'm')}; environmental <Tex tex={F.Gamma} /> used: <Tex tex={F.GammaA} /> = {fmtQ(d.design.gamma_A, '')} s⁻¹, <Tex tex={F.GammaB} /> = {fmtQ(d.design.gamma_B, '')} s⁻¹.</p>
       </Card>
 
       <Card title="Density matrix ρ (basis |LL⟩, |LR⟩, |RL⟩, |RR⟩)" level="expert" actions={<ProvBadge kind={prov} />}>
@@ -207,26 +209,33 @@ function Results({ r, prov, mode }: { r: Result; prov: 'COMPUTED' | 'COMPUTED_LO
 // ----------------------------------------------------------------------------- apparatus (3-D + 2-D)
 function ApparatusCard({ d, p, prov }: { d: PredictResult; p: PlayerState; prov: 'COMPUTED' | 'COMPUTED_LOCAL' }) {
   const [view, setView] = useState<'3d' | '2d'>('3d');
+  const [mag, setMag] = useState(false);
   const ts = d.time_series!;
+  // what moves in this view is the phase dial (angle Δφ(t)) and the branch glow: relative change = span of Δφ / 2π
+  const span = Math.max(...ts.delta_phi) - Math.min(...ts.delta_phi);
+  const rel = span / (2 * Math.PI);
+  const factor = span > 0 ? Math.max(1, (0.3 * 2 * Math.PI) / span) : 1;
   const opts = useMemo(() => ({
     positions: d.branch_positions, radiusA: d.design.radius_A, radiusB: d.design.radius_B, energies: d.total_energies_J,
-    phases: { t: ts.t, deltaPhi: ts.delta_phi },
-  }), [d]);
+    phases: { t: ts.t, deltaPhi: mag ? ts.delta_phi.map((x) => x * factor) : ts.delta_phi },
+  }), [d, mag, factor]);
   return (
     <Card title="Apparatus view" actions={<Seg label="View" value={view} onChange={setView} options={[{ v: '3d', label: '3-D' }, { v: '2d', label: '2-D top view' }]} />}>
-      <p class="small muted">Branch centres at the computed positions (A at the origin, B along +x; split axis {d.design.geometry === 'linear' ? 'along x' : d.design.geometry === 'parallel' ? 'along y' : `at ${d.design.angle_deg}° to x`}). Segments A_i–B_j are coloured by |U_ij| (<span class="energy-ramp" aria-hidden="true" /> weak → strong). The phase dial and branch glow follow Δφ(t) from the time series.</p>
+      <p class="small muted">Branch centres at the computed positions (A at the origin, B along +x; split axis {d.design.geometry === 'linear' ? 'along x' : d.design.geometry === 'parallel' ? 'along y' : `at ${d.design.angle_deg}° to x`}). Segments <Tex tex={F.AiBj} /> are coloured by <Tex tex={F.absU} /> (<span class="energy-ramp" aria-hidden="true" /> weak → strong). The phase dial and branch glow follow <Tex tex={F.dphiT} /> from the time series.</p>
       {view === '3d' ? (
         <View3D kind="apparatus" opts={opts} frame={p.pos} label="Three-dimensional view of the four superposition branches"
           title="BMV apparatus — branch layout and entangling phase" badge={prov === 'COMPUTED_LOCAL' ? 'COMPUTED LOCALLY' : 'COMPUTED'} name="bmv-apparatus"
           legend={[{ label: 'Mass A branches', color: '#0072B2' }, { label: 'Mass B branches', color: '#D55E00' }, { label: 'weak |U_ij|', color: '#2b6cb0' }, { label: 'strong |U_ij|', color: '#dd6b20' }]}
           onRecordStart={() => { p.setPos(0); p.setPlaying(true); }} playing={p.playing}
-          frameData={() => ({ sample_index_nearest: p.frame, t_s: ts.t[p.frame], delta_phi_rad: ts.delta_phi[p.frame], branch_positions_m: d.branch_positions, total_energies_J: d.total_energies_J, source: prov })}
+          change={{ rel, what: 'phase-dial angle Δφ over 2π' }}
+          magnify={rel < 5e-3 ? { on: mag, factor, onToggle: setMag, reference: 'zero phase (dial angle = k·Δφ)' } : undefined}
+          frameData={() => ({ sample_index_nearest: p.frame, t_s: ts.t[p.frame], delta_phi_rad: ts.delta_phi[p.frame], dial_magnification: mag ? factor : 1, branch_positions_m: d.branch_positions, total_energies_J: d.total_energies_J, source: prov })}
           fallback={<TopView d={d} frame={p.pos} />}
           overlay={(info) => info && (
             <>
               <span>Scale bar: {fmtQ(info.scaleBarMetres, 'm', 3)}{info.radiiEnlarged ? ` · radii enlarged ×${fmtNum(info.enlargementFactor, 3)} for visibility` : ' · radii to scale'}</span>
               <span>|U| {fmtQ(info.energyRamp?.min, 'J', 3)} <span class="energy-ramp" aria-hidden="true" /> {fmtQ(info.energyRamp?.max, 'J', 3)}</span>
-              <span>t = {fmtQ(info.time ?? NaN, 's')} · Δφ = {fmtNum(info.deltaPhi ?? NaN, 4)} rad{info.samples && info.samples.w > 1e-3 ? ` (interpolated between samples ${info.samples.i + 1} and ${info.samples.j + 1})` : ''}</span>
+              <span>t = {fmtQ(info.time ?? NaN, 's')} · Δφ = {fmtNum((info.deltaPhi ?? NaN) / (mag ? factor : 1), 4)} rad{mag ? ` (dial shows ×${fmtNum(factor, 3)})` : ''}{info.samples && info.samples.w > 1e-3 ? ` (interpolated between samples ${info.samples.i + 1} and ${info.samples.j + 1})` : ''}</span>
             </>
           )} />
       ) : <TopView d={d} frame={p.pos} />}
@@ -354,7 +363,7 @@ function DecoherenceCard({ d, prov }: { d: PredictResult; prov: string }) {
   const items = Object.entries(b.mechanisms);
   return (
     <Card title="Decoherence budget (per mass, mass A)" actions={<ProvBadge kind={prov} />}>
-      <p class="small">Total Γ = <b>{fmtQ(b.total_rate, '')} s⁻¹</b>, Γt = <b>{fmtNum(b.total_gamma_t, 4)}</b>, coherence factor e<sup>−Γt</sup> = <b>{fmtNum(b.coherence_factor, 5)}</b>. Dominant mechanism: <b>{humanKey(b.dominant ?? '—')}</b>.</p>
+      <p class="small">Total <Tex tex={F.Gamma} /> = <b>{fmtQ(b.total_rate, '')} s⁻¹</b>, <Tex tex={F.gammaT} /> = <b>{fmtNum(b.total_gamma_t, 4)}</b>, coherence factor <Tex tex={F.expGt} /> = <b>{fmtNum(b.coherence_factor, 5)}</b>. Dominant mechanism: <b>{humanKey(b.dominant ?? '—')}</b>.</p>
       <DataTable caption="Decoherence mechanisms" head={['Mechanism', 'Rate Γ (s⁻¹)', 'Γt', 'e^(−Γt)', 'Regime']} numeric={[1, 2, 3]} hl={(i) => items[i][0] === b.dominant}
         rows={items.map(([k, m]) => [humanKey(k), fmtNum(m.rate, 4), fmtNum(m.gamma_t, 4), fmtNum(m.coherence_factor, 6), <span class="small">{m.regime ?? ''}</span>])} />
       <BarChart name="decoherence-rates" title="Rates (log scale)" desc="Decoherence rate of each mechanism on a logarithmic axis" xLabel="Rate" unit="s⁻¹" logX highlight={humanKey(b.dominant ?? '')}
@@ -371,10 +380,10 @@ function NongravCard({ d, prov }: { d: PredictResult; prov: string }) {
   const dphiOf = (name: string) => -(t / hbar) * ((ch.LL[name] ?? 0) + (ch.RR[name] ?? 0) - (ch.LR[name] ?? 0) - (ch.RL[name] ?? 0));
   return (
     <Card title="Non-gravitational channels (confounders)" actions={<ProvBadge kind={prov} />}>
-      <p class="small muted">Branch-dependent electromagnetic energies that would entangle the masses without gravity. Δφ contribution per channel = −(t/ħ)(U_LL + U_RR − U_LR − U_RL), derived from the returned energies.</p>
+      <p class="small muted"><MathText text={T.fl_nongrav} /></p>
       <DataTable caption="Non-gravitational branch energies" head={['Channel', ...BRANCHES.map((k) => `U_${k}`), 'Δφ contribution', 'vs gravity']} numeric={[1, 2, 3, 4, 5, 6]}
         rows={names.map((nm) => [humanKey(nm), ...BRANCHES.map((k) => fmtQ(ch[k]?.[nm] ?? 0, 'J', 4)), `${fmtNum(dphiOf(nm), 4)} rad`, d.delta_phi_gravity_rad ? `${fmtNum(Math.abs(dphiOf(nm) / d.delta_phi_gravity_rad) * 100, 3)} %` : '—'])} />
-      <p class="small" style={{ marginTop: '6px' }}>Sum of channels: Δφ_total − Δφ_gravity = {fmtNum(d.delta_phi_total_rad - d.delta_phi_gravity_rad, 4)} rad. See <a href="/suite/environment">Suite 8</a> for the gravity-dominance distance.</p>
+      <p class="small" style={{ marginTop: '6px' }}>Sum of channels: <Tex tex={F.dphiDiff} /> = {fmtNum(d.delta_phi_total_rad - d.delta_phi_gravity_rad, 4)} rad. See <a href="/suite/environment">Suite 8</a> for the gravity-dominance distance.</p>
     </Card>
   );
 }
@@ -467,19 +476,37 @@ function rhoAt(series: Mat[], pos: number): Mat {
   const a = series[i], b = series[j];
   return { re: a.re.map((v, k) => v * (1 - w) + b.re[k] * w), im: a.im.map((v, k) => v * (1 - w) + b.im[k] * w) };
 }
-const phaseColor = (ph: number) => rgb(colorAt('twilight', (ph + Math.PI) / (2 * Math.PI)));
+// cyclic, lightness-balanced phase map: every angle stays clearly visible on light and dark backgrounds
+const phaseColor = (ph: number) => mapCss('phase', phaseT(ph));
+const KET = [String.raw`|LL\rangle`, String.raw`|LR\rangle`, String.raw`|RL\rangle`, String.raw`|RR\rangle`];
+const PHASE_BAR = { map: 'phase', titleTex: String.raw`\arg\rho_{ij}`, title: 'arg ρ_ij', ticks: [{ at: 0, tex: String.raw`-\pi` }, { at: 0.25, tex: String.raw`-\tfrac{\pi}{2}` }, { at: 0.5, tex: '0' }, { at: 0.75, tex: String.raw`\tfrac{\pi}{2}` }, { at: 1, tex: String.raw`\pi` }] };
 
-function citySpec(m: Mat, zmax: number) {
+function citySpec(m: Mat, zmax: number, magnified: boolean) {
   const bars = [];
   for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
     const re = m.re[i * 4 + j], im = m.im[i * 4 + j];
     bars.push({ xi: j, yi: i, h: Math.hypot(re, im), color: phaseColor(Math.atan2(im, re)) });
   }
   return {
-    x: { label: 'column (ket)', cats: BASIS }, y: { label: 'row (bra)', cats: BASIS }, z: { label: '|ρ_ij|', min: 0, max: zmax },
+    x: { label: 'column (ket)', cats: BASIS, catsTex: KET }, y: { label: 'row (bra)', cats: BASIS, catsTex: KET.map((k) => k.replace('|', '\\langle ').replace('\\rangle', '|')) },
+    z: magnified ? { label: 'k·|ρ_ij(t) − ρ_ij(0)|', tex: String.raw`k\,|\rho_{ij}(t)-\rho_{ij}(0)|`, min: 0, max: zmax } : { label: '|ρ_ij|', tex: String.raw`|\rho_{ij}|`, min: 0, max: zmax },
     bars, barWidth: 0.72,
   };
 }
+
+/** Relative change of what a city plot draws over the run: bar heights (vs the tallest bar) and phase colours (vs 2π, for visible bars). */
+function cityChange(series: Mat[], zmax: number): number {
+  const m0 = series[0];
+  let dh = 0, dp = 0;
+  for (const m of series) for (let k = 0; k < 16; k++) {
+    const a0 = Math.hypot(m0.re[k], m0.im[k]), a = Math.hypot(m.re[k], m.im[k]);
+    dh = Math.max(dh, Math.abs(a - a0));
+    if (a > 0.02 * zmax && a0 > 0.02 * zmax) { let d = Math.atan2(m.im[k], m.re[k]) - Math.atan2(m0.im[k], m0.re[k]); d = Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); dp = Math.max(dp, d); }
+  }
+  return Math.max(dh / (zmax || 1), dp / (2 * Math.PI));
+}
+/** ρ(t) − ρ(0) magnified by k (display of the deviation from the initial product state). */
+function deviation(m: Mat, m0: Mat, k: number): Mat { return { re: m.re.map((v, i) => k * (v - m0.re[i])), im: m.im.map((v, i) => k * (v - m0.im[i])) }; }
 
 function CityCard({ r, p }: { r: Result; p: PlayerState }) {
   const [a, setA] = useState('QG-COH');
@@ -498,10 +525,15 @@ function CityCard({ r, p }: { r: Result; p: PlayerState }) {
     return m;
   }, [r]);
   const zmax = useMemo(() => Math.max(...[...sa, ...sb].flatMap((m) => m.re.map((v, k) => Math.hypot(v, m.im[k])))), [sa, sb]);
+  const [mag, setMag] = useState(false);
+  // magnification so the largest deviation of either hypothesis fills ~30 % of the height axis
+  const maxDev = useMemo(() => Math.max(...[sa, sb].flatMap((S) => S.flatMap((m) => m.re.map((v, k) => Math.hypot(v - S[0].re[k], m.im[k] - S[0].im[k]))))), [sa, sb]);
+  const factor = maxDev > 0 ? Math.max(1, (0.3 * zmax) / maxDev) : 1;
+  const chA = useMemo(() => cityChange(sa, zmax), [sa, zmax]), chB = useMemo(() => cityChange(sb, zmax), [sb, zmax]);
   const ma = rhoAt(sa, p.pos), mb = rhoAt(sb, p.pos);
-  const specA = useMemo(() => citySpec(ma, zmax), [ma.re.join(), ma.im.join(), zmax]);
-  const specB = useMemo(() => citySpec(mb, zmax), [mb.re.join(), mb.im.join(), zmax]);
-  const legend = [-Math.PI, -Math.PI / 2, 0, Math.PI / 2, Math.PI].map((ph) => ({ label: `arg ρ = ${fmtNum(ph / Math.PI, 2)}π`, color: phaseColor(ph) }));
+  const showA = mag ? deviation(ma, sa[0], factor) : ma, showB = mag ? deviation(mb, sb[0], factor) : mb;
+  const specA = useMemo(() => citySpec(showA, zmax, mag), [showA.re.join(), showA.im.join(), zmax, mag]);
+  const specB = useMemo(() => citySpec(showB, zmax, mag), [showB.re.join(), showB.im.join(), zmax, mag]);
   const i = Math.floor(Math.max(0, Math.min(ts.t.length - 1, p.pos))), w = p.pos - i;
   const sel = (v: string, set: (x: string) => void, lab: string) => (
     <label class="small">{lab}{' '}
@@ -514,25 +546,27 @@ function CityCard({ r, p }: { r: Result; p: PlayerState }) {
       <HeatMap name={`rho-abs-${id}`} title={`|ρ_ij| — ${id}`} desc={`Magnitude of the density matrix for ${id}`} z={[0, 1, 2, 3].map((ii) => [0, 1, 2, 3].map((jj) => Math.hypot(m.re[ii * 4 + jj], m.im[ii * 4 + jj])))}
         xCats={BASIS} yCats={BASIS} xLabel="column" yLabel="row" zLabel="|ρ_ij|" palette="cividis" zDomain={[0, zmax]} annotate={(v) => (v == null ? null : v.toFixed(3))} aspect={0.8} />
       <HeatMap name={`rho-arg-${id}`} title={`arg ρ_ij — ${id}`} desc={`Phase of the density-matrix elements for ${id}`} z={[0, 1, 2, 3].map((ii) => [0, 1, 2, 3].map((jj) => Math.atan2(m.im[ii * 4 + jj], m.re[ii * 4 + jj])))}
-        xCats={BASIS} yCats={BASIS} xLabel="column" yLabel="row" zLabel="arg ρ_ij" zUnit="rad" palette="twilight" zDomain={[-Math.PI, Math.PI]} annotate={(v) => (v == null ? null : v.toFixed(2))} aspect={0.8} />
+        xCats={BASIS} yCats={BASIS} xLabel="column" yLabel="row" zLabel="arg ρ_ij" zUnit="rad" palette="phase" zDomain={[-Math.PI, Math.PI]} annotate={(v) => (v == null ? null : v.toFixed(2))} aspect={0.8} />
     </div>
   );
   const panel = (m: Mat, spec: any, id: string) => view === '3d' ? (
-    <View3D kind="plot3d" opts={spec} label={`Density-matrix city plot for ${id}: bar height |ρ_ij|, colour arg ρ_ij`} title={`ρ(t) — ${id}`} badge="COMPUTED LOCALLY" name={`city-${id}`} legend={legend}
+    <View3D kind="plot3d" opts={spec} label={`Density-matrix city plot for ${id}: bar height |ρ_ij|, colour arg ρ_ij`} title={`ρ(t) — ${id} · t = ${fmtQ(interp(ts.t, p.pos), 's')}`} badge="COMPUTED LOCALLY" name={`city-${id}`}
+      colorbar={PHASE_BAR} change={{ rel: id === a ? chA : chB, what: '|ρ| and arg ρ' }} frame={p.pos}
+      magnify={{ on: mag, factor, onToggle: setMag, reference: 'the initial product state ρ(0)' }}
       onRecordStart={() => { p.setPos(0); p.setPlaying(true); }} playing={p.playing}
-      frameData={() => ({ hypothesis: id, t_s: interp(ts.t, p.pos), samples: { i, j: Math.min(ts.t.length - 1, i + 1), w }, rho_re: m.re, rho_im: m.im, basis: BASIS, source: 'COMPUTED_LOCALLY (engine)' })}
+      frameData={() => ({ hypothesis: id, t_s: interp(ts.t, p.pos), magnified: mag ? { factor, reference: 'rho(0)' } : null, samples: { i, j: Math.min(ts.t.length - 1, i + 1), w }, rho_re: m.re, rho_im: m.im, basis: BASIS, source: 'COMPUTED_LOCALLY (engine)' })}
       fallback={heat(m, id)} />
   ) : heat(m, id);
   return (
     <Card title="Density matrix ρ(t) — city plots by hypothesis" actions={<><ProvBadge kind="COMPUTED_LOCAL" /><Seg label="City plot view" value={view} onChange={setView} options={[{ v: '3d', label: '3-D' }, { v: '2d', label: '2-D heat maps' }]} /></>}>
-      <p class="small muted">Bar height = |ρ_ij| in the basis |LL⟩, |LR⟩, |RL⟩, |RR⟩; colour = arg ρ_ij on the cyclic “twilight” scale (−π…π). States are computed in this browser by the offline engine at the same times as the server time series, driven by the same playback cursor. The server additionally implements CG-QFT-AH; the local engine does not, so it cannot be shown here.</p>
+      <p class="small muted"><MathText text={T.fl_city} /> States are computed in this browser by the offline engine at the same times as the server time series, driven by the same playback cursor. The server additionally implements CG-QFT-AH; the local engine does not, so it cannot be shown here.</p>
       <div class="row">{sel(a, setA, 'Left')}{sel(b, setB, 'Right')}</div>
       <div class="grid-2" style={{ marginTop: '8px' }}>
         <div>{panel(ma, specA, a)}</div>
         <div>{panel(mb, specB, b)}</div>
       </div>
-      <PlayerControls p={p} n={ts.t.length} t={ts.t} label="Density matrix" />
-      <p class="small muted">Cross-check at t = {fmtQ(r.inputs.design.time, 's')}: max |ρ_engine(QG-COH) − ρ_{r.source === 'local' ? 'local prediction' : 'server'}| = <b>{fmtNum(check, 2)}</b>{check < 1e-9 ? ' (agreement)' : ' (check)'}.</p>
+      <PlayerControls p={p} n={ts.t.length} t={ts.t} label="Density matrix" syncNote="both (synchronised)" />
+      <p class="small muted">Cross-check at t = {fmtQ(r.inputs.design.time, 's')}: <Tex tex={F.rhoCheck} /> (QG-COH; reference: {r.source === 'local' ? 'local prediction' : 'server'}) = <b>{fmtNum(check, 2)}</b>{check < 1e-9 ? ' (agreement)' : ' (check)'}.</p>
     </Card>
   );
 }

@@ -3,6 +3,7 @@ import type { ComponentChildren } from 'preact';
 import { useApiGet } from '../lib/api';
 import { suiteByN, prevSuite, nextSuite } from '../lib/nav';
 import { MaturityBadge, SourceChip, Level } from './ui';
+import { GoverningEquations } from './Equations';
 
 export interface SuiteInfo { n: number; slug: string; name: string; modules: string[]; capabilities: string[]; maturity: string; gaps: string[] }
 
@@ -32,6 +33,7 @@ export function SuiteHeader({ n, intro, children }: { n: number; intro: Componen
       <Level min="expert">
         {info && <p class="small muted" style={{ margin: 0 }}>Modules: {info.modules.map((m) => <code>{m} </code>)} · Capabilities: {info.capabilities.join('; ')}.</p>}
       </Level>
+      <GoverningEquations suite={n} />
     </header>
   );
 }

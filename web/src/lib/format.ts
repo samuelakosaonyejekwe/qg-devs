@@ -11,21 +11,18 @@ export const PREFIXES: [number, string][] = [
 /** Units that accept SI prefixes. 'kg' is handled via grams. */
 const PREFIXABLE = new Set(['m', 's', 'Pa', 'K', 'J', 'Hz', 'g', 'T', 'W', 'C', 'N', 'V', 'B', 'eV']);
 
-/** Plain number: fixed for moderate magnitudes, ×10ⁿ otherwise. */
+/** Plain number: fixed for moderate magnitudes, ×10ⁿ otherwise. Robust for ±0, ±∞, NaN and subnormals. */
 export function fmtNum(v: number | null | undefined, sig = 4): string {
-  if (v == null || Number.isNaN(v)) return '—';
+  if (v == null || typeof v !== 'number' || Number.isNaN(v)) return '—';
   if (v === Infinity) return '∞';
   if (v === -Infinity) return '−∞';
-  if (v === 0) return '0';
-  const a = Math.abs(v);
-  if (a >= 1e-3 && a < 1e5) {
-    const s = Number(v.toPrecision(sig)).toString();
-    return s.replace('-', '−');
-  }
-  const e = Math.floor(Math.log10(a));
-  let m = v / 10 ** e;
-  if (Math.abs(Number(m.toPrecision(sig))) >= 10) { m /= 10; return `${Number(m.toPrecision(sig))} × 10${sup(e + 1)}`.replace(/^-/, '−'); }
-  return `${Number(m.toPrecision(sig))} × 10${sup(e)}`.replace(/^-/, '−');
+  if (v === 0) return '0'; // also −0
+  const p = Math.max(1, Math.min(15, Math.round(sig)));
+  // toExponential gives the correctly rounded mantissa/exponent even for subnormals (5e-324) and 1.8e308
+  const [mant, expStr] = v.toExponential(p - 1).split('e');
+  const e = Number(expStr);
+  if (e >= -3 && e < 5) return String(Number(v.toPrecision(p))).replace('-', '−');
+  return `${String(Number(mant)).replace('-', '−')} × 10${sup(e)}`;
 }
 
 /** Pick a prefix so the mantissa is in [1, 1000). */
@@ -45,9 +42,13 @@ export function fmtQ(v: number | null | undefined, unit = '', sig = 4): string {
     return fmtQ(v * 1e3, 'g', sig);
   }
   if (PREFIXABLE.has(unit) && v !== 0) {
-    const [f, p] = pickPrefix(v);
-    const m = v / f;
-    if (Math.abs(v) >= 1e-24 && Math.abs(v) < 1e27) return `${Number(m.toPrecision(sig)).toString().replace('-', '−')} ${p}${unit}`;
+    if (Math.abs(v) >= 1e-24 && Math.abs(v) < 1e27) {
+      // round first, then choose the prefix (so 999.96 µm prints as 1 mm, not 1000 µm)
+      const r = Number(v.toPrecision(Math.max(1, Math.min(15, sig))));
+      const [f, p] = pickPrefix(r);
+      const m = Number((r / f).toPrecision(Math.max(1, Math.min(15, sig))));
+      return `${String(m).replace('-', '−')} ${p}${unit}`;
+    }
   }
   if (!unit || unit === '1') return fmtNum(v, sig);
   return `${fmtNum(v, sig)} ${unit}`;

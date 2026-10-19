@@ -5,6 +5,7 @@ import { View3D } from '../../components/View3D';
 import { usePlayer, PlayerControls, interp } from '../../components/Player';
 import { HeatMap } from '../../plot/Chart';
 import { Seg } from '../../components/ui';
+import { MathText } from '../../components/Tex';
 import { bornProbabilities } from '../../engine/index';
 import { isOfflineError } from '../../lib/api';
 import type { Scenario } from '../../lib/types';
@@ -45,7 +46,7 @@ export default function Page(_props: { suite?: number }) {
             help="The model whose predicted state generates the synthetic counts. Comparing records from different hypotheses shows what a real experiment would need to distinguish them." />
           <div class="form-grid">
             <NumberField name="shots" label="Shots per setting" unit="1" integer value={shots} min={10} max={1e7} report={v.report} onChange={setShots}
-              help="Number of repeated runs per measurement setting. Statistical uncertainty of each correlator scales as 1/√N." />
+              help={<MathText text="Number of repeated runs per measurement setting. Statistical uncertainty of each correlator scales as $1/\sqrt{N}$." />} />
             <NumberField name="seed" label="Random seed" unit="1" integer value={seed} min={0} max={2 ** 31 - 1} report={v.report} onChange={setSeed}
               help="Seed of the pseudo-random generator; the same seed reproduces the same record (recorded in its SHA-256)." />
           </div>
@@ -79,13 +80,13 @@ export default function Page(_props: { suite?: number }) {
                   <>
                     <div class="outs">
                       <Out label="Witness ⟨W⟩ (readout-corrected)" value={w.witness} sig={5} unc={w.stderr} prov="SYNTHETIC" tone={w.bootstrap_ci95[1] < 0 ? 'good' : null}
-                        interp="⟨W⟩ < 0 certifies entanglement for every separable state (CPK witness)." />
+                        interp={<MathText text="$\langle W\rangle < 0$ certifies entanglement, since $\langle W\rangle \ge 0$ for every separable state (CPK witness)." />} />
                       <Out label="Bootstrap 95 % interval" value={`[${fmtNum(w.bootstrap_ci95[0], 4)}, ${fmtNum(w.bootstrap_ci95[1], 4)}]`} prov="SYNTHETIC"
                         interp={w.bootstrap_ci95[1] < 0 ? 'Entirely below zero.' : 'Includes zero or positive values: not certified at 95 %.'} />
-                      <Out label="z-score" value={w.z_score} sig={4} prov="SYNTHETIC" interp="(0 − ⟨W⟩)/stderr; the preregistered decision rule asks for z ≥ 5." />
-                      <Out label="One-sided p-value" value={w.p_value_one_sided} sig={3} prov="SYNTHETIC" interp="Probability of a value this negative if the state were separable at the boundary ⟨W⟩ = 0." />
+                      <Out label="z-score" value={w.z_score} sig={4} prov="SYNTHETIC" interp={<MathText text="$z = (0 - \langle W\rangle)/\mathrm{stderr}$; the preregistered decision rule asks for $z \ge 5$." />} />
+                      <Out label="One-sided p-value" value={w.p_value_one_sided} sig={3} prov="SYNTHETIC" interp={<MathText text="Probability of a value this negative if the state were separable at the boundary $\langle W\rangle = 0$." />} />
                       <Out label="Sign variant" value={w.sign_variant > 0 ? 'W₊ = 1 − XX − (YZ + ZY)' : 'W₋ = 1 − XX + (YZ + ZY)'} prov="SYNTHETIC" interp="Chosen from the model prediction before looking at the data." />
-                      <Out label="Readout correction factor" value={w.readout_correction_factor} sig={6} prov="SYNTHETIC" interp="1/(1−2ε)² applied to the measured correlators." />
+                      <Out label="Readout correction factor" value={w.readout_correction_factor} sig={6} prov="SYNTHETIC" interp={<MathText text="$1/(1-2\varepsilon)^2$ applied to the measured correlators." />} />
                     </div>
                     <p class="small"><strong>Interpretation:</strong> {w.z_score >= 5 ? 'this synthetic record would meet a 5σ entanglement claim.' : w.z_score >= 2 ? 'a hint of entanglement, below the 5σ claim threshold; more shots are needed.' : 'no significant evidence of entanglement in this synthetic record.'} This concerns simulated data from {rec.generator.model_id}, not nature.</p>
                   </>
@@ -152,7 +153,7 @@ function Injection() {
       <div class="form-grid">
         <NumberField name="noise" label="Noise σ" unit="1" value={noise} min={0} minExclusive max={1e6} report={v.report} onChange={setNoise} help="Standard deviation of the white Gaussian noise per sample (arbitrary signal units)." />
         <NumberField name="thr" label="Detection threshold" unit="SNR" value={thr} min={0} minExclusive max={100} report={v.report} onChange={setThr} help="Matched-filter signal-to-noise ratio above which an injection counts as detected. Higher thresholds lower false positives at the cost of efficiency." />
-        <NumberField name="trials" label="Trials per amplitude" unit="1" integer value={trials} min={1} max={300} report={v.report} onChange={setTrials} help="Monte-Carlo repetitions per amplitude (the server caps this at 300). Efficiency uncertainty ≈ √(p(1−p)/trials)." />
+        <NumberField name="trials" label="Trials per amplitude" unit="1" integer value={trials} min={1} max={300} report={v.report} onChange={setTrials} help={<MathText text="Monte-Carlo repetitions per amplitude (the server caps this at 300). Efficiency uncertainty $\approx \sqrt{p(1-p)/n_{\text{trials}}}$." />} />
       </div>
       <RunBar label="Run injection–recovery" scenario busy={r.busy} disabled={!v.ok} onRun={r.run} />
       <ErrorBox error={r.error} what="running injection–recovery" />
@@ -167,7 +168,7 @@ function Injection() {
             series={[{ name: 'Detection efficiency', x: d.amplitudes, y: d.detection_efficiency, color: '#0072B2', markers: true,
               band: { lo: d.detection_efficiency.map((p) => Math.max(0, p - Math.sqrt((p * (1 - p)) / d.trials))), hi: d.detection_efficiency.map((p) => Math.min(1, p + Math.sqrt((p * (1 - p)) / d.trials))) } }]}
             xLabel="Injected amplitude" yLabel="Efficiency" yDomain={[0, 1.05]} />
-          <p class="small muted">Shaded band: binomial standard error √(p(1−p)/trials), computed in the browser from the returned efficiencies. <StatusBadge status={d.data_label} /></p>
+          <p class="small muted"><MathText text="Shaded band: binomial standard error $\sqrt{p(1-p)/n_{\text{trials}}}$, computed in the browser from the returned efficiencies." /> <StatusBadge status={d.data_label} /></p>
         </div>
       )}
     </Card>
@@ -242,7 +243,7 @@ function Convergence({ model, shots, seed, settings: sel, valid }: { model: stri
     const bars = fr.settings.flatMap((s, i) => [0, 1, 2, 3].map((o) => ({ xi: i, yi: o, h: cur[s][o], color: OUTCOME_COLORS[o] })));
     const pts = fr.born ? fr.settings.flatMap((s, i) => [0, 1, 2, 3].map((o) => [i, o, fr.born![s][o]] as [number, number, number])) : [];
     return {
-      x: { label: 'Pauli setting', cats: fr.settings }, y: { label: 'Outcome', cats: OUTCOMES }, z: { label: 'Frequency', unit: '1', min: 0, max: zMax },
+      x: { label: 'Pauli setting', cats: fr.settings, catsTex: fr.settings.map((st) => String.raw`${st[0]}\otimes ${st[1]}`) }, y: { label: 'Outcome', cats: OUTCOMES, catsTex: OUTCOMES.map((o) => o.split('').map((c) => (c === '+' ? '{+}' : '{-}')).join('')) }, z: { label: 'Frequency', tex: String.raw`\hat p`, unit: '1', min: 0, max: zMax },
       bars, barWidth: 0.55,
       points: pts.length ? [{ name: 'Born probability', pts, color: '#D55E00', size: 0.03 }] : [],
     };
@@ -262,6 +263,7 @@ function Convergence({ model, shots, seed, settings: sel, valid }: { model: stri
             <span class="small">Showing record N = <b>{fr.Ns[i]}</b>{p.pos - i > 1e-3 && i + 1 < n ? ` → ${fr.Ns[i + 1]} (interpolated between records for display only)` : ''} shots per setting</span></div>
           {view === '3d' ? (
             <View3D kind="plot3d" opts={spec} name="outcome-convergence" title={`Outcome frequencies, N = ${fr.Ns[i]}`} badge="SYNTHETIC" playing={p.playing}
+              change={{ rel: Math.max(0, ...fr.settings.flatMap((s) => [0, 1, 2, 3].map((o) => Math.abs(fr.freq[fr.freq.length - 1][s][o] - fr.freq[0][s][o])))) / Math.max(zMax, 1e-12), what: 'bar heights between the smallest and largest record' }}
               label="Three-dimensional bars of empirical outcome frequencies per Pauli setting with Born-probability markers"
               legend={[...OUTCOMES.map((o, k) => ({ label: `outcome ${o}`, color: OUTCOME_COLORS[k] })), ...(fr.born ? [{ label: 'Born probability (engine)', color: '#D55E00' }] : [])]}
               onRecordStart={() => { p.setPos(0); p.setPlaying(true); }}
@@ -275,7 +277,7 @@ function Convergence({ model, shots, seed, settings: sel, valid }: { model: stri
               series={[{ name: 'Synthetic records', x: fr.Ns, y: fr.tv, color: '#0072B2', markers: true },
                 { name: 'Reference ∝ 1/√N (through first point)', x: fr.Ns, y: fr.Ns.map((N) => fr.tv[0] * Math.sqrt(fr.Ns[0] / N)), color: '#7f7f7f', dash: [5, 4] }]} />
           )}
-          <p class="small muted">Frequencies of independent records fluctuate around the Born probabilities with spread ∝ 1/√N; the dashed line is the scaling expectation, not a fit.</p>
+          <p class="small muted"><MathText text="Frequencies of independent records fluctuate around the Born probabilities with spread $\propto 1/\sqrt{N}$; the dashed line is the scaling expectation, not a fit." /></p>
         </div>
       )}
     </Card>

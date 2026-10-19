@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { View3D } from '../../components/View3D';
 import { SuiteHeader } from '../../components/SuiteHeader';
 import { Card, ProvBadge, ErrorBox, Loading, DataTable, Btn, InfoBanner, Switch, Progress, StatusBadge, KV, SourceChip, EvidenceBanner } from '../../components/ui';
+import { Tex } from '../../components/Tex';
 import { NumberField, SelectField, useValidity } from '../../components/fields';
 import { HeatMap } from '../../plot/Chart';
 import { apiGet, apiPost, cancelJob, useApiGet, type Job } from '../../lib/api';
@@ -149,7 +150,7 @@ function BrowserCompute() {
             {st.finished && <div class="row"><Btn busy={checking} onClick={crossCheck}>Cross-check 5 random cells against the server</Btn><span class="small muted">(5 × POST /api/bmv/sweep2d, 1 × 1 grids)</span></div>}
             <ErrorBox error={checkErr} what="cross-checking with POST /api/bmv/sweep2d" />
             {checks && (<>
-              <DataTable head={['d', 'Δx', 'Negativity (local)', 'Negativity (server)', '⟨W⟩ (local)', '⟨W⟩ (server)']} numeric={[2, 3, 4, 5]}
+              <DataTable head={[<Tex tex="d" />, <Tex tex="\Delta x" />, 'Negativity (local)', 'Negativity (server)', <><Tex tex="\langle W\rangle" /> (local)</>, <><Tex tex="\langle W\rangle" /> (server)</>]} numeric={[2, 3, 4, 5]}
                 rows={checks.map((c) => [fmtQ(c.x, 'm'), fmtQ(c.y, 'm'), fmtNum(c.local[0], 10), fmtNum(c.server[0], 10), fmtNum(c.local[1], 10), fmtNum(c.server[1], 10)])} />
               <p class="small">Maximum relative difference local vs server: <b>{maxRel == null ? '—' : fmtNum(maxRel, 3)}</b> {maxRel != null && maxRel < 1e-8 ? <span class="badge b-ok">agree to &lt; 1e-8</span> : <span class="badge b-warn">check</span>}</p>
             </>)}

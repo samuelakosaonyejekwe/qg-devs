@@ -47,6 +47,7 @@ self.addEventListener('activate', (event) => {
       .filter((n) => (n.startsWith('qg-shell-') && n !== SHELL_CACHE) || (n.startsWith('qg-lazy-') && n !== LAZY_CACHE))
       .map((n) => caches.delete(n)));
     await self.clients.claim();
+    trimApiCache();
     // Background: cache all lazily loaded chunks so every page works offline after the first visit.
     precacheLazy();
   })());
@@ -162,6 +163,35 @@ async function withHeaders(res, extra) {
   return new Response(body, { status: res.status, statusText: res.statusText, headers });
 }
 
+// API cache limits: entries older than MAX_AGE are evicted, and at most MAX_ENTRIES are kept
+// (oldest stored first), so the cache cannot grow without bound on long-lived installs.
+const API_MAX_ENTRIES = 300;
+const API_MAX_AGE_MS = 14 * 24 * 3600 * 1000;
+let trimming = null;
+function trimApiCache() {
+  if (trimming) return trimming;
+  trimming = (async () => {
+    try {
+      const cache = await caches.open(API_CACHE);
+      const keys = await cache.keys();
+      const items = [];
+      for (const k of keys) {
+        const r = await cache.match(k, MATCH);
+        const at = Date.parse((r && r.headers.get('x-qg-stored-at')) || '') || 0;
+        items.push({ k, at });
+      }
+      const now = Date.now();
+      items.sort((a, b) => a.at - b.at);
+      const excess = Math.max(0, items.length - API_MAX_ENTRIES);
+      for (let i = 0; i < items.length; i++) {
+        if (i < excess || now - items[i].at > API_MAX_AGE_MS) await cache.delete(items[i].k);
+      }
+    } catch (_) { /* best effort */ }
+    trimming = null;
+  })();
+  return trimming;
+}
+
 async function fetchAndStore(req) {
   const res = await fetch(req);
   const at = new Date().toISOString();
@@ -169,6 +199,7 @@ async function fetchAndStore(req) {
     const stored = await withHeaders(res.clone(), { 'x-qg-stored-at': at });
     const cache = await caches.open(API_CACHE);
     await cache.put(req.url, stored);
+    if (Math.random() < 0.1) trimApiCache(); // amortised trimming
   }
   return { res, at };
 }

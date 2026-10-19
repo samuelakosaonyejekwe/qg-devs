@@ -4,6 +4,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
 import { Card, Out, ProvBadge, StatusBadge, EvidenceBanner, ErrorBox, Btn, DataTable, Json, Level, InfoBanner, Tabs, TabPanel, KV, SourceChip, Seg } from '../../components/ui';
+import { Tex } from '../../components/Tex';
 import { useValidity } from '../../components/fields';
 import { ScenarioForm } from '../../components/ScenarioForm';
 import { View3D } from '../../components/View3D';
@@ -110,7 +111,7 @@ export default function Page(_props: { suite?: number }) {
 
 function Protocol({ p, setTab }: { p: any; setTab: (t: string) => void }) {
   if (!p) return <p class="muted">No protocol in the response.</p>;
-  const sections = Object.keys(p).filter((k) => /^\d+_/.test(k)).sort((a, b) => parseInt(a) - parseInt(b));
+  const sections = Object.keys(p).filter((k) => /^\d+_/.test(k) && !k.endsWith('_tex')).sort((a, b) => parseInt(a) - parseInt(b));
   return (
     <div>
       <h2>{p.title}</h2>
@@ -131,10 +132,19 @@ function Protocol({ p, setTab }: { p: any; setTab: (t: string) => void }) {
                   link={(t) => <button type="button" class="btn-link small" onClick={() => goTo(`eng-tol-${slug(t)}`, setTab, 'engineering')}>engineering spec →</button>} />
               ) : null}
               {p[k].decoherence_mechanisms && (
-                <DataTable caption="Decoherence mechanisms" head={['Mechanism', 'Rate (s⁻¹)', 'Γt', 'Regime']} numeric={[1, 2]}
+                <DataTable caption="Decoherence mechanisms" head={['Mechanism', 'Rate (s⁻¹)', <Tex tex="\Gamma t" />, 'Regime']} numeric={[1, 2]}
                   rows={Object.entries(p[k].decoherence_mechanisms).map(([m, x]: [string, any]) => [humanKey(m), fmtNum(x.rate_s), fmtNum(x.gamma_t), <span class="small">{x.regime}</span>])} />
               )}
             </>
+          ) : k === '3_equations' ? (
+            p['3_equations_tex'] && typeof p['3_equations_tex'] === 'object' ? (
+              <dl class="eq-list">
+                {Object.entries(p['3_equations_tex'] as Record<string, string>).map(([name, tex]) => (
+                  <div class="eq-item"><dt>{humanKey(name).replace(/^\w/, (c) => c.toUpperCase())}</dt>
+                    <dd><Tex tex={tex} display alt={typeof p[k]?.[name] === 'string' ? p[k][name] : undefined} /></dd></div>
+                ))}
+              </dl>
+            ) : <Val v={p[k]} />
           ) : k === '6_procedure' ? (
             <>
               <ol class="tight">{(p[k] as string[]).map((s) => <li>{s}</li>)}</ol>
@@ -260,6 +270,7 @@ function Apparatus3D({ stamp }: { stamp: string }) {
           title="Apparatus geometry and Δφ(t)" badge="COMPUTED" name="lab-apparatus"
           legend={[{ label: 'Mass A branches', color: '#0072B2' }, { label: 'Mass B branches', color: '#D55E00' }, { label: 'weak |U_ij|', color: '#2b6cb0' }, { label: 'strong |U_ij|', color: '#dd6b20' }]}
           onRecordStart={() => { player.setPos(0); player.setPlaying(true); }} playing={player.playing}
+          change={ts ? { rel: Math.abs(ts.delta_phi[ts.delta_phi.length - 1] - ts.delta_phi[0]) / (2 * Math.PI), what: 'phase-dial angle Δφ relative to a full turn' } : undefined}
           frameData={() => ({ nearest_sample: player.frame, t_s: ts?.t[player.frame], delta_phi_rad: ts?.delta_phi[player.frame], scene: s, source: 'COMPUTED (server: /api/lab/export/scene, /api/bmv/predict)' })}
           fallback={<TopView2D s={s!} />}
           overlay={(info) => info && <>

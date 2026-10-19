@@ -7,8 +7,12 @@ import type { Design, Environment, PredictResult } from '../lib/types';
 import golden from './golden.json';
 import {
   checkGeometry, decoherenceBudget, eftPotentialTerms, getMaterial, clausiusMossotti, minDistanceForGravityDominance,
-  modelCurves, parallelDeltaPhiAnalytic, predictScenario, radiusOf, IMPLEMENTED_IDS,
+  modelCurves, parallelDeltaPhiAnalytic, predictScenario, radiusOf, IMPLEMENTED_IDS, predictionsTable, cslRate,
+  spinDipolarBranchEnergies,
 } from './index';
+import { entanglingPhase } from './bmv';
+import { BRANCHES } from '../lib/types';
+import { hbar } from './constants';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const cases: any[] = (golden as any).cases;
@@ -118,6 +122,9 @@ describe('golden vectors (Python reference)', () => {
       });
       // decoherence budget of A
       expect(r.decoherence.dominant).toBe(g.decoherence.dominant);
+      phys(r.decoherence.environmental_total_rate!, g.decoherence.environmental_total_rate, `${name} Γ_env (default budget)`);
+      expect(r.decoherence.includes_hypothetical).toBe(false); // hypothetical collapse models are opt-in
+      expect(Object.keys(r.decoherence.mechanisms).sort()).toEqual(Object.keys(g.decoherence.mechanisms).sort());
       phys(r.decoherence.total_rate, g.decoherence.total_rate, `${name} Γ_total`);
       for (const m of Object.keys(g.decoherence.mechanisms)) {
         phys(r.decoherence.mechanisms[m].rate, g.decoherence.mechanisms[m].rate, `${name} Γ_${m}`);
@@ -139,8 +146,16 @@ describe('golden vectors (Python reference)', () => {
       const cm = clausiusMossotti(getMaterial(env.material));
       const b = decoherenceBudget(design.mass_A, R, design.dx_A, {
         pressure: env.pressure, T_gas: env.T_gas, T_env: env.T_env, T_int: env.T_int, cm, t: design.time, include_dp: true,
+        include_csl: true,
       });
       const g = c.dp_budget;
+      // CSL: the reference integrates with adaptive quad (epsrel 1e-10 per subinterval); Gauss–Legendre here
+      phys(b.mechanisms.csl_collapse.rate, g.mechanisms.csl_collapse.rate, `${name} Γ_CSL`);
+      expect(b.mechanisms.csl_collapse.hypothetical).toBe(true);
+      expect(b.mechanisms.diosi_penrose_collapse.hypothetical).toBe(true);
+      phys(b.environmental_total_rate!, g.environmental_total_rate, `${name} Γ_env`);
+      expect(b.includes_hypothetical).toBe(g.includes_hypothetical);
+      phys(b.suggested_display_window_s!, g.suggested_display_window_s, `${name} display window`);
       // DP: the reference integrates U(0) numerically (quad, epsrel 1e-12); the closed form is exact
       phys(b.mechanisms.diosi_penrose_collapse.rate, g.mechanisms.diosi_penrose_collapse.rate, `${name} Γ_DP`);
       phys(b.total_rate, g.total_rate, `${name} Γ_total(DP)`);
@@ -194,16 +209,35 @@ describe('analytic checks', () => {
     expect(Math.abs(r.negativity - r.concurrence / 2)).toBeLessThan(1e-8);
   });
 
-  it('negativity is non-negative and CPK ≥ 0 for the non-entangling hypotheses (SC-MF, NULL-NG without Casimir)', () => {
+  it('negativity ≥ 0 for every hypothesis; SC-MF, CC-KTM and NULL-NG never entangle through gravity', () => {
+    // The NV spin–spin channel is always present and is itself entangling, so the gravity-only statement is
+    // checked with the non-gravitational branch energies switched off.
+    const zero = { LL: 0, LR: 0, RL: 0, RR: 0 };
     for (const time of [0.5, 2.5, 6]) {
       const r = predictScenario({ ...base, time }, vacuum) as PredictResult;
       for (const m of r.models) expect(m.negativity).toBeGreaterThanOrEqual(0);
-      const sc = r.models.find((m) => m.id === 'SC-MF')!;
-      const nul = r.models.find((m) => m.id === 'NULL-NG')!;
-      expect(sc.witness_cpk).toBeGreaterThanOrEqual(-1e-12);
-      expect(nul.witness_cpk).toBeGreaterThanOrEqual(-1e-12);
-      expect(sc.negativity).toBeLessThan(1e-13);
+      const rows = predictionsTable({ design: { ...base, time }, gamma_env_A: 0, gamma_env_B: 0, nongrav: zero }, ['SC-MF', 'CC-KTM', 'NULL-NG', 'QG-COH']);
+      for (const id of ['SC-MF', 'CC-KTM', 'NULL-NG']) {
+        const m = rows.find((x) => x.id === id)!;
+        expect(m.negativity, id).toBeLessThan(1e-13);
+        expect(m.witness_cpk, id).toBeGreaterThanOrEqual(-1e-12);
+      }
+      expect(rows.find((x) => x.id === 'QG-COH')!.negativity).toBeGreaterThan(0);
     }
+  });
+
+  it('NV spin–spin coupling is present and entangling: Δφ_ss = −(t/ħ)(U_LL+U_RR−U_LR−U_RL) ≠ 0', () => {
+    const U = spinDipolarBranchEnergies(base);
+    const ph = {} as Record<(typeof BRANCHES)[number], number>;
+    for (const k of BRANCHES) ph[k] = (-U[k] * base.time) / hbar;
+    expect(Math.abs(entanglingPhase(ph))).toBeGreaterThan(0);
+    expect(U.LL).toBeGreaterThan(0); // parallel spins side by side (θ = 90°): repulsive
+  });
+
+  it('CSL rate reduces to λ(m/m0)²(1 − e^{−Δx²/4r_C²}) for point-like bodies (R ≪ r_C)', () => {
+    const m = 1e-20, R = 1e-9, dx = 3e-7, m0 = 1.66053906892e-27, rC = 1e-7;
+    const exact = 1e-16 * (m / m0) ** 2 * (1 - Math.exp(-(dx * dx) / (4 * rC * rC)));
+    expect(Math.abs(cslRate(m, R, dx).rate / exact - 1)).toBeLessThan(1e-4); // finite-R form factor ~ (R/r_C)²
   });
 
   it('model curves at t = 0 give the product state |+>|+> (no entanglement, CPK = 0)', () => {

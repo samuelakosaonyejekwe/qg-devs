@@ -1,3 +1,4 @@
+import { useImplementedModels } from './f2-shared';
 import { RunBar, useResetKey } from '../../components/Reset';
 import { View3D } from '../../components/View3D';
 /** Suite 18 — Discovery evidence and independent replication. */
@@ -10,7 +11,7 @@ import { useApiGet, apiPost, apiPostBlob, apiUpload, downloadBlob, isOfflineErro
 import { enqueue } from '../../lib/queue';
 import { useStore, scenario } from '../../lib/store';
 import { fmtQ, fmtTime, shortHash } from '../../lib/format';
-import { IMPLEMENTED_IDS, hypStyle } from '../../lib/hyp';
+import { hypStyle } from '../../lib/hyp';
 import type { Scenario } from '../../lib/types';
 
 /** The nine rungs of the evidence ladder — verbatim from EVIDENCE_LADDER in qgdevs/evidence.py. */
@@ -79,6 +80,7 @@ function summary(e: Entry): string {
 
 // ----------------------------------------------------------------------------- preregistration
 function Preregister({ onDone }: { onDone: () => void }) {
+  const HYP_IDS = useImplementedModels(); // live registry (server implements more models than the local engine)
   const sc = useStore(scenario);
   const val = useValidity();
   const [title, setTitle] = useState('');
@@ -113,7 +115,7 @@ function Preregister({ onDone }: { onDone: () => void }) {
       <p class="small muted">Freezes the hypotheses, design, the server-computed predictions of each hypothesis for this design, decision rules, seeds, sample size, nuisance ranges and the exact code hash — <strong>before</strong> any outcome data are unblinded. Once recorded it cannot be edited (only superseded by a new entry).</p>
       <TextField label="Title" value={title} onChange={setTitle} required placeholder="e.g. BMV witness test, 1e-14 kg, 450 µm" help="Short, unique description of the study." />
       <fieldset class="fieldset"><legend>Hypotheses under test</legend>
-        <div class="row">{IMPLEMENTED_IDS.map((id) => (
+        <div class="row">{HYP_IDS.map((id) => (
           <label class="row" style={{ gap: '4px' }}><input type="checkbox" checked={hyps.includes(id)} onChange={(e: any) => setHyps(e.currentTarget.checked ? [...hyps, id] : hyps.filter((h) => h !== id))} />
             <span class="swatch" style={{ background: hypStyle(id).color }} /> {id}</label>))}</div>
         {hyps.length === 0 && <div class="field-error">Select at least one hypothesis.</div>}
@@ -144,7 +146,7 @@ function Preregister({ onDone }: { onDone: () => void }) {
           help="Planned number of repetitions per Pauli setting (9 settings). Fixed in advance so optional stopping cannot inflate significance. Suite 9/13 report the shots needed for 5σ." />
         <TextField label="Actor" value={actor} onChange={setActor} required help="Name recorded in the ledger as the author of this entry." />
       </div>
-      <RunBar label="Record preregistration" scenario busy={busy} disabled={!ok} onRun={submit} />
+      <RunBar label="Record preregistration" requiresToken scenario busy={busy} disabled={!ok} onRun={submit} />
       {!ok && <span class="small muted"> Complete the required fields.</span>}
       <ErrorBox error={err} what="recording the preregistration" />
       {queued && <InfoBanner>Offline: the preregistration was queued on this device and will be submitted when the server is reachable. It is <strong>not</strong> recorded in the ledger until then (see Jobs → Offline queue).</InfoBanner>}
@@ -190,7 +192,7 @@ function Datasets({ onDone }: { onDone: () => void }) {
       <TextField label="Source" value={source} onChange={setSource} required placeholder="instrument / lab / generator and run id" help="Where the data came from (recorded in the ledger)." />
       <TextField label="Description" value={desc} onChange={setDesc} help="Optional free text." />
       <TextField label="Preregistration id (optional)" value={prereg} onChange={setPrereg} help="Link the dataset to an existing preregistration." />
-      <RunBar label="Ingest dataset" scenario busy={busy} disabled={!file || !source.trim()} onRun={ingest} />
+      <RunBar label="Ingest dataset" requiresToken scenario busy={busy} disabled={!file || !source.trim()} onRun={ingest} />
       <ErrorBox error={err} what="ingesting the dataset" />
       {rec && <div style={{ marginTop: '8px' }}><KV rows={[['Dataset id', <code>{rec.dataset_id}</code>], ['Label', rec.label], ['Role', rec.role], ['SHA-256', <code style={{ overflowWrap: 'anywhere' }}>{rec.sha256}</code>], ['Source', rec.source]]} /></div>}
     </Card>
@@ -214,7 +216,7 @@ function Unblind({ onDone }: { onDone: () => void }) {
       <TextField label="Dataset id" value={ds} onChange={setDs} required help="Id returned at ingestion." />
       <TextField label="Preregistration id" value={pr} onChange={setPr} required help="Id returned by the preregistration." />
       <TextField label="Actor" value={actor} onChange={setActor} required help="Name recorded in the ledger." />
-      <RunBar label="Record unblinding" scenario busy={busy} disabled={!ds.trim() || !pr.trim() || !actor.trim()} onRun={go} />
+      <RunBar label="Record unblinding" requiresToken scenario busy={busy} disabled={!ds.trim() || !pr.trim() || !actor.trim()} onRun={go} />
       {err ? <div style={{ marginTop: '8px' }}><ErrorBox error={err} what="unblinding (the server refused; reason above)" /></div> : null}
       {res && <div class="banner ok" role="status"><div><strong>Unblinding recorded</strong> as ledger entry #{res.index} (<code>{shortHash(res.entry_hash, 16)}</code>).</div></div>}
     </Card>
@@ -223,6 +225,7 @@ function Unblind({ onDone }: { onDone: () => void }) {
 
 // ----------------------------------------------------------------------------- gates & ladder
 function Gates({ onClass }: { onClass: (c: Classification | null) => void }) {
+  const HYP_IDS = useImplementedModels(); // live registry (server implements more models than the local engine)
   const sc = useStore(scenario);
   const [hyp, setHyp] = useState('QG-COH');
   const [busy, setBusy] = useState(false);
@@ -237,7 +240,7 @@ function Gates({ onClass }: { onClass: (c: Classification | null) => void }) {
     <Card title="Seven acceptance gates and the evidence ladder">
       <p class="small muted">Gates are evaluated from recorded evidence only: model registry, latest V&amp;V run, Lean proof status, ledger (preregistrations, sign-offs), the virtual-laboratory dossier and independent reproduction. Gates that need human review or physical data cannot be passed by software alone.</p>
       <div class="row">
-        <SelectField label="Hypothesis" value={hyp} onChange={setHyp} options={IMPLEMENTED_IDS.map((h) => ({ v: h, label: h }))} help="Model whose G1 (theory) record is assessed." />
+        <SelectField label="Hypothesis" value={hyp} onChange={setHyp} options={HYP_IDS.map((h) => ({ v: h, label: h }))} help="Model whose G1 (theory) record is assessed." />
         <span class="small muted">Scenario: current shared design (m = {fmtQ(sc.design.mass_A, 'kg')}, d = {fmtQ(sc.design.separation, 'm')}).</span>
       </div>
       <RunBar label="Evaluate gates" scenario busy={busy} onRun={run} />
@@ -312,7 +315,7 @@ function Signoff({ onDone }: { onDone: () => void }) {
       </div>
       <TextField label="Statement" value={stmt} onChange={setStmt} multiline required help="What was reviewed and the conclusion (at least 10 characters)." />
       <label class="row small" style={{ marginBottom: '8px' }}><input type="checkbox" checked={confirm} onChange={(e: any) => setConfirm(e.currentTarget.checked)} /> I am the named reviewer and this statement reflects my own independent review.</label>
-      <RunBar label="Record sign-off" scenario busy={busy} disabled={!ok} onRun={go} />
+      <RunBar label="Record sign-off" requiresToken scenario busy={busy} disabled={!ok} onRun={go} />
       <ErrorBox error={err} what="recording the sign-off" />
       {res && <div class="banner ok" role="status"><div><strong>Sign-off recorded</strong> for {gate} as ledger entry #{res.index}.</div></div>}
     </Card>

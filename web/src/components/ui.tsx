@@ -94,17 +94,98 @@ export function InfoBanner({ children, kind = 'info' }: { children: ComponentChi
 export function Loading({ label = 'Loading' }: { label?: string }) {
   return <div class="row muted" role="status" aria-live="polite"><span class="spinner" aria-hidden="true" /> {label}…</div>;
 }
-export function ErrorBox({ error, what }: { error: unknown; what?: string }) {
+const cap = (x: string) => (x ? x[0].toUpperCase() + x.slice(1) : x);
+
+/** Human-readable summary of an API error (never raw JSON or a stack trace). */
+export function friendlyDetail(e: unknown): string {
+  const msg = e instanceof ApiError ? e.message : String((e as any)?.message ?? e ?? '');
+  const first = msg.split('\n')[0].replace(/^Traceback.*$/, '').trim();
+  return first.length > 400 ? `${first.slice(0, 400)}…` : first;
+}
+
+/**
+ * Error notice for any failed request. Status codes become explanations with a next step:
+ * 401/403 researcher access, 429 job limit, 503 server busy (optionally retried automatically),
+ * 422 rejected input, 5xx server failure, network errors offline. No raw status lines are shown.
+ */
+export function ErrorBox({ error, what, onRetry, retryInS }: { error: unknown; what?: string; onRetry?: () => void; retryInS?: number | null }) {
   if (!error) return null;
   const e = error as ApiError;
-  const offline = e instanceof ApiError && (e.offline || e.status === 0);
+  const status = e instanceof ApiError ? e.status : -1;
+  const offline = e instanceof ApiError && (e.offline || status === 0);
+  const detail = friendlyDetail(error);
+  if (offline) {
+    return (
+      <div class="notice notice-offline" role="alert">
+        <strong>Server unreachable{what ? ` while ${what}` : ''}.</strong> No fresh data was fetched; cached results (if any) are labelled with their cache time. Job submissions and preregistrations made now are queued on this device and sent when the connection returns.
+        {onRetry && <div><button type="button" class="btn-sm" onClick={onRetry}>Try again</button></div>}
+      </div>
+    );
+  }
+  if (status === 401 || status === 403) {
+    return (
+      <div class="notice notice-access" role="alert" data-notice="access">
+        <div class="notice-title"><span aria-hidden="true">🔒</span> Researcher access required</div>
+        <p>This action writes to the evidence record, so it needs a researcher API token{s_tokenNote()}.{detail && !/bearer token required|researcher access required/i.test(detail) ? <> <span class="muted">{cap(detail)}</span></> : null}</p>
+        <p class="small muted">Viewing results and running computations are open to everyone; only evidence-writing actions (preregistration, dataset ingest, unblinding, sign-off, backups) need a token.</p>
+        <a class="btn" href="/settings#api-token">Open Settings → API token</a>
+      </div>
+    );
+  }
+  if (status === 429 && !/active|running|jobs?\b.*limit|at most|max(imum)? .*jobs?/i.test(detail)) {
+    // request-rate limiter (too many POSTs in a minute), not the per-visitor job limit
+    return (
+      <div class="notice notice-busy" role="alert" data-notice="rate">
+        <div class="notice-title">Too many requests — please wait a minute</div>
+        <p>The server limits how many computations a visitor can request per minute.{retryInS != null ? ` Retrying automatically in ${retryInS} s…` : ''}</p>
+        {onRetry && <button type="button" class="btn-sm" onClick={onRetry}>Try again</button>}
+      </div>
+    );
+  }
+  if (status === 429) {
+    return (
+      <div class="notice notice-busy" role="alert" data-notice="limit">
+        <div class="notice-title">You already have the maximum number of jobs running</div>
+        <p>{detail ? cap(detail.replace(/\.?$/, '.')) : 'Each visitor may have up to 3 computation jobs active at once.'} Wait for one to finish, then submit again.</p>
+        <a class="btn" href="/jobs">See your jobs</a>
+      </div>
+    );
+  }
+  if (status === 503) {
+    return (
+      <div class="notice notice-busy" role="alert" data-notice="busy">
+        <div class="notice-title">The server is busy right now</div>
+        <p>{detail && !/^offline/i.test(detail) ? `${cap(detail.replace(/\.$/, ''))}. ` : ''}{retryInS != null ? `Retrying automatically in ${retryInS} s…` : 'Please try again in a moment.'}</p>
+        {onRetry && <button type="button" class="btn-sm" onClick={onRetry}>Retry now</button>}
+      </div>
+    );
+  }
+  if (status === 422 || status === 400 || status === 404) {
+    return (
+      <div class="notice notice-input" role="alert">
+        <div class="notice-title">{status === 404 ? 'Not found' : 'The server could not accept these inputs'}{what ? ` (${what})` : ''}</div>
+        <p>{detail ? cap(detail) : 'Check the highlighted inputs and try again.'}</p>
+      </div>
+    );
+  }
   return (
-    <div class="error-box" role="alert">
-      <strong>{offline ? 'Offline / server unreachable' : `Error${e?.status ? ` ${e.status}` : ''}`}</strong>{what ? ` while ${what}` : ''}: {String(e?.message ?? error)}
-      {offline && <div class="small muted">No fresh data was fetched. Cached results (if any) are labelled with their cache time.</div>}
+    <div class="notice notice-error" role="alert">
+      <div class="notice-title">{status >= 500 ? 'The server could not complete this request' : 'Something went wrong'}{what ? ` while ${what}` : ''}</div>
+      <p>{detail ? cap(detail) : 'Unknown error.'}{status >= 500 ? ' The inputs were valid; please try again, and if it persists check System health.' : ''}</p>
+      {onRetry && <button type="button" class="btn-sm" onClick={onRetry}>Try again</button>}
     </div>
   );
 }
+
+function s_tokenNote(): string { return settings.get().apiToken.trim() ? ' (the configured token was not accepted)' : ' (none is configured on this device)'; }
+
+/** Small lock hint for evidence-writing actions when no researcher token is configured (the action stays usable). */
+export function WriteLock() {
+  const s = useStore(settings);
+  if (s.apiToken.trim()) return <span class="badge b-ok" title="A researcher API token is configured in Settings">🔓 token set</span>;
+  return <a class="badge b-warn lock-hint" href="/settings#api-token" title="Evidence-writing actions need a researcher API token (Settings → API bearer token). You can still try; the server will say if access is refused.">🔒 researcher token needed</a>;
+}
+
 export function SourceChip({ source, cachedAt }: { source: Source | null; cachedAt?: string | null }) {
   if (!source) return null;
   if (source === 'cache') return <span class="cached-chip"><ProvBadge kind="CACHED" /> cached at {fmtTime(cachedAt)}</span>;
@@ -230,7 +311,7 @@ export function KV({ rows }: { rows: [ComponentChildren, ComponentChildren][] })
 
 export function DataTable({ head, rows, numeric = [], caption, hl }: { head: ComponentChildren[]; rows: ComponentChildren[][]; numeric?: number[]; caption?: string; hl?: (i: number) => boolean }) {
   return (
-    <div class="table-wrap">
+    <div class="table-wrap" role="region" aria-label={caption ?? 'Data table'} tabIndex={0}>
       <table class="data">
         {caption && <caption class="sr-only">{caption}</caption>}
         <thead><tr>{head.map((h, i) => <th scope="col" class={numeric.includes(i) ? 'num' : ''}>{h}</th>)}</tr></thead>
@@ -241,7 +322,7 @@ export function DataTable({ head, rows, numeric = [], caption, hl }: { head: Com
 }
 
 export function Json({ data, max = 360 }: { data: unknown; max?: number }) {
-  return <pre class="code" style={{ maxHeight: `${max}px` }}>{JSON.stringify(data, null, 2)}</pre>;
+  return <pre class="code" style={{ maxHeight: `${max}px` }} tabIndex={0} aria-label="Raw data (JSON)">{JSON.stringify(data, null, 2)}</pre>;
 }
 
 export function Btn(props: JSX.HTMLAttributes<HTMLButtonElement> & { busy?: boolean; kind?: 'primary' | 'danger' }) {

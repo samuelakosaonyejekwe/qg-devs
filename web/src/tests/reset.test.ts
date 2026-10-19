@@ -66,16 +66,16 @@ describe('reset infrastructure', () => {
     expect(s).toMatch(/<RunBar\b/);
     expect(s).toMatch(/useResetKey\(lastKey\(key\)\)/);
   });
-  it('Reset asks for confirmation only when results are present', () => {
+  it('Reset asks for confirmation when results are shown or jobs are running, and can cancel running jobs', () => {
     const s = read('components/Reset.tsx');
-    expect(s).toMatch(/if \(ctx\?\.hasResults\(\)\) setPending\(kind\); else doReset\(kind\)/);
+    expect(s).toMatch(/ctx\?\.hasResults\(\) \|\| \(ctx\?\.running\(\)\.length \?\? 0\) > 0/);
+    expect(s).toMatch(/data-reset-cancel-jobs/);
     expect(s).toMatch(/aria-labelledby="reset-dlg-title"/);
     expect(s).toMatch(/Reset shared scenario to defaults/);
+    expect(read('components/JobRunner.tsx')).toMatch(/useRunningJob\(/);
   });
-  it('auto-running pages skip the run that would follow a reset', () => {
-    for (const f of ['pages/Flagship.tsx', 'pages/suites/S07Decoherence.tsx', 'pages/suites/S08Environment.tsx', 'pages/suites/S09Lab.tsx']) {
-      expect(read(f), f).toMatch(/if \(afterReset\) return;/);
-    }
+  it('a reset page behaves exactly like a first visit (default computations are not suppressed)', () => {
+    expect(read('components/Reset.tsx')).toMatch(/export function useAfterReset\(\): boolean \{[\s\S]*?return false;/);
   });
   it('Settings offers a global reset of saved inputs', () => {
     expect(read('pages/Settings.tsx')).toMatch(/resetAllSavedInputs\(\)/);
@@ -92,5 +92,31 @@ describe('isSavedInputKey', () => {
     expect(isSavedInputKey('qg.theme')).toBe(false);
     expect(isSavedInputKey('qg.lastSeenVersion')).toBe(false);
     expect(isSavedInputKey('qg.maxIdx')).toBe(false);
+  });
+});
+
+describe('page-scoped default scenario (Reset this page)', async () => {
+  const { scenario } = await import('../lib/store');
+  const { DEFAULT_DESIGN, DEFAULT_ENV } = await import('../lib/types');
+  it('override shows defaults without changing the shared scenario; first edit writes through', () => {
+    scenario.set({ design: { ...DEFAULT_DESIGN, mass_A: 2e-14, mass_B: 2e-14 }, environment: { ...DEFAULT_ENV } });
+    scenario.override({ design: { ...DEFAULT_DESIGN }, environment: { ...DEFAULT_ENV } });
+    expect(scenario.get().design.mass_A).toBe(DEFAULT_DESIGN.mass_A);
+    expect(scenario.hasOverride()).toBe(true);
+    scenario.override(null); // leaving the page
+    expect(scenario.get().design.mass_A).toBe(2e-14); // other suites still see the shared value
+    scenario.override({ design: { ...DEFAULT_DESIGN }, environment: { ...DEFAULT_ENV } });
+    scenario.set((s) => ({ ...s, design: { ...s.design, time: 3 } })); // first edit on the reset page
+    expect(scenario.hasOverride()).toBe(false);
+    expect(scenario.get().design.time).toBe(3);
+    expect(scenario.get().design.mass_A).toBe(DEFAULT_DESIGN.mass_A); // edit applied on top of the page defaults
+  });
+  it('subscribers are notified when an override is applied or dropped', () => {
+    const seen: number[] = [];
+    const un = scenario.subscribe((v) => seen.push(v.design.time));
+    scenario.override({ design: { ...DEFAULT_DESIGN, time: 7 }, environment: { ...DEFAULT_ENV } });
+    scenario.override(null);
+    un();
+    expect(seen).toEqual([7, 3]);
   });
 });

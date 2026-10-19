@@ -40,6 +40,9 @@ function ApiSection() {
         <Btn busy={busy} disabled={!valid} onClick={testIt}>Test connection</Btn>
       </div>
       {test && <p role="status" class="small" style={{ color: test.ok ? 'var(--ok)' : 'var(--danger)' }}>{test.text}</p>}
+      {(() => { try { const t = draft.trim() || s.apiBase; return t && new URL(t).origin !== location.origin; } catch { return false; } })() && (
+        <p class="small muted" role="note">Cross-origin API: the site hosting this app must allow that origin in its Content-Security-Policy <code>connect-src</code> (the default production policy allows only <code>'self'</code>), and the API must send CORS headers for this origin. Otherwise every request is blocked by the browser.</p>
+      )}
       <div class="field" style={{ marginTop: '12px' }}>
         <label class="field-label" for="api-token">API bearer token (optional) <Tip text="Only needed when the server sets QGDEVS_API_TOKENS. It is stored in this browser's local storage and sent only as an Authorization header to the configured API base URL." /></label>
         <div class="field-input"><input id="api-token" type="password" autoComplete="off" value={s.apiToken} onInput={(e: any) => settings.set({ apiToken: e.currentTarget.value })} /></div>

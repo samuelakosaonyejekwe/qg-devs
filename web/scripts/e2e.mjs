@@ -91,7 +91,7 @@ await step('flagship prediction (Suite 4)', async () => {
   await page.waitForSelector('.view3d canvas', { timeout: 30000 });
   await page.waitForTimeout(1500);
   await shot('02-flagship');
-  await page.locator('button', { hasText: '▶ Play' }).first().click();
+  await page.locator('main [data-play]').first().click();
   await page.waitForTimeout(1200);
   await page.locator('.view3d').first().screenshot({ path: path.join(OUT, '05-apparatus-3d.png') });
   await page.locator('section[aria-label="Competing hypotheses — side by side"]').screenshot({ path: path.join(OUT, '06-hypotheses.png') });

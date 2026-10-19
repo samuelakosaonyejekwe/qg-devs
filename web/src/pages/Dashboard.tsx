@@ -1,6 +1,9 @@
+import { Tex } from '../components/Tex';
+import { F } from './formulas-l1';
 /** Dashboard: mission, quick actions, live snapshot of the shared scenario, the 18 suites and system status. */
 import { useEffect, useState } from 'preact/hooks';
 import { apiPost, useApiGet, apiGet, isOfflineError, ApiError, type Job } from '../lib/api';
+import type { HealthInfo } from '../lib/api';
 import { useStore, scenario } from '../lib/store';
 import { SUITES_IN_ORDER, topicOf } from '../lib/nav';
 import { useSuites } from '../components/SuiteHeader';
@@ -48,13 +51,13 @@ function Snapshot() {
           <EvidenceBanner classification={snap.local ? 'COMPUTED LOCALLY (offline engine)' : null} />
           <div class="outs">
             <Out label="Entangling phase Δφ" value={snap.r.delta_phi_total_rad} unit="rad" prov={prov}
-              interp={`Gravity alone: ${fmtQ(snap.r.delta_phi_gravity_rad, 'rad')}. Entanglement is maximal at Δφ = π.`} />
+              interp={<>Gravity alone: {fmtQ(snap.r.delta_phi_gravity_rad, 'rad')}. Entanglement is maximal at <Tex tex={F.dphiPi} />.</>} />
             <Out label="Negativity" value={snap.r.negativity} prov={prov} tone={snap.r.negativity > 0 ? 'good' : null}
               interp={snap.r.negativity > 0 ? 'N > 0: the predicted joint state is entangled (PPT criterion).' : 'N = 0: no entanglement predicted for this design.'} />
             <Out label="CPK witness ⟨W⟩" value={snap.r.witness_cpk_local_corrected} prov={prov} tone={snap.r.witness_cpk_local_corrected < 0 ? 'good' : 'bad'}
-              interp={snap.r.witness_cpk_local_corrected < 0 ? '⟨W⟩ < 0 would certify entanglement with three settings (XX, YZ, ZY).' : '⟨W⟩ ≥ 0: this witness cannot certify entanglement here.'} />
+              interp={snap.r.witness_cpk_local_corrected < 0 ? <><Tex tex={F.wNeg} /> would certify entanglement with three settings (XX, YZ, ZY).</> : <><Tex tex={F.wNonneg} />: this witness cannot certify entanglement here.</>} />
             <Out label="Dominant decoherence" value={snap.r.decoherence.dominant ? humanKey(snap.r.decoherence.dominant) : '—'} prov={prov}
-              interp={`Total rate per mass ${fmtQ(snap.r.decoherence.total_rate, 'Hz')} · Γt = ${fmtQ(snap.r.decoherence.total_gamma_t, '1', 3)}.`} />
+              interp={<>Total rate per mass {fmtQ(snap.r.decoherence.total_rate, 'Hz')} · <Tex tex={F.gammaT} /> = {fmtQ(snap.r.decoherence.total_gamma_t, '1', 3)}.</>} />
           </div>
           {busy && <div class="small muted" role="status">Updating…</div>}
         </>
@@ -88,7 +91,7 @@ function SuitesGrid() {
 }
 
 function SystemStatus() {
-  const h = useApiGet<any>('/api/health');
+  const h = useApiGet<HealthInfo>('/api/health');
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [jerr, setJerr] = useState<ApiError | null>(null);
   useEffect(() => {

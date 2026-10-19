@@ -5,6 +5,7 @@ import { useMemo, useState } from 'preact/hooks';
 import { View3D } from '../../components/View3D';
 import { usePlayer, PlayerControls } from '../../components/Player';
 import { Seg, Out } from '../../components/ui';
+import { Tex, MathText } from '../../components/Tex';
 import { sobol, pointMassDeltaPhi } from '../../engine/index';
 import { DEFAULT_DESIGN, type Geometry } from '../../lib/types';
 import { SuiteHeader } from '../../components/SuiteHeader';
@@ -13,21 +14,41 @@ import { NumberField, SelectField, useValidity } from '../../components/fields';
 import { JobRunner } from '../../components/JobRunner';
 import { LinePlot } from '../../plot/Chart';
 import { apiPost, useApiGet } from '../../lib/api';
-import { fmtNum, fmtQ, fmtTime, shortHash, sup } from '../../lib/format';
+import { fmtNum, fmtQ, fmtTime, shortHash } from '../../lib/format';
 import { CONSTANTS } from '../../engine';
 
 interface Law {
   raw_exponents: Record<string, number>; rational_exponents: Record<string, string | null>; constant_exponents: Record<string, string>;
   dimensionally_consistent: boolean; expression: string | null; log_prefactor: number; r2_log: number; max_rel_residual: number;
 }
-interface Scaling { study: string; regime: string; geometry: string; n: number; seed: number; law: Law; data_sha256: string; correction_series?: { variable: string; normalisation: string; coefficients: Record<string, number>; reference_series: string; max_abs_error: number } }
+interface Samples { mass: number[]; separation: number[]; branch_separation: number[]; time: number[]; delta_phi: number[] }
+interface Scaling { study: string; regime: string; geometry: string; n: number; seed: number; law: Law; data_sha256: string; samples?: Samples; correction_series?: { variable: string; normalisation: string; coefficients: Record<string, number>; reference_series: string; max_abs_error: number } }
 
-const SYM: Record<string, string> = { hbar: 'ħ', G: 'G', c: 'c', k_B: 'k_B', mass: 'm', separation: 'd', branch_separation: 'Δx', time: 't' };
+/** Known server strings → LaTeX (the server string stays available as tooltip). */
+const REF_SERIES_TEX: Record<string, string> = {
+  '1 - (1+u)^(-1/2) = u/2 - 3u²/8 + 5u³/16 - 35u⁴/128 + ...': '1-(1+u)^{-1/2} = \\tfrac{u}{2} - \\tfrac{3u^{2}}{8} + \\tfrac{5u^{3}}{16} - \\tfrac{35u^{4}}{128} + \\dots',
+};
+const REL_TEX: Record<string, string> = {
+  's* = 1 + |Δφ_g| / (2 Γ_env t)': 's^{*} = 1 + \\frac{|\\Delta\\varphi_g|}{2\\,\\Gamma_{\\text{env}}\\,t}',
+};
 
-/** Render "G^1 · hbar^-1 · mass^2 …" as G ħ⁻¹ m² … (exponent 1 omitted). */
-function LawExpr({ expr }: { expr: string }) {
-  const parts = expr.split('·').map((s) => s.trim()).filter(Boolean).map((f) => { const [n, e] = f.split('^'); return [n, e ?? '1'] as [string, string]; });
-  return <span class="mono" style={{ fontSize: '1.15rem' }}>Δφ ∝ {parts.map(([n, e]) => <span style={{ marginRight: '0.35em' }}>{SYM[n] ?? n}{e === '1' ? '' : sup(e.replace('/', 'ᐟ'))}</span>)}</span>;
+const TEXSYM: Record<string, string> = { hbar: '\\hbar', G: 'G', c: 'c', k_B: 'k_B', mass: 'm', separation: 'd', branch_separation: '\\Delta x', time: 't' };
+const texExp = (e: string) => { const [a, b] = e.split('/'); return b ? `\\tfrac{${a}}{${b}}` : a; };
+
+/** LaTeX for the server's expression "G^1 · hbar^-1 · mass^2 …" (exponent 1 omitted). */
+export function lawTex(expr: string): string {
+  const parts = expr.split('·').map((x) => x.trim()).filter(Boolean).map((f) => { const [n, e] = f.split('^'); return [n, e ?? '1'] as [string, string]; });
+  return parts.map(([n, e]) => `${TEXSYM[n] ?? `\\mathrm{${n}}`}${e === '1' ? '' : `^{${texExp(e)}}`}`).join('\\,');
+}
+
+/** The discovered law typeset, with the dimensionless coefficient implied by the fitted intercept. */
+function LawExpr({ expr, C }: { expr: string; C: number | null }) {
+  return (
+    <div>
+      <Tex display tex={`\\Delta\\varphi \\;=\\; C\\,${lawTex(expr)}`} alt={`Δφ = C · ${expr}`} />
+      {C != null && <p class="small" style={{ margin: 0 }}><Tex tex={`C = ${fmtNum(C, 6).replace('×', '\\times').replace(/10([⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+)/, (_m, d: string) => `10^{${d.replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]/g, (c) => '-0123456789'['⁻⁰¹²³⁴⁵⁶⁷⁸⁹'.indexOf(c)])}}`).replace('−', '-')}`} /> from the fitted intercept (point masses, parallel geometry: the exact far-field coefficient is 1).</p>}
+    </div>
+  );
 }
 
 /** Dimensionless coefficient implied by the fitted intercept: C = exp(ln prefactor) / Π constant^exponent. */
@@ -66,8 +87,8 @@ function ScalingView() {
     <div class="split">
       <div class="card sticky-side">
         <h2>Scaling-law discovery</h2>
-        <p class="small muted">Sobol-sampled BMV simulations → fit ln Δφ = c + Σ eᵢ ln xᵢ → rationalise exponents → solve for constants (G, ħ, c, k_B) making the law dimensionally consistent; laws without a consistent completion are rejected.</p>
-        <SelectField label="Regime" value={p.regime} onChange={(regime) => setP({ ...p, regime })} options={[{ v: 'far', label: 'Far field (Δx ≪ d)' }, { v: 'near', label: 'Near field (Δx ~ d)' }]} help="Far field: a pure power law is expected. Near field: no single power law exists; the engine then fits a correction series in u = (Δx/d)²." />
+        <p class="small muted"><MathText text="Sobol-sampled BMV simulations → fit $\ln\Delta\varphi = c + \sum_i e_i \ln x_i$ → rationalise exponents → solve for constants ($G$, $\hbar$, $c$, $k_B$) making the law dimensionally consistent; laws without a consistent completion are rejected." /></p>
+        <SelectField label="Regime" value={p.regime} onChange={(regime) => setP({ ...p, regime })} options={[{ v: 'far', label: 'Far field (Δx ≪ d)' }, { v: 'near', label: 'Near field (Δx ~ d)' }]} help={<MathText text="Far field: a pure power law is expected. Near field: no single power law exists; the engine then fits a correction series in $u = (\Delta x/d)^2$." />} />
         <SelectField label="Geometry" value={p.geometry} onChange={(geometry) => setP({ ...p, geometry })} options={[{ v: 'parallel', label: 'Parallel' }, { v: 'linear', label: 'Linear' }]} help="Split-axis orientation of the sampled designs." />
         <NumberField name="n" label="Samples" unit="1" integer value={p.n} min={8} max={512} report={v.report} onChange={(n) => setP({ ...p, n })} help="Number of Sobol samples (server limit 512)." />
         <NumberField name="seed" label="Seed" unit="1" integer value={p.seed} min={0} max={2 ** 31} report={v.report} onChange={(seed) => setP({ ...p, seed })} help="Seed of the scrambled Sobol sequence." />
@@ -78,25 +99,25 @@ function ScalingView() {
         <ErrorBox error={err} what="running POST /api/discovery/scaling" />
         {res && law && (<>
           <Card title="Discovered law" actions={<ProvBadge kind="COMPUTED" />}>
-            {law.expression ? <LawExpr expr={law.expression} /> : <InfoBanner kind="danger">No dimensionally consistent power law was found for this regime — the candidate is rejected (expected in the near field, where Δφ is not a monomial).</InfoBanner>}
+            {law.expression ? <LawExpr expr={law.expression} C={C} /> : <InfoBanner kind="danger">No dimensionally consistent power law was found for this regime — the candidate is rejected (expected in the near field, where Δφ is not a monomial).</InfoBanner>}
             <div class="outs" style={{ marginTop: '10px' }}>
               <div class="out"><div class="out-label">Dimensional consistency</div><div class="out-value">{law.dimensionally_consistent ? 'consistent' : 'inconsistent'}</div></div>
               <div class="out"><div class="out-label">r² (log space)</div><div class="out-value">{fmtNum(law.r2_log, 10)}</div></div>
-              <div class="out"><div class="out-label">Max relative residual</div><div class="out-value">{fmtNum(law.max_rel_residual, 3)}</div><div class="out-interp">Largest |Δφ_fit/Δφ_sim − 1| over the samples.</div></div>
+              <div class="out"><div class="out-label">Max relative residual</div><div class="out-value">{fmtNum(law.max_rel_residual, 3)}</div><div class="out-interp"><MathText text="Largest $|\Delta\varphi_{\text{fit}}/\Delta\varphi_{\text{sim}} - 1|$ over the samples." /></div></div>
               {C != null && <div class="out"><div class="out-label">Implied dimensionless coefficient</div><div class="out-value">{fmtNum(C, 5)}</div><div class="out-interp">exp(ln prefactor) divided by the constants' powers (computed here from the fitted intercept {fmtNum(law.log_prefactor, 6)}).</div></div>}
             </div>
             <DataTable head={['Variable', 'Raw exponent (fit)', 'Rational exponent']} numeric={[1]}
-              rows={Object.keys(law.raw_exponents).map((k) => [<span>{SYM[k] ?? k} <span class="muted small">({k})</span></span>, fmtNum(law.raw_exponents[k], 8), law.rational_exponents[k] ?? <span class="badge b-bad">not rationalisable</span>])} />
-            {Object.keys(law.constant_exponents).length > 0 && <p class="small">Constants solved for dimensional consistency: {Object.entries(law.constant_exponents).map(([k, e]) => <code>{SYM[k] ?? k}^{e} </code>)}</p>}
+              rows={Object.keys(law.raw_exponents).map((k) => [<span><Tex tex={TEXSYM[k] ?? `\\mathrm{${k}}`} /> <span class="muted small">({k})</span></span>, fmtNum(law.raw_exponents[k], 8), law.rational_exponents[k] ?? <span class="badge b-bad">not rationalisable</span>])} />
+            {Object.keys(law.constant_exponents).length > 0 && <p class="small">Constants solved for dimensional consistency: {Object.entries(law.constant_exponents).map(([k, e]) => <><Tex tex={`${TEXSYM[k] ?? `\\mathrm{${k}}`}^{${texExp(e)}}`} />{' '}</>)}</p>}
             <p class="small muted">Study: {res.study}, regime {res.regime}, geometry {res.geometry}, n = {res.n}, seed {res.seed}. Data SHA-256 <code>{shortHash(res.data_sha256, 16)}</code>. Recovering a known law blind is a check of the method, not a discovery.</p>
           </Card>
           {res.regime === 'far' && law.dimensionally_consistent && law.expression && <SobolView res={res} />}
           {res.correction_series && (
             <Card title="Near-field correction series" actions={<ProvBadge kind="COMPUTED" />}>
-              <p class="small">Variable {res.correction_series.variable}; normalisation {res.correction_series.normalisation}. Reference: <code>{res.correction_series.reference_series}</code></p>
+              <p class="small">Variable {res.correction_series.variable}; normalisation {res.correction_series.normalisation}. Reference: {REF_SERIES_TEX[res.correction_series.reference_series] ? <Tex tex={REF_SERIES_TEX[res.correction_series.reference_series]} alt={res.correction_series.reference_series} /> : <code>{res.correction_series.reference_series}</code>}</p>
               <DataTable head={['Term', 'Sparse-regression coefficient', 'Binomial reference', 'Difference']} numeric={[1, 2, 3]}
                 rows={Object.entries(res.correction_series.coefficients).map(([k, c]) => { const kk = Number(k.replace('u^', '')); const r = binomialRef(kk); return [<code>{k}</code>, fmtNum(c, 6), fmtNum(r, 6), fmtNum(c - r, 3)]; })} />
-              <p class="small muted">Max absolute error of the fitted series: {fmtNum(res.correction_series.max_abs_error, 3)}. The reference coefficients are the exact binomial expansion of 1 − (1+u)^(−1/2), evaluated in this page; higher-order terms absorb truncation and differ more.</p>
+              <p class="small muted">Max absolute error of the fitted series: {fmtNum(res.correction_series.max_abs_error, 3)}. The reference coefficients are the exact binomial expansion of <Tex tex="1-(1+u)^{-1/2}" />, evaluated in this page; higher-order terms absorb truncation and differ more.</p>
             </Card>
           )}
         </>)}
@@ -175,12 +196,12 @@ function CalView({ r }: { r: CalRes }) {
   const order = r.rows.map((_, i) => i).sort((a, b) => r.rows[a].s_star_formula - r.rows[b].s_star_formula);
   return (
     <div class="stack">
-      <p><ProvBadge kind="COMPUTED" /> Candidate relationship: <code>{r.candidate_relationship}</code> — max relative difference numeric vs formula: <b>{r.max_rel_diff == null ? '—' : fmtNum(r.max_rel_diff, 3)}</b> <StatusBadge status={(r.max_rel_diff ?? 1) < 0.01 ? 'NUMERICALLY_VERIFIED' : 'UNVERIFIED'} /> <span class="small muted">(ledger classification: UNTESTED_PREDICTION; status rule: verified if max rel. diff &lt; 1 %)</span></p>
+      <p><ProvBadge kind="COMPUTED" /> Candidate relationship: {REL_TEX[r.candidate_relationship] ? <Tex tex={REL_TEX[r.candidate_relationship]} alt={r.candidate_relationship} /> : <code>{r.candidate_relationship}</code>} — max relative difference numeric vs formula: <b>{r.max_rel_diff == null ? '—' : fmtNum(r.max_rel_diff, 3)}</b> <StatusBadge status={(r.max_rel_diff ?? 1) < 0.01 ? 'NUMERICALLY_VERIFIED' : 'UNVERIFIED'} /> <span class="small muted">(ledger classification: UNTESTED_PREDICTION; status rule: verified if max rel. diff &lt; 1 %)</span></p>
       <p class="small muted">{r.interpretation}</p>
       <LinePlot name="calibration-tradeoff" desc="critical calibration factor s* from bisection versus formula" xLabel="Design (sorted by formula s*)" yLabel="s*" logY
         series={[{ name: 's* numeric (bisection)', color: '#0072B2', markers: true, x: order.map((_, k) => k + 1), y: order.map((i) => r.rows[i].s_star_numeric) },
           { name: 's* formula', color: '#D55E00', dash: [4, 3], x: order.map((_, k) => k + 1), y: order.map((i) => r.rows[i].s_star_formula) }]} />
-      <DataTable head={['Mass', 'd', 'Δx', 't', 'Γ_env', 'Δφ', 's* numeric', 's* formula', 'rel. diff']} numeric={[0, 1, 2, 3, 4, 5, 6, 7, 8]}
+      <DataTable head={['Mass', <Tex tex="d" />, <Tex tex="\Delta x" />, <Tex tex="t" />, <Tex tex="\Gamma_{\text{env}}" />, <Tex tex="\Delta\varphi" />, <><Tex tex="s^{*}" /> numeric</>, <><Tex tex="s^{*}" /> formula</>, 'rel. diff']} numeric={[0, 1, 2, 3, 4, 5, 6, 7, 8]}
         rows={r.rows.map((x) => [fmtQ(x.mass, 'kg'), fmtQ(x.separation, 'm'), fmtQ(x.dx, 'm'), fmtQ(x.time, 's'), fmtQ(x.gamma_env, 's⁻¹'), `${fmtNum(x.delta_phi, 4)} rad`, fmtNum(x.s_star_numeric, 5), fmtNum(x.s_star_formula, 5), fmtNum(x.rel_diff, 3)])} />
     </div>
   );
@@ -207,33 +228,38 @@ const ORDER = ['mass', 'separation', 'branch_separation', 'time'];
 const rat = (e: string | null | undefined, raw: number) => { if (!e) return raw; const [a, b] = e.split('/').map(Number); return b ? a / b : a; };
 
 /**
- * The scaling endpoint does not return its (scrambled-Sobol) samples, so the designs are re-sampled here with
- * an unscrambled Sobol sequence over the same bounds and evaluated with the same point-mass entangling phase.
- * The discovered law (server exponents and intercept) is drawn as a plane through them.
+ * Sampled designs and the discovered law. Uses the server's own samples (POST /api/discovery/scaling →
+ * `samples`); as an independent check each sample's Δφ is re-evaluated with the local engine's point-mass
+ * entangling phase. Older servers without `samples`: designs are re-sampled locally (unscrambled Sobol) and
+ * labelled as such.
  */
 function SobolView({ res }: { res: Scaling }) {
   const law = res.law;
   const e = Object.fromEntries(ORDER.map((k) => [k, rat(law.rational_exponents[k], law.raw_exponents[k])])) as Record<string, number>;
   const c10 = law.log_prefactor / Math.LN10; // ln → log10
+  const server = !!res.samples?.mass?.length;
   const data = useMemo(() => {
-    const U = sobol(res.n, 4);
-    return U.map((u) => {
-      const q: Record<string, number> = {};
-      ORDER.forEach((k, i) => { const [lo, hi] = FAR_BOUNDS[k]; q[k] = 10 ** (Math.log10(lo) + u[i] * (Math.log10(hi) - Math.log10(lo))); });
-      const dphi = Math.abs(pointMassDeltaPhi({ ...DEFAULT_DESIGN, mass_A: q.mass, mass_B: q.mass, separation: q.separation, dx_A: q.branch_separation, dx_B: q.branch_separation, time: q.time, geometry: res.geometry as Geometry }));
+    const qs: Record<string, number>[] = server
+      ? res.samples!.mass.map((_, i) => ({ mass: res.samples!.mass[i], separation: res.samples!.separation[i], branch_separation: res.samples!.branch_separation[i], time: res.samples!.time[i], delta_phi: res.samples!.delta_phi[i] }))
+      : sobol(res.n, 4).map((u) => { const q: Record<string, number> = {}; ORDER.forEach((k, i) => { const [lo, hi] = FAR_BOUNDS[k]; q[k] = 10 ** (Math.log10(lo) + u[i] * (Math.log10(hi) - Math.log10(lo))); }); return q; });
+    return qs.map((q) => {
+      const local = Math.abs(pointMassDeltaPhi({ ...DEFAULT_DESIGN, mass_A: q.mass, mass_B: q.mass, separation: q.separation, dx_A: q.branch_separation, dx_B: q.branch_separation, time: q.time, geometry: res.geometry as Geometry }));
+      const dphi = server ? Math.abs(q.delta_phi) : local;
       const x = e.mass * Math.log10(q.mass) + e.branch_separation * Math.log10(q.branch_separation) + e.time * Math.log10(q.time);
       const y = Math.log10(q.separation), z = Math.log10(dphi);
       const zLaw = c10 + x + e.separation * y;
-      return { q, dphi, x, y, z, rel: 10 ** (z - zLaw) - 1 };
+      return { q, dphi, local, x, y, z, rel: 10 ** (z - zLaw) - 1, check: server ? local / dphi - 1 : NaN };
     });
   }, [res]);
   const maxRel = Math.max(...data.map((d) => Math.abs(d.rel)));
+  const maxCheck = server ? Math.max(...data.map((d) => Math.abs(d.check))) : NaN;
   const n = data.length;
   const p = usePlayer(n, 20);
   const shown = Math.max(1, Math.min(n, Math.floor(p.pos) + 1));
   const [view, setView] = useState<'3d' | '2d'>('3d');
   const xr: [number, number] = [Math.min(...data.map((d) => d.x)), Math.max(...data.map((d) => d.x))];
-  const yr: [number, number] = [Math.log10(FAR_BOUNDS.separation[0]), Math.log10(FAR_BOUNDS.separation[1])];
+  const ysAll = data.map((d) => d.y);
+  const yr: [number, number] = [Math.min(...ysAll), Math.max(...ysAll)];
   const zAll = data.map((d) => d.z);
   const zr: [number, number] = [Math.min(...zAll), Math.max(...zAll)];
   const spec = useMemo(() => {
@@ -242,40 +268,45 @@ function SobolView({ res }: { res: Scaling }) {
     const ys = Array.from({ length: NY }, (_, j) => yr[0] + ((yr[1] - yr[0]) * j) / (NY - 1));
     const z = ys.map((y) => xs.map((x) => { const v = c10 + x + e.separation * y; return v >= zr[0] - 0.5 && v <= zr[1] + 0.5 ? v : null; }));
     return {
-      x: { label: 'Σ eᵢ log₁₀ qᵢ (m, Δx, t)', unit: '1', min: xr[0], max: xr[1] }, y: { label: 'log₁₀ d', unit: '1', min: yr[0], max: yr[1] }, z: { label: 'log₁₀ Δφ', unit: '1', min: zr[0] - 0.5, max: zr[1] + 0.5 },
+      x: { label: 'Σ eᵢ log₁₀ qᵢ (m, Δx, t)', tex: String.raw`\textstyle\sum_i e_i \log_{10} q_i`, min: xr[0], max: xr[1] }, y: { label: 'log₁₀ d', tex: String.raw`\log_{10} d`, min: yr[0], max: yr[1] }, z: { label: 'log₁₀ Δφ', tex: String.raw`\log_{10}\Delta\varphi`, min: zr[0] - 0.5, max: zr[1] + 0.5 },
       surfaces: [{ name: 'discovered law', xs, ys, z, color: '#56B4E9', opacity: 0.45, wire: true }],
       points: [{ name: 'designs', pts: data.slice(0, shown).map((d) => [d.x, d.y, d.z] as [number, number, number]), color: '#D55E00', size: 0.02, highlightLast: true }],
     };
   }, [data, shown]);
-  const exprX = `${fmtNum(e.mass, 3)}·log₁₀ m + ${fmtNum(e.branch_separation, 3)}·log₁₀ Δx + ${fmtNum(e.time, 3)}·log₁₀ t`;
   const collapsed = data.map((d) => ({ x: d.x + e.separation * d.y, z: d.z })).sort((a, b) => a.x - b.x);
+  const xTex = `x = ${fmtNum(e.mass, 3)}\\log_{10} m + ${fmtNum(e.branch_separation, 3)}\\log_{10}\\Delta x + ${fmtNum(e.time, 3)}\\log_{10} t`;
+  const zTex = `\\log_{10}\\Delta\\varphi = ${fmtNum(c10, 6)} + x ${e.separation < 0 ? '-' : '+'} ${fmtNum(Math.abs(e.separation), 3)}\\,\\log_{10} d`;
+  const who = server ? 'server samples' : 'local re-samples';
   return (
-    <Card title="Sampled designs and the discovered power-law surface" actions={<><ProvBadge kind="COMPUTED_LOCAL" title="Design points re-sampled and evaluated in the browser" /><ProvBadge kind="COMPUTED" title="Law: server fit" /></>}>
-      <InfoBanner>The API does not return the server's sampled designs (they come from a scrambled Sobol sequence), so {n} designs are re-sampled here with an <b>unscrambled</b> Sobol sequence over the same far-field bounds and evaluated with the same point-mass entangling phase (local engine). The plane is the <b>server's</b> discovered law: z = {fmtNum(c10, 6)} + x + ({fmtNum(e.separation, 3)})·y with x = {exprX} (rational exponents; intercept = fitted ln-prefactor / ln 10).</InfoBanner>
+    <Card title="Sampled designs and the discovered power-law surface" actions={server ? <ProvBadge kind="COMPUTED" title="Samples and law from the server study" /> : <><ProvBadge kind="COMPUTED_LOCAL" title="Designs re-sampled in the browser (server did not return its samples)" /><ProvBadge kind="COMPUTED" title="Law: server fit" /></>}>
+      {server
+        ? <p class="small">These are the <b>{n} designs the server actually sampled</b> (scrambled Sobol, seed {res.seed}) with their simulated <Tex tex="\Delta\varphi" />. The plane is the server's discovered law: <Tex tex={zTex} /> with <Tex tex={xTex} /> (rational exponents; intercept = fitted ln-prefactor / ln 10).</p>
+        : <InfoBanner>This server did not return its sampled designs, so {n} designs are re-sampled here with an <b>unscrambled</b> Sobol sequence over the same far-field bounds and evaluated with the same point-mass entangling phase (local engine). The plane is the server's law: <Tex tex={zTex} /> with <Tex tex={xTex} />.</InfoBanner>}
       <div class="outs">
-        <Out label="Max |Δφ_local / Δφ_law − 1|" value={maxRel} sig={3} prov="COMPUTED_LOCAL" interp="Residual of the locally evaluated designs against the server law; small values confirm the law on independent samples." />
-        <Out label="Designs shown" value={`${shown} / ${n}`} prov="COMPUTED_LOCAL" interp="Points appear in Sobol order (low-discrepancy filling of the design space)." />
+        <Out label="Max residual vs the law" value={maxRel} sig={3} prov={server ? 'COMPUTED' : 'COMPUTED_LOCAL'} interp={<MathText text={`$\\max|\\Delta\\varphi/\\Delta\\varphi_{\\text{law}} - 1|$ over the ${who}; the far-field law neglects the $(\\Delta x/d)^2$ near-field term.`} />} />
+        {server && <Out label="Local engine re-evaluation" value={maxCheck} sig={3} prov="COMPUTED_LOCAL" interp={<MathText text="$\max|\Delta\varphi_{\text{local}}/\Delta\varphi_{\text{server}} - 1|$: the same designs evaluated independently in the browser (point masses)." />} />}
+        <Out label="Designs shown" value={`${shown} / ${n}`} prov={server ? 'COMPUTED' : 'COMPUTED_LOCAL'} interp="Points appear in sampling order (low-discrepancy filling of the design space)." />
       </div>
       <div class="row-between"><Seg label="View" value={view} onChange={setView} options={[{ v: '3d', label: '3-D' }, { v: '2d', label: '2-D collapse' }]} /></div>
       {view === '3d' ? (
-        <View3D kind="plot3d" opts={spec} name="sobol-law" title={`Discovered law and ${shown} sampled designs`} badge="COMPUTED LOCALLY" playing={p.playing}
+        <View3D kind="plot3d" opts={spec} name="sobol-law" title={`Discovered law and ${shown} sampled designs`} badge={server ? 'COMPUTED' : 'COMPUTED LOCALLY'} playing={p.playing}
           label="Three-dimensional scatter of sampled designs on the plane of the discovered power law"
-          legend={[{ label: 'designs (local engine)', color: '#D55E00' }, { label: 'discovered law (server fit)', color: '#56B4E9' }]}
+          legend={[{ label: server ? 'designs (server samples)' : 'designs (local re-samples)', color: '#D55E00' }, { label: 'discovered law (server fit)', color: '#56B4E9' }]}
           onRecordStart={() => { p.setPos(0); p.setPlaying(true); }}
-          frameData={() => ({ law: { log10_prefactor: c10, exponents: e }, designs: data.slice(0, shown).map((d) => ({ ...d.q, delta_phi_rad: d.dphi, rel_residual: d.rel })) })}
-          fallback={<Collapse collapsed={collapsed} c10={c10} />} />
-      ) : <Collapse collapsed={collapsed} c10={c10} shown={shown} />}
-      <PlayerControls p={p} n={n} label="Sobol designs" />
+          frameData={() => ({ source: who, law: { log10_prefactor: c10, exponents: e }, designs: data.slice(0, shown).map((d) => ({ ...d.q, delta_phi_rad: d.dphi, rel_residual: d.rel, local_delta_phi_rad: d.local })) })}
+          fallback={<Collapse collapsed={collapsed} c10={c10} who={who} />} />
+      ) : <Collapse collapsed={collapsed} c10={c10} shown={shown} who={who} />}
+      <PlayerControls p={p} n={n} label="Sampled designs" />
     </Card>
   );
 }
 
-function Collapse({ collapsed, c10 }: { collapsed: { x: number; z: number }[]; c10: number; shown?: number }) {
+function Collapse({ collapsed, c10, who }: { collapsed: { x: number; z: number }[]; c10: number; shown?: number; who: string }) {
   const xs = collapsed.map((d) => d.x);
   return (
     <LinePlot name="law-collapse" title="Collapse onto the discovered law" desc="log10 of the entangling phase versus the combined exponent sum including separation; the line is the discovered law"
       xLabel="Σ eᵢ log₁₀ qᵢ (incl. d)" yLabel="log₁₀ Δφ"
       series={[{ name: 'discovered law (server)', x: [Math.min(...xs), Math.max(...xs)], y: [c10 + Math.min(...xs), c10 + Math.max(...xs)], color: '#56B4E9', width: 2.5 },
-        { name: 'sampled designs (local engine)', x: xs, y: collapsed.map((d) => d.z), color: '#D55E00', markers: true, width: 0.01 }]} />
+        { name: `sampled designs (${who})`, x: xs, y: collapsed.map((d) => d.z), color: '#D55E00', markers: true, width: 0.01 }]} />
   );
 }

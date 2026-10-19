@@ -4,8 +4,20 @@
 .view3d-box.is-fs .view3d { flex: 1; height: auto; }
 .view3d-head { position: absolute; z-index: 3; top: 8px; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
 .view3d-title { font-weight: 650; font-size: 0.88rem; background: color-mix(in srgb, var(--bg-elev) 80%, transparent); padding: 2px 8px; border-radius: 6px; }
-.view3d-legend { position: absolute; z-index: 3; top: 38px; right: 10px; list-style: none; margin: 0; padding: 6px 8px; display: grid; gap: 3px; font-size: 0.76rem; background: color-mix(in srgb, var(--bg-elev) 85%, transparent); border: 1px solid var(--border); border-radius: 6px; pointer-events: none; }
-.view3d-legend li { display: flex; gap: 6px; align-items: center; }
+.view3d-legend { position: absolute; z-index: 3; top: 40px; right: 8px; max-width: min(42%, 260px); margin: 0; padding: 6px 8px; font-size: 0.74rem; background: color-mix(in srgb, var(--bg-elev) 88%, transparent); border: 1px solid var(--border); border-radius: 6px; pointer-events: none; overflow: hidden; }
+.view3d-legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.view3d-legend li { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.view3d-legend .lg-text { overflow-wrap: anywhere; line-height: 1.2; }
+.cbar { margin-top: 4px; min-width: 120px; }
+.cbar-title { font-weight: 600; margin-bottom: 2px; }
+.cbar-bar { height: 10px; border-radius: 3px; border: 1px solid var(--border); }
+.cbar-ticks { position: relative; height: 2.1em; margin: 0 10px; }
+.cbar-ticks span { position: absolute; top: 3px; transform: translateX(-50%); white-space: nowrap; font-size: 1.05em; line-height: 1.2; }
+.cbar { min-width: 150px; }
+.view3d-magnote { position: absolute; z-index: 3; left: 10px; top: 40px; max-width: 55%; background: #b3261e; color: #fff; font-weight: 700; font-size: 0.78rem; padding: 3px 8px; border-radius: 6px; }
+.view3d-below { position: absolute; z-index: 3; left: 10px; bottom: 10px; max-width: calc(100% - 20px); background: color-mix(in srgb, var(--warn-soft) 92%, transparent); color: var(--fg); border: 1px solid var(--warn); font-size: 0.78rem; padding: 4px 8px; border-radius: 6px; }
+.view3d-static { font-weight: 600; }
+@media (max-width: 560px) { .view3d-legend { max-width: 52%; font-size: 0.68rem; top: 36px; } .view3d-title { font-size: 0.78rem; } .view3d-head { flex-wrap: wrap; } }
 .view3d-rec { position: absolute; z-index: 3; top: 8px; right: 10px; color: #d32f2f; font-weight: 700; font-size: 0.8rem; }
 .view3d-tools { margin-top: 6px; gap: 6px; }
 .qg3d-label { font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; white-space: nowrap; text-shadow: 0 0 3px var(--bg-elev), 0 0 2px var(--bg-elev); }

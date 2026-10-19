@@ -62,7 +62,7 @@ for (const scheme of ['light', 'dark']) {
       await p.waitForTimeout(1500);
       const boxes = await p.locator('main .view3d-box').all();
       let k = 0;
-      for (const b of boxes) { await b.scrollIntoViewIfNeeded(); await p.waitForTimeout(900); await b.screenshot({ path: path.join(OUT, `3d-${name}-${++k}-${scheme}.png`) }); }
+      for (const b of boxes) { await b.scrollIntoViewIfNeeded(); await p.waitForTimeout(900); await b.screenshot({ path: path.join(OUT, `3d-${name}-${++k}-${scheme}.png`), timeout: 90000 }); }
       if (!k) throw new Error('no 3-D view found');
       let n2 = 0;
       if (steps2d.length) {

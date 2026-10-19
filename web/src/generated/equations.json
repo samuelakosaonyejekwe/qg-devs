@@ -1,0 +1,252 @@
+{
+ "suites": {
+  "1": [
+   {
+    "label": "Lindblad master equation",
+    "tex": "\\dot\\rho = -i[\\hat H,\\rho] + \\sum_k \\Big(\\hat L_k\\rho\\hat L_k^\\dagger - \\tfrac12\\{\\hat L_k^\\dagger\\hat L_k,\\rho\\}\\Big)",
+    "note": "H in rad/s (H/ħ)"
+   },
+   {
+    "label": "Negativity",
+    "tex": "\\mathcal N(\\rho) = \\tfrac12\\big(\\lVert\\rho^{T_B}\\rVert_1 - 1\\big)"
+   },
+   {
+    "label": "Concurrence",
+    "tex": "C = \\max\\{0,\\ \\lambda_1-\\lambda_2-\\lambda_3-\\lambda_4\\}"
+   }
+  ],
+  "2": [
+   {
+    "label": "Schwarzschild orbit (Binet form)",
+    "tex": "\\frac{\\mathrm{d}^2u}{\\mathrm{d}\\phi^2} + u = \\frac{GM}{h^2} + \\frac{3GM}{c^2}u^2,\\qquad u=\\frac1r"
+   },
+   {
+    "label": "Perihelion advance",
+    "tex": "\\Delta\\phi = \\frac{6\\pi G M}{c^2 a (1-e^2)}"
+   },
+   {
+    "label": "Light deflection",
+    "tex": "\\delta = \\frac{4GM}{c^2 b}"
+   }
+  ],
+  "3": [
+   {
+    "label": "One-loop EFT potential",
+    "tex": "V(r) = -\\frac{G m_1 m_2}{r}\\left[1 + \\frac{3G(m_1+m_2)}{r c^2} + \\frac{41}{10\\pi}\\frac{G\\hbar}{r^2 c^3}\\right]"
+   }
+  ],
+  "4": [
+   {
+    "label": "Branch energy",
+    "tex": "U_{ij} = -\\frac{G\\,m_A m_B}{r_{ij}}"
+   },
+   {
+    "label": "Branch phase",
+    "tex": "\\varphi_{ij} = -\\frac{1}{\\hbar}\\int_0^{t} U_{ij}(t')\\,\\mathrm{d}t'"
+   },
+   {
+    "label": "Entangling phase",
+    "tex": "\\Delta\\varphi = \\varphi_{LL} + \\varphi_{RR} - \\varphi_{LR} - \\varphi_{RL}"
+   },
+   {
+    "label": "Dephased joint state",
+    "tex": "\\rho_{ij,kl}(t) = \\tfrac14\\, e^{\\,i(\\varphi_{ij}-\\varphi_{kl})}\\,e^{-\\Gamma_A t\\,[i\\neq k]}\\, e^{-\\Gamma_B t\\,[j\\neq l]}"
+   },
+   {
+    "label": "CPK witness",
+    "tex": "W_\\pm = \\mathbb 1 - X\\!\\otimes\\! X \\mp \\big(Y\\!\\otimes\\! Z + Z\\!\\otimes\\! Y\\big)"
+   },
+   {
+    "label": "Exact separability threshold (Lean 4)",
+    "tex": "\\rho(t)\\ \\text{separable}\\ \\forall\\, t\\ge 0 \\iff \\Gamma \\ge \\frac{|\\omega|}{2},\\qquad \\Delta\\varphi(t) = \\omega t"
+   }
+  ],
+  "5": [
+   {
+    "label": "Atom-interferometer phase",
+    "tex": "\\Delta\\phi = -k_{\\mathrm{eff}}\\, g\\, T^2"
+   },
+   {
+    "label": "Stern–Gerlach gradient",
+    "tex": "|\\partial_x B| = \\frac{2 m a}{g_e \\mu_B},\\qquad \\Delta x = 2 a \\tau^2"
+   },
+   {
+    "label": "Recombination visibility",
+    "tex": "V = \\exp\\!\\Big[-\\tfrac{2\\bar n+1}{2}\\Big(\\frac{\\delta x^2}{4\\sigma_0^2} + \\frac{\\delta p^2}{4\\sigma_{p0}^2}\\Big)\\Big]"
+   }
+  ],
+  "6": [
+   {
+    "label": "Gravitational coupling",
+    "tex": "\\hat H_{\\mathrm{int}} = \\frac{2 G m_A m_B}{d^3}\\,\\hat x_A \\hat x_B"
+   },
+   {
+    "label": "Covariance dynamics",
+    "tex": "\\dot V = A V + V A^{\\mathsf T} + D"
+   },
+   {
+    "label": "Log-negativity",
+    "tex": "E_{\\mathcal N} = \\max\\{0,\\ -\\ln 2\\tilde\\nu_-\\}"
+   }
+  ],
+  "7": [
+   {
+    "label": "Gas collisions",
+    "tex": "\\Gamma_{\\mathrm{gas}} = n\\,\\pi R^2\\,\\bar v,\\qquad n = \\frac{P}{k_B T}"
+   },
+   {
+    "label": "Black-body scattering",
+    "tex": "\\Lambda_{\\mathrm{sc}} = \\frac{8!\\,8\\zeta(9)\\,c R^6}{9\\pi}\\Big(\\frac{k_BT}{\\hbar c}\\Big)^{9}\\,\\mathrm{Re}\\Big[\\frac{\\varepsilon-1}{\\varepsilon+2}\\Big]^{2}"
+   },
+   {
+    "label": "Diósi–Penrose",
+    "tex": "\\Gamma_{DP} = \\frac{\\kappa_{DP}}{\\hbar}\\big[U(\\Delta x) - U(0)\\big]"
+   },
+   {
+    "label": "CSL",
+    "tex": "\\Gamma_{CSL} = \\lambda\\,\\frac{(4\\pi r_C^2)^{3/2}}{m_0^2}\\int\\!\\frac{\\mathrm{d}^3k}{(2\\pi)^3}\\,e^{-k^2 r_C^2}\\,|\\tilde\\rho(\\mathbf k)|^2\\,\\big(1-\\cos\\mathbf k\\!\\cdot\\!\\Delta\\mathbf x\\big)"
+   }
+  ],
+  "8": [
+   {
+    "label": "Casimir–Polder",
+    "tex": "U_{CP}(r) = -\\frac{23\\,\\hbar c}{4\\pi}\\,\\frac{R_A^3 R_B^3}{r^7}\\left(\\frac{\\varepsilon-1}{\\varepsilon+2}\\right)^{2}"
+   },
+   {
+    "label": "Dipole–dipole",
+    "tex": "U = \\frac{\\mathbf p_A\\!\\cdot\\!\\mathbf p_B - 3(\\mathbf p_A\\!\\cdot\\!\\hat n)(\\mathbf p_B\\!\\cdot\\!\\hat n)}{4\\pi\\varepsilon_0 r^3}"
+   },
+   {
+    "label": "Patch-induced dipole",
+    "tex": "p_{\\mathrm{rms}} = 4\\pi\\varepsilon_0\\, R\\,\\ell\\,V_{\\mathrm{rms}}\\sqrt{\\tfrac{3}{4\\pi}}"
+   }
+  ],
+  "10": [
+   {
+    "label": "Witness estimator",
+    "tex": "\\hat W = 1 - \\hat E_{XX} \\mp \\big(\\hat E_{YZ} + \\hat E_{ZY}\\big),\\qquad \\sigma_{\\hat E}^2 = \\frac{1-E^2}{N}"
+   }
+  ],
+  "11": [
+   {
+    "label": "Bayes factor",
+    "tex": "B_{10} = \\frac{\\int L(\\theta)\\,\\pi_1(\\theta)\\,\\mathrm d\\theta}{\\int L(\\theta)\\,\\pi_0(\\theta)\\,\\mathrm d\\theta}"
+   },
+   {
+    "label": "Fisher information",
+    "tex": "I_{ab} = N\\sum_{s,k}\\frac{\\partial_a p_{sk}\\,\\partial_b p_{sk}}{p_{sk}}"
+   }
+  ],
+  "12": [
+   {
+    "label": "Robust discrimination",
+    "tex": "D = \\min_{\\eta\\in\\mathcal H_{\\mathrm{alt}}}\\ \\frac1S\\sum_s \\mathrm{KL}\\big(p_s(\\cdot\\,|\\,H_{\\mathrm{true}})\\,\\Vert\\,p_s(\\cdot\\,|\\,H_{\\mathrm{alt}},\\eta)\\big)"
+   },
+   {
+    "label": "Shots for evidence",
+    "tex": "N = \\frac{\\ln B}{S\\,D}"
+   }
+  ],
+  "13": [
+   {
+    "label": "Design objective",
+    "tex": "\\min_{m,d,\\Delta x,t}\\ \\log_{10}\\!\\big[3\\,N_{5\\sigma}\\,(t + t_{\\mathrm{oh}})\\big]"
+   }
+  ],
+  "14": [
+   {
+    "label": "Discovered far-field law",
+    "tex": "\\Delta\\varphi \\propto \\frac{G\\, m^2\\, \\Delta x^2\\, t}{\\hbar\\, d^3}"
+   },
+   {
+    "label": "Calibration trade-off (candidate)",
+    "tex": "s^\\ast = 1 + \\frac{|\\Delta\\varphi_g|}{2\\,\\Gamma_{\\mathrm{env}}\\, t}"
+   }
+  ]
+ },
+ "models": {
+  "QG-COH": {
+   "dynamics": [
+    "\\hat H = \\sum_{i,j\\in\\{L,R\\}} U_{ij}\\,|ij\\rangle\\langle ij|",
+    "U_{ij} = -\\frac{G\\,m_A m_B}{r_{ij}}",
+    "\\varphi_{ij} = -\\frac{1}{\\hbar}\\int_0^{t} U_{ij}(t')\\,\\mathrm{d}t'"
+   ],
+   "known_limits": [
+    "\\Delta\\varphi \\xrightarrow{\\text{point masses}} \\frac{2 G m_A m_B t}{\\hbar}\\left(\\frac{1}{d} - \\frac{1}{\\sqrt{d^2+\\Delta x^2}}\\right)",
+    "\\langle \\hat F \\rangle = -\\nabla \\langle U \\rangle\\ \\ \\text{(Newtonian force on branch averages)}"
+   ]
+  },
+  "QG-EFT1": {
+   "dynamics": [
+    "V(r) = -\\frac{G m_1 m_2}{r}\\left[1 + \\frac{3G(m_1+m_2)}{r c^2} + \\frac{41}{10\\pi}\\frac{G\\hbar}{r^2 c^3}\\right]"
+   ],
+   "known_limits": [
+    "\\frac{41}{10\\pi}\\frac{\\ell_P^2}{r^2} \\to 0 \\ \\Rightarrow\\ \\text{QG-COH}"
+   ]
+  },
+  "SC-MF": {
+   "dynamics": [
+    "G_{\\mu\\nu} = \\frac{8\\pi G}{c^4}\\,\\langle \\hat T_{\\mu\\nu} \\rangle",
+    "\\varphi^{A}_{i} = -\\frac{t}{\\hbar}\\sum_{j} p^{B}_{j}\\,U_{ij},\\qquad p^{B}_{L}=p^{B}_{R}=\\tfrac12"
+   ],
+   "known_limits": [
+    "\\Delta\\varphi_{\\text{grav}} \\equiv 0\\quad\\text{(no gravitational entanglement)}"
+   ]
+  },
+  "CC-KTM": {
+   "dynamics": [
+    "\\frac{\\mathrm{d}\\rho}{\\mathrm{d}t} = -\\frac{i}{\\hbar}\\big[\\hat H_g,\\rho\\big] + \\sum_{X\\in\\{A,B\\}} \\frac{\\Gamma_{cc}}{2}\\big(\\hat Z_X\\,\\rho\\,\\hat Z_X - \\rho\\big)",
+    "\\Gamma_{cc} = \\kappa\\,\\frac{|\\Delta\\varphi_g|}{2t},\\qquad \\kappa \\ge 1"
+   ],
+   "known_limits": [
+    "\\rho(t)\\ \\text{separable}\\ \\forall\\, t\\ge 0 \\iff \\Gamma \\ge \\frac{|\\omega|}{2},\\qquad \\Delta\\varphi(t) = \\omega t",
+    "\\kappa = 1:\\ \\text{minimal decoherence compatible with no gravitational entanglement}"
+   ]
+  },
+  "DP-COLL": {
+   "dynamics": [
+    "\\Gamma_{DP} = \\frac{\\kappa_{DP}}{\\hbar}\\big[U(\\Delta x) - U(0)\\big]"
+   ],
+   "known_limits": [
+    "\\Gamma_{DP} = \\frac{\\kappa_{DP}\\, G m^2}{\\hbar}\\left(\\frac{6}{5R} - \\frac{1}{\\Delta x}\\right),\\quad \\Delta x \\ge 2R",
+    "\\Gamma_{DP} \\to 0 \\ \\text{as}\\ \\Delta x \\to 0"
+   ]
+  },
+  "CSL-COLL": {
+   "dynamics": [
+    "\\Gamma_{CSL} = \\lambda\\,\\frac{(4\\pi r_C^2)^{3/2}}{m_0^2}\\int\\!\\frac{\\mathrm{d}^3k}{(2\\pi)^3}\\,e^{-k^2 r_C^2}\\,|\\tilde\\rho(\\mathbf k)|^2\\,\\big(1-\\cos\\mathbf k\\!\\cdot\\!\\Delta\\mathbf x\\big)",
+    "\\tilde\\rho(k) = m\\,\\frac{3\\,(\\sin kR - kR\\cos kR)}{(kR)^3}"
+   ],
+   "known_limits": [
+    "R \\ll r_C:\\quad \\Gamma = \\lambda\\left(\\frac{m}{m_0}\\right)^{2}\\left(1 - e^{-\\Delta x^2/4 r_C^2}\\right)",
+    "\\lambda \\to 0 \\ \\Rightarrow\\ \\text{QG-COH}"
+   ]
+  },
+  "NULL-NG": {
+   "dynamics": [
+    "\\hat H = \\sum_{ij} U^{\\mathrm{EM}}_{ij}\\,|ij\\rangle\\langle ij|",
+    "U_{CP}(r) = -\\frac{23\\,\\hbar c}{4\\pi}\\,\\frac{R_A^3 R_B^3}{r^7}\\left(\\frac{\\varepsilon-1}{\\varepsilon+2}\\right)^{2}"
+   ],
+   "known_limits": [
+    "\\text{any entanglement is of electromagnetic origin}"
+   ]
+  },
+  "CG-QFT-AH": {
+   "dynamics": [
+    "\\beta^{(4)}_{ij} \\approx \\left(\\frac{6}{25}\\,\\frac{i\\,G^2 m^2 M^3 R\\, t}{\\hbar^3 d_{ij}}\\right)^{2}",
+    "\\sqrt{\\vartheta} = \\frac{6}{25}\\,\\frac{G^2 m^2 M^3 R\\,t}{\\hbar^3 d_{RL}}"
+   ],
+   "known_limits": [
+    "\\frac{\\vartheta}{\\varphi} = \\frac{36}{625}\\,\\frac{G^3 m^4 M^4 R^2 t}{\\hbar^5 d}",
+    "m \\to 0 \\ \\Rightarrow\\ \\text{SC-MF}"
+   ]
+  }
+ },
+ "protocol": {
+  "branch_energy": "U_{ij} = -\\frac{G\\,m_A m_B}{r_{ij}}",
+  "branch_phase": "\\varphi_{ij} = -\\frac{1}{\\hbar}\\int_0^{t} U_{ij}(t')\\,\\mathrm{d}t'",
+  "entangling_phase": "\\Delta\\varphi = \\varphi_{LL} + \\varphi_{RR} - \\varphi_{LR} - \\varphi_{RL}",
+  "state": "\\rho_{ij,kl}(t) = \\tfrac14\\, e^{\\,i(\\varphi_{ij}-\\varphi_{kl})}\\,e^{-\\Gamma_A t\\,[i\\neq k]}\\, e^{-\\Gamma_B t\\,[j\\neq l]}",
+  "classical_channel_threshold": "\\rho(t)\\ \\text{separable}\\ \\forall\\, t\\ge 0 \\iff \\Gamma \\ge \\frac{|\\omega|}{2},\\qquad \\Delta\\varphi(t) = \\omega t"
+ }
+}

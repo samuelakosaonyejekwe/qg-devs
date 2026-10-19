@@ -28,11 +28,29 @@ export const route = createStore<RouteState>({
   max: readMax(initialIdx),
 });
 
+/** Scroll to an in-page anchor once the (possibly lazily loaded) page has rendered it. */
+export function scrollToHash(hash: string) {
+  if (!hash || hash === '#') return;
+  const id = decodeURIComponent(hash.slice(1));
+  let tries = 0;
+  const attempt = () => {
+    const el = document.getElementById(id);
+    if (el) { el.scrollIntoView({ block: 'start' }); return; }
+    if (++tries < 40) setTimeout(attempt, 100);
+  };
+  attempt();
+}
+
 export function navigate(to: string, opts: { replace?: boolean } = {}) {
   const url = new URL(to, location.href);
   if (url.origin !== location.origin) { location.href = to; return; }
   const cur = route.get();
-  if (url.pathname === cur.path && url.search === cur.search && !opts.replace) return;
+  if (url.pathname === cur.path && url.search === cur.search && !opts.replace) {
+    // same page: only the anchor changes
+    if (url.hash && url.hash !== location.hash) { history.replaceState(history.state, '', url.pathname + url.search + url.hash); }
+    scrollToHash(url.hash);
+    return;
+  }
   if (opts.replace) {
     history.replaceState({ qgIdx: cur.idx }, '', url.pathname + url.search + url.hash);
     route.set({ path: url.pathname, search: url.search });
@@ -42,7 +60,7 @@ export function navigate(to: string, opts: { replace?: boolean } = {}) {
     writeMax(idx);
     route.set({ path: url.pathname, search: url.search, idx, max: idx });
   }
-  window.scrollTo({ top: 0 });
+  if (url.hash) scrollToHash(url.hash); else window.scrollTo({ top: 0 });
 }
 
 if (typeof window !== 'undefined') {

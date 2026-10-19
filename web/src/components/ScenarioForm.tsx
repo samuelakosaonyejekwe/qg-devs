@@ -1,3 +1,5 @@
+import { MathText } from './Tex';
+import { T } from '../pages/formulas-l1';
 /** Editor for the BMV design and environment shared by the flagship page, the builder and many suites. */
 import { NumberField, SelectField } from './fields';
 import { Switch, Level, Tip } from './ui';
@@ -5,6 +7,9 @@ import { useStore, settings, atLeast } from '../lib/store';
 import { useApiGet } from '../lib/api';
 import type { Design, Environment, Geometry, Scenario } from '../lib/types';
 import { DEFAULT_DESIGN, DEFAULT_ENV } from '../lib/types';
+
+/** Physics of the bias-field input (qgdevs.em.diamagnetic_branch_energies); exported for the KaTeX strict test. */
+export const BIAS_FIELD_HELP = String.raw`Uniform magnetic field applied along $z$ during the interaction (0 T: no field). It induces diamagnetic moments $\mathbf{m} = \chi\,\tfrac{4}{3}\pi R^{3}\,\mathbf{B}/\mu_0$ in each sphere ($\chi$ from the material table), whose dipole–dipole energy $U_{ij} = \frac{\mu_0}{4\pi r_{ij}^{3}}\left[\mathbf{m}_A\cdot\mathbf{m}_B - 3(\mathbf{m}_A\cdot\hat{n})(\mathbf{m}_B\cdot\hat{n})\right]$ depends on the branch and therefore entangles without gravity, with $\Delta\varphi \propto B^{2}$. The spin–spin coupling of the embedded NV electron spins is always included.`;
 
 /** Offline fallback for the material list (same values as qgdevs/materials.py; the live list comes from GET /api/materials). */
 const FALLBACK_MATERIALS: Record<string, { name: string; density: number }> = {
@@ -44,39 +49,39 @@ export function ScenarioForm({ value, onChange, report, showEnv = true, showDesi
             {massLinked ? (
               <NumberField name="mass" label="Mass (each)" unit="kg" value={d.mass_A} min={1e-27} max={1e3} minExclusive maxExclusive report={report}
                 onChange={(v) => setD({ mass_A: v, mass_B: v })}
-                help="Mass of each test particle. The entangling phase grows as m_A·m_B, so heavier masses entangle faster — but decoherence from gas collisions and black-body radiation also grows with size." />
+                help={<MathText text={T.sf_mass} />} />
             ) : (<>
               <NumberField name="mass_A" label="Mass A" unit="kg" value={d.mass_A} min={1e-27} max={1e3} minExclusive maxExclusive report={report} onChange={(v) => setD({ mass_A: v })}
-                help="Mass of particle A (uniform sphere of the chosen density). Δφ ∝ m_A m_B." />
+                help={<MathText text={T.sf_massA} />} />
               <NumberField name="mass_B" label="Mass B" unit="kg" value={d.mass_B} min={1e-27} max={1e3} minExclusive maxExclusive report={report} onChange={(v) => setD({ mass_B: v })}
                 help="Mass of particle B." />
             </>)}
             <NumberField name="separation" label="Centre separation d" unit="m" value={d.separation} min={1e-9} max={10} minExclusive maxExclusive report={report} onChange={(v) => setD({ separation: v })}
-              help="Distance between the centres of the two interferometers (A at the origin, B on the +x axis). Gravity falls as 1/r, Casimir–Polder as 1/r⁷, so too small a separation lets electromagnetic forces dominate." />
+              help={<MathText text={T.sf_sep} />} />
             {dxLinked ? (
               <NumberField name="dx" label="Branch separation Δx (each)" unit="m" value={d.dx_A} min={0} max={10} maxExclusive report={report} onChange={(v) => setD({ dx_A: v, dx_B: v })}
-                help="Spatial size of each superposition (distance between the L and R branches). Larger Δx increases the entangling phase but also the which-path information leaked to the environment." />
+                help={<MathText text={T.sf_dx} />} />
             ) : (<>
               <NumberField name="dx_A" label="Branch separation Δx_A" unit="m" value={d.dx_A} min={0} max={10} maxExclusive report={report} onChange={(v) => setD({ dx_A: v })} help="Superposition size of A." />
               <NumberField name="dx_B" label="Branch separation Δx_B" unit="m" value={d.dx_B} min={0} max={10} maxExclusive report={report} onChange={(v) => setD({ dx_B: v })} help="Superposition size of B." />
             </>)}
             <NumberField name="time" label="Interaction time t" unit="s" value={d.time} min={0} max={1e4} minExclusive report={report} onChange={(v) => setD({ time: v })}
-              help="Time during which the branches are held apart and interact. In the static model phases grow linearly: φ_ij = −U_ij t/ħ; decoherence grows as e^{−Γt}." />
+              help={<MathText text={T.sf_time} />} />
             <SelectField label="Geometry" value={d.geometry} level="advanced" onChange={(g: Geometry) => setD({ geometry: g })}
               options={[{ v: 'parallel', label: 'Parallel (split ⟂ A–B line)' }, { v: 'linear', label: 'Linear (split along A–B line)' }, { v: 'angled', label: 'Angled' }]}
-              help="Orientation of the split axis relative to the A–B line. Linear geometry gives a larger Δφ for the same d and Δx but brings the inner branches closer (stronger Casimir–Polder)." />
+              help={<MathText text={T.sf_geom} />} />
             {d.geometry === 'angled' && (
               <NumberField name="angle" label="Split angle" unit="deg" value={d.angle_deg} min={0} max={180} report={report} level="advanced" onChange={(v) => setD({ angle_deg: v })}
                 help="Angle between the split axis and the A–B line (0° = linear, 90° = parallel)." />
             )}
             <NumberField name="density" label="Density" unit="kg m⁻³" value={d.density} min={100} max={3e4} minExclusive maxExclusive report={report} level="expert" onChange={(v) => setD({ density: v })}
               hint="Set automatically from the material; override only for custom materials."
-              help="Mass density used to compute the sphere radius R = (3m/4πρ)^{1/3}; it sets the Casimir–Polder strength (∝ R⁶) and black-body cross-sections." />
+              help={<MathText text={T.sf_density} />} />
             <NumberField name="gamma_A" label="Extra decoherence Γ_A" unit="s⁻¹" value={d.gamma_A} min={0} max={1e9} report={report} level="expert" onChange={(v) => setD({ gamma_A: v })}
               hint="Note: the server replaces this with the computed environmental rate."
-              help="Additional single-mass coherence decay rate. In POST /api/bmv/predict the server overwrites Γ with the environmental budget (gas + black-body), so this input only matters for custom job payloads." />
+              help={<MathText text={T.sf_gammaA} />} />
             <NumberField name="gamma_B" label="Extra decoherence Γ_B" unit="s⁻¹" value={d.gamma_B} min={0} max={1e9} report={report} level="expert" onChange={(v) => setD({ gamma_B: v })}
-              help="Additional single-mass coherence decay rate for B (see Γ_A)." />
+              help={<MathText text={T.sf_gammaB} />} />
           </div>
           {!adv && (d.mass_A !== d.mass_B || d.dx_A !== d.dx_B || d.geometry !== 'parallel') && (
             <p class="small muted">This design has settings that are only editable in Advanced mode (geometry: {d.geometry}{d.mass_A !== d.mass_B ? ', unequal masses' : ''}{d.dx_A !== d.dx_B ? ', unequal branch separations' : ''}). They are still used in every calculation.</p>
@@ -89,26 +94,28 @@ export function ScenarioForm({ value, onChange, report, showEnv = true, showDesi
           <div class="form-grid">
             <SelectField label="Material" value={e.material} onChange={(m) => onChange({ design: mats[m] ? { ...d, density: mats[m].density } : d, environment: { ...e, material: m } })}
               options={Object.entries(mats).map(([k, m]) => ({ v: k, label: `${k} — ${m.density} kg/m³` }))}
-              help="Test-mass material. Sets density and the Clausius–Mossotti factor (ε−1)/(ε+2) that controls Casimir–Polder coupling and black-body decoherence. Thermal-IR absorption (Im ε) values are estimates — see the Virtual Laboratory." />
+              help={<MathText text={T.sf_material} />} />
             <NumberField name="pressure" label="Gas pressure" unit="Pa" value={e.pressure} min={0} max={2e5} report={report} onChange={(v) => setE({ pressure: v })}
-              help="Residual-gas pressure. Each gas collision resolves which-path information (saturated regime), so the decoherence rate Γ = n σ v̄ is proportional to pressure. BMV needs extreme-high vacuum (~10⁻¹⁵ Pa)." />
+              help={<MathText text={T.sf_pressure} />} />
             {tLinked ? (
               <NumberField name="T" label="Temperature (gas, environment, internal)" unit="K" value={e.T_gas} min={0} max={2000} minExclusive report={report} onChange={(v) => setE({ T_gas: v, T_env: v, T_int: v })}
-                help="Temperature of the residual gas, the black-body environment and the particles' interior. Black-body scattering scales as T⁹, absorption/emission as T⁶." />
+                help={<MathText text={T.sf_temp} />} />
             ) : (<>
-              <NumberField name="T_gas" label="Gas temperature" unit="K" value={e.T_gas} min={0} max={2000} minExclusive report={report} onChange={(v) => setE({ T_gas: v })} help="Sets the gas number density n = P/(k_B T) and mean speed v̄ ∝ √T." />
-              <NumberField name="T_env" label="Environment temperature" unit="K" value={e.T_env} min={0} max={2000} report={report} onChange={(v) => setE({ T_env: v })} help="Temperature of the surrounding black-body radiation: scattering ∝ T⁹, absorption ∝ T⁶." />
-              <NumberField name="T_int" label="Internal temperature" unit="K" value={e.T_int} min={0} max={2000} report={report} onChange={(v) => setE({ T_int: v })} help="Internal temperature of the particles: thermal emission ∝ T⁶ · Im[(ε−1)/(ε+2)]." />
+              <NumberField name="T_gas" label="Gas temperature" unit="K" value={e.T_gas} min={0} max={2000} minExclusive report={report} onChange={(v) => setE({ T_gas: v })} help={<MathText text={T.sf_Tgas} />} />
+              <NumberField name="T_env" label="Environment temperature" unit="K" value={e.T_env} min={0} max={2000} report={report} onChange={(v) => setE({ T_env: v })} help={<MathText text={T.sf_Tenv} />} />
+              <NumberField name="T_int" label="Internal temperature" unit="K" value={e.T_int} min={0} max={2000} report={report} onChange={(v) => setE({ T_int: v })} help={<MathText text={T.sf_Tint} />} />
             </>)}
             <NumberField name="charge" label="Residual charge (each)" unit="e" value={e.residual_charge_e} min={0} max={1e9} report={report} level="advanced" onChange={(v) => setE({ residual_charge_e: v })}
               help="Net charge left on each particle in elementary charges. Coulomb and charge–induced-dipole forces create branch-dependent phases that mimic gravitational entanglement." />
             <NumberField name="readout" label="Readout error ε" unit="1" value={e.readout_error} min={0} max={0.5} maxExclusive report={report} level="advanced" onChange={(v) => setE({ readout_error: v })}
-              help="Probability that a spin readout returns the wrong outcome (symmetric bit flip, independent per mass). Shrinks measured correlators by (1−2ε)²." />
+              help={<MathText text={T.sf_readout} />} />
+            <NumberField name="bias_field" label="Bias field B (along z)" unit="T" value={e.bias_field_T ?? 0} min={-20} max={20} report={report} level="advanced" onChange={(v) => setE({ bias_field_T: v })}
+              help={<MathText text={BIAS_FIELD_HELP} />} />
           </div>
           <Level min="beginner">
             <div class="row" style={{ marginBottom: '8px' }}>
               <Switch checked={e.include_casimir} onChange={(v) => setE({ include_casimir: v })} label="Include Casimir–Polder interaction" />
-              <Tip text="Retarded Casimir–Polder interaction U = −(23ħc/4π) R_A³R_B³ cm_A cm_B / r⁷ between the dielectric spheres. Turning it off isolates the gravitational contribution (for analysis only — nature cannot switch it off)." />
+              <Tip text={<MathText text={T.sf_casimir} />} />
             </div>
           </Level>
         </fieldset>

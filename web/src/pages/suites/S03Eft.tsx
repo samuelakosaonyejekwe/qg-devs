@@ -1,3 +1,5 @@
+import { Tex, MathText } from '../../components/Tex';
+import { T, F } from '../formulas-l1';
 /** Suite 3 — Quantum gravity EFT: registry entries for QG-COH / QG-EFT1 and the locally computed one-loop correction. */
 import { useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
@@ -13,7 +15,7 @@ import { hypStyle } from '../../lib/hyp';
 import { BRANCHES } from '../../lib/types';
 import { logspace } from './f1-shared';
 
-interface ModelEntry { id: string; name: string; family: string; implemented: boolean; dynamics: string; assumptions: string[]; approximations: string[]; admissible_domain: string; known_limits: string[]; references: string[]; assurance: string; status_note: string; entangling_by_gravity: boolean }
+interface ModelEntry { tex?: { dynamics?: string[]; known_limits?: string[] }; id: string; name: string; family: string; implemented: boolean; dynamics: string; assumptions: string[]; approximations: string[]; admissible_domain: string; known_limits: string[]; references: string[]; assurance: string; status_note: string; entangling_by_gravity: boolean }
 
 export default function Page(_props: { suite?: number }) {
   const models = useApiGet<ModelEntry[]>('/api/models');
@@ -53,11 +55,11 @@ export default function Page(_props: { suite?: number }) {
               <div class="card-head"><h3><span class="dot" style={{ background: hypStyle(m.id).color }} /> {m.id}</h3><AssuranceBadge status={m.assurance} raw={m.assurance} /></div>
               <p class="small">{m.name}</p>
               <KV rows={[
-                ['Dynamics', <code>{m.dynamics}</code>],
+                ['Dynamics', m.tex?.dynamics?.length ? <>{m.tex.dynamics.map((t) => <Tex tex={t} display alt={m.dynamics} />)}</> : <code>{m.dynamics}</code>],
                 ['Assumptions', <ul class="tight">{m.assumptions.map((a) => <li>{a}</li>)}</ul>],
                 ['Approximations', <ul class="tight">{m.approximations.map((a) => <li>{a}</li>)}</ul>],
                 ['Admissible domain', m.admissible_domain],
-                ['Known limits', <ul class="tight">{m.known_limits.map((a) => <li>{a}</li>)}</ul>],
+                ['Known limits', m.tex?.known_limits?.length ? <ul class="tight">{m.tex.known_limits.map((t, i) => <li><Tex tex={t} display alt={m.known_limits[i] ?? ''} /></li>)}</ul> : <ul class="tight">{m.known_limits.map((a) => <li>{a}</li>)}</ul>],
                 ['Entangling by gravity', m.entangling_by_gravity ? 'yes' : 'no'],
                 ['References', <ul class="tight">{m.references.map((a) => <li>{a}</li>)}</ul>],
                 ['Status note', m.status_note],
@@ -69,24 +71,24 @@ export default function Page(_props: { suite?: number }) {
 
       <Card title="One-loop EFT correction for the current design" actions={<button type="button" class="btn-sm" onClick={() => setShowForm((s) => !s)} aria-expanded={showForm}>{showForm ? 'Hide design' : 'Edit design'}</button>}>
         <EvidenceBanner />
-        <p class="small muted">V(r) = −G m₁m₂/r [1 + 3G(m₁+m₂)/(rc²) + 41Għ/(10π r²c³)]. The second term is a classical post-Newtonian (gauge-dependent) correction; only the third is the genuine quantum correction. Every number below is computed in this browser from that formula and the current design (CODATA 2022 constants).</p>
+        <Tex tex={F.eftV} display /><p class="small muted">The second term is a classical post-Newtonian (gauge-dependent) correction; only the third is the genuine quantum correction. Every number below is computed in this browser from that formula and the current design (CODATA 2022 constants).</p>
         {showForm && <ScenarioForm value={sc} onChange={(s) => scenario.set(s)} report={v.report} showEnv={false} />}
         {issues.length > 0 && <div class="error-box" role="alert"><strong>Inadmissible design:</strong> {issues.join('; ')}</div>}
         {calc && (<>
           <div class="outs">
             <Out label="Quantum relative size at d" value={calc.rows.find((r) => r.k === 'LL')!.quantum_relative_size} prov="COMPUTED_LOCAL"
-              interp={`41 l_P²/(10π r²) with l_P = ${fmtQ(calc.l_P, 'm')}: the quantum term relative to Newtonian gravity. Far below any conceivable laboratory resolution.`} />
-            <Out label="Δφ from quantum correction" value={calc.dphiQ} unit="rad" prov="COMPUTED_LOCAL" interp="Contribution to the entangling phase, Δφ_q = φ_LL + φ_RR − φ_LR − φ_RL with φ_ij = −U_q t/ħ." />
-            <Out label="Newtonian Δφ (point masses)" value={calc.dphiN} unit="rad" prov="COMPUTED_LOCAL" interp="Same combination for −Gm₁m₂/r: the tree-level QG-COH prediction (no Casimir, no decoherence)." />
+              interp={<><Tex tex={F.relSize} /> with <Tex tex={F.lP} /> = {fmtQ(calc.l_P, 'm')}: the quantum term relative to Newtonian gravity. Far below any conceivable laboratory resolution.</>} />
+            <Out label="Δφ from quantum correction" value={calc.dphiQ} unit="rad" prov="COMPUTED_LOCAL" interp={<MathText text={T.s3_dphiq} />} />
+            <Out label="Newtonian Δφ (point masses)" value={calc.dphiN} unit="rad" prov="COMPUTED_LOCAL" interp={<MathText text={T.s3_newton} />} />
             <Out label="Ratio Δφ_q / Δφ_N" value={calc.dphiN !== 0 ? calc.dphiQ / calc.dphiN : NaN} prov="COMPUTED_LOCAL" interp="Why QG-EFT1 is experimentally indistinguishable from QG-COH at laboratory scales (computed, not asserted)." />
           </div>
           <h3 style={{ marginTop: '14px' }}>Per branch pair</h3>
-          <DataTable caption="EFT potential terms per branch pair" head={['Pair', 'r', 'Newtonian U', 'classical PN term', 'quantum term', 'relative size', 'φ_q = −U_q t/ħ']} numeric={[1, 2, 3, 4, 5, 6]}
+          <DataTable caption="EFT potential terms per branch pair" head={['Pair', 'r', 'Newtonian U', 'classical PN term', 'quantum term', 'relative size', <Tex tex={F.phiQ} />]} numeric={[1, 2, 3, 4, 5, 6]}
             rows={calc.rows.map((r) => [r.k, fmtQ(r.r, 'm'), fmtQ(r.newtonian_J, 'J'), fmtQ(r.classical_pn_correction_J, 'J'), fmtQ(r.quantum_one_loop_correction_J, 'J'), fmtNum(r.quantum_relative_size, 3), `${fmtNum(r.phase_q, 3)} rad`])} />
           <h3 style={{ marginTop: '14px' }}>Domain-of-validity checks (static Newtonian-limit approximation)</h3>
           <div class="outs">
-            <Out label="Retardation ratio (r/c)/t" value={calc.regime.retardation} prov="COMPUTED_LOCAL" tone={calc.regime.retardation < 1e-6 ? 'good' : 'bad'} interp="Light-crossing time over interaction time; must be ≪ 1 (threshold 10⁻⁶ in qgdevs.qg_eft)." />
-            <Out label="|Φ|/c² = Gm/(rc²)" value={calc.regime.potential} prov="COMPUTED_LOCAL" tone={calc.regime.potential < 1e-6 ? 'good' : 'bad'} interp="Weak-field condition; must be ≪ 1 (threshold 10⁻⁶)." />
+            <Out label="Retardation ratio (r/c)/t" value={calc.regime.retardation} prov="COMPUTED_LOCAL" tone={calc.regime.retardation < 1e-6 ? 'good' : 'bad'} interp={<MathText text={T.s3_ret} />} />
+            <Out label="|Φ|/c² = Gm/(rc²)" value={calc.regime.potential} prov="COMPUTED_LOCAL" tone={calc.regime.potential < 1e-6 ? 'good' : 'bad'} interp={<MathText text={T.s3_weak} />} />
             <Out label="Branch geometry Δx < r" value={calc.regime.geom ? 'satisfied' : 'violated'} prov="COMPUTED_LOCAL" tone={calc.regime.geom ? 'good' : 'bad'} interp="Branches must be distinct and closer to each other than the masses are apart." />
           </div>
           <LinePlot name="eft-relative-size" title="Quantum one-loop relative size vs distance" desc="41 l_P squared over 10 pi r squared, log-log, with the current separation marked" xLabel="Distance r" xUnit="m" yLabel="Relative size" yUnit="1" logX logY

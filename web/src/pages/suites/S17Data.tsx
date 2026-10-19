@@ -3,6 +3,7 @@ import { RunBar } from '../../components/Reset';
 import { useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
 import { Card, ProvBadge, ErrorBox, Loading, SourceChip, DataTable, Json, Btn, Level, Tip, StatusBadge, KV, InfoBanner } from '../../components/ui';
+import { MathText } from '../../components/Tex';
 import { SelectField } from '../../components/fields';
 import { JobRunner } from '../../components/JobRunner';
 import { useApiGet, apiGet, apiUpload } from '../../lib/api';
@@ -146,7 +147,7 @@ function Constants() {
   const r = useApiGet<Constant[]>('/api/constants');
   return (
     <Card title="Physical constants" actions={<><ProvBadge kind="LITERATURE_REFERENCE" title="CODATA 2022 recommended values (NIST)" /><span class="badge b-literature">CODATA 2022</span><SourceChip source={r.source} cachedAt={r.cachedAt} /></>}>
-      <p class="small muted">Exact SI-defining constants have zero uncertainty. G carries the largest relative uncertainty (≈2×10⁻⁵), which propagates directly into every gravitational phase (Δφ ∝ G).</p>
+      <p class="small muted"><MathText text="Exact SI-defining constants have zero uncertainty. $G$ carries the largest relative uncertainty ($u_r(G) \approx 2\times10^{-5}$), which propagates directly into every gravitational phase ($\Delta\varphi \propto G$)." /></p>
       {r.loading && <Loading />}
       <ErrorBox error={r.error} what="loading constants" />
       {r.data && (

@@ -6,9 +6,9 @@
  * module only normalises each axis into the box for display.
  */
 import * as THREE from 'three';
-import { createStage, color, colormap, lineSegments, pbr, polyline, textSprite, SPHERE_SEG, lowEnd, highTier, type Handle } from './core';
+import { createStage, color, colormap, lineSegments, pbr, polyline, textSprite, texLabel, SPHERE_SEG, lowEnd, highTier, type Handle } from './core';
 
-export interface Axis3 { label: string; unit?: string; log?: boolean; min?: number; max?: number; cats?: string[] }
+export interface Axis3 { label: string; unit?: string; log?: boolean; min?: number; max?: number; cats?: string[]; /** LaTeX title (typeset) */ tex?: string; /** LaTeX category labels */ catsTex?: string[] }
 export interface Surface3 { name: string; xs: number[]; ys: number[]; z: (number | null)[][]; color?: string; colormap?: string; cmin?: number; cmax?: number; opacity?: number; wire?: boolean }
 export interface Points3 { name: string; pts: [number, number, number][]; color: string | string[]; size?: number; count?: number; line?: boolean; lineWidth?: number; highlightLast?: boolean }
 export interface Bar3 { xi: number; yi: number; h: number; color: string; label?: string }
@@ -96,10 +96,7 @@ function eigSym3(a: number[][]): { w: number[]; v: number[][] } {
 export function mountPlot3D(el: HTMLElement, spec0: Plot3Spec): Handle & { info: { axes: { x: [number, number]; y: [number, number]; z: [number, number] } } } {
   const st = createStage(el);
   const th = st.theme;
-  st.camera.position.set(2.6, 1.9, 2.9);
-  st.setHome(st.camera.position.clone(), new THREE.Vector3(0, 0, 0));
-  st.controls.target.set(0, 0, 0);
-  st.controls.update();
+  st.fit(Math.sqrt(3) * BOX + 0.45, new THREE.Vector3(0, 0.05, 0));
   // data axes (x, y, z) → scene (x, z, -y) so that the data z axis points up
   const P = (x: number, y: number, z: number) => new THREE.Vector3(x, z, -y);
   const frame = new THREE.Group(); st.scene.add(frame);
@@ -136,13 +133,17 @@ export function mountPlot3D(el: HTMLElement, spec0: Plot3Spec): Handle & { info:
     E(P(B, -B, -B), P(B, B, -B)); E(P(-B, B, -B), P(B, B, -B)); E(P(-B, B, -B), P(-B, B, B)); E(P(B, B, -B), P(B, B, B)); E(P(-B, B, B), P(B, B, B)); E(P(-B, -B, B), P(-B, B, B));
     frame.add(lineSegments(edges, th.muted, 0.85, 1.4));
     // tick labels
-    for (const t of M[0].ticks) { const s = textSprite(M[0].fmt(t), th.muted, 0.02, 'qg3d-tick'); s.position.copy(P(M[0].f(t), -B - 0.12, -B)); frame.add(s); }
-    for (const t of M[1].ticks) { const s = textSprite(M[1].fmt(t), th.muted, 0.02, 'qg3d-tick'); s.position.copy(P(B + 0.14, M[1].f(t), -B)); frame.add(s); }
+    const tick = (ax: Axis3, m: Mapper, t: number) => (ax.catsTex?.[t] ? texLabel(ax.catsTex[t], m.fmt(t), th.fg, 'qg3d-tick') : textSprite(m.fmt(t), th.muted, 0.02, 'qg3d-tick'));
+    for (const t of M[0].ticks) { const s = tick(spec.x, M[0], t); s.position.copy(P(M[0].f(t), -B - 0.14, -B)); frame.add(s); }
+    for (const t of M[1].ticks) { const s = tick(spec.y, M[1], t); s.position.copy(P(B + 0.16, M[1].f(t), -B)); frame.add(s); }
     for (const t of M[2].ticks) { const s = textSprite(M[2].fmt(t), th.muted, 0.02, 'qg3d-tick'); s.position.copy(P(-B - 0.12, -B - 0.04, M[2].f(t))); frame.add(s); }
     const title = (a: Axis3) => `${a.label}${a.unit && !a.cats ? ` (${a.log ? 'log, ' : ''}${a.unit})` : a.log ? ' (log)' : ''}`;
-    const tx = textSprite(title(spec.x), th.fg, 0.08, 'qg3d-axis'); tx.position.copy(P(0, -B - 0.32, -B)); frame.add(tx);
-    const ty = textSprite(title(spec.y), th.fg, 0.08, 'qg3d-axis'); ty.position.copy(P(B + 0.42, 0, -B)); frame.add(ty);
-    const tz = textSprite(title(spec.z), th.fg, 0.08, 'qg3d-axis'); tz.position.copy(P(-B + 0.35, -B, B + 0.2)); frame.add(tz);
+    const ttl = (a: Axis3) => (a.tex ? texLabel(a.tex + (a.unit && !a.cats ? String.raw`\;(\text{${a.unit.replace(/[{}\\$]/g, '')}})` : ''), title(a), th.fg, 'qg3d-axis') : textSprite(title(a), th.fg, 0.08, 'qg3d-axis'));
+    const tx = ttl(spec.x); tx.position.copy(P(0, -B - (spec.x.cats ? 0.52 : 0.36), -B)); frame.add(tx);
+    const ty = ttl(spec.y); ty.position.copy(P(B + (spec.y.cats ? 0.62 : 0.46), 0, -B)); frame.add(ty);
+    const tz = ttl(spec.z); tz.position.copy(P(-B, -B, B + 0.2)); frame.add(tz);
+    // frame the box plus its label margin at every aspect ratio (re-fitted on resize)
+    st.fit(Math.sqrt(3) * B + 0.45, new THREE.Vector3(0, 0.05, 0));
   }
 
   const tmp = new THREE.Color();
@@ -234,8 +235,13 @@ export function mountPlot3D(el: HTMLElement, spec0: Plot3Spec): Handle & { info:
     const nxC = spec.x.cats?.length ?? 1, nyC = spec.y.cats?.length ?? 1;
     const bw = (spec.barWidth ?? 0.7) * (2 * BOX) / Math.max(nxC, nyC);
     for (const b of spec.bars ?? []) {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(bw, 1, bw), pbr(b.color, { roughness: 0.45 }));
+      const bm = pbr(b.color, { roughness: 0.5, metalness: 0.0 });
+      bm.emissive.copy(color(b.color)).multiplyScalar(0.18); // self-light keeps faces readable on dark backgrounds
+      const box = new THREE.BoxGeometry(bw, 1, bw);
+      const mesh = new THREE.Mesh(box, bm);
       mesh.castShadow = true; mesh.receiveShadow = true;
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(box), new THREE.LineBasicMaterial({ color: color(th.fg), transparent: true, opacity: 0.45 }));
+      mesh.add(edges);
       dyn.add(mesh);
       let lab = null;
       if (b.label != null) { lab = textSprite(b.label, th.fg, 0.01, 'qg3d-tick'); dyn.add(lab); }
@@ -308,7 +314,8 @@ export function mountPlot3D(el: HTMLElement, spec0: Plot3Spec): Handle & { info:
         const hgt = Math.max(1e-4, Math.abs(top - base));
         o.mesh.scale.set(1, hgt, 1);
         o.mesh.position.copy(P(mx.f(b.xi), my.f(b.yi), (top + base) / 2));
-        (o.mesh.material as THREE.MeshPhysicalMaterial).color.copy(color(b.color));
+        const bmat = o.mesh.material as THREE.MeshStandardMaterial;
+        bmat.color.copy(color(b.color)); bmat.emissive.copy(bmat.color).multiplyScalar(0.18);
         if (o.lab) { o.lab.element.textContent = b.label ?? ''; o.lab.position.copy(P(mx.f(b.xi), my.f(b.yi), Math.max(top, base) + 0.08)); }
       });
     }
@@ -342,6 +349,7 @@ export function mountPlot3D(el: HTMLElement, spec0: Plot3Spec): Handle & { info:
     info,
     update(spec: Plot3Spec) { apply(spec); },
     resetView: st.resetView,
+    fitView: st.resetView,
     toPNG: st.toPNG,
     composite: st.composite,
     canvasSize: st.canvasSize,

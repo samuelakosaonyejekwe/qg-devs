@@ -60,10 +60,14 @@ async function parse(res: Response): Promise<unknown> {
   try { return text ? JSON.parse(text) : null; } catch { return text; }
 }
 
+/** Thrown for requests cancelled because a newer one replaced them (callers ignore it). */
+export class AbortedError extends Error { constructor() { super('aborted'); } }
+
 async function doFetch(url: string, init: RequestInit): Promise<Response> {
   try {
     return await fetch(url, init);
   } catch (e) {
+    if ((e as Error)?.name === 'AbortError') throw new AbortedError();
     throw new ApiError(0, `network error: ${(e as Error).message || 'unreachable'}`, true);
   }
 }
@@ -73,10 +77,10 @@ function sourceOf(res: Response): Source {
   return s === 'cache' || s === 'offline' ? s : 'network';
 }
 
-export async function apiGet<T = unknown>(path: string, query?: Record<string, string | number | boolean | undefined>, opts: { noCache?: boolean } = {}): Promise<Fetched<T>> {
+export async function apiGet<T = unknown>(path: string, query?: Record<string, string | number | boolean | undefined>, opts: { noCache?: boolean; signal?: AbortSignal } = {}): Promise<Fetched<T>> {
   const h = headers(false);
   if (opts.noCache) h['x-qg-no-cache'] = '1';
-  const res = await doFetch(apiUrl(path, query), { headers: h });
+  const res = await doFetch(apiUrl(path, query), { headers: h, signal: opts.signal });
   const body = await parse(res);
   let src = sourceOf(res);
   const cachedAt = res.headers.get('x-qg-cached-at');
@@ -142,12 +146,15 @@ export function useApiGet<T = unknown>(path: string | null, query?: Record<strin
   const reload = useCallback(() => setTick((t) => t + 1), []);
   useEffect(() => {
     if (!path) return;
+    // Each request is aborted when the path/query change, the component unmounts (route change) or a
+    // reload is requested, so a slow stale response can never overwrite a newer one.
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     let alive = true;
     setSt((s) => ({ ...s, loading: true, error: null }));
-    apiGet<T>(path, query)
+    apiGet<T>(path, query, { signal: ctl?.signal })
       .then((r) => alive && setSt({ data: r.data, error: null, loading: false, source: r.source, cachedAt: r.cachedAt }))
-      .catch((e) => alive && setSt((s) => ({ ...s, error: e instanceof ApiError ? e : new ApiError(0, String(e)), loading: false })));
-    return () => { alive = false; };
+      .catch((e) => { if (alive && !(e instanceof AbortedError)) setSt((s) => ({ ...s, error: e instanceof ApiError ? e : new ApiError(0, String(e)), loading: false })); });
+    return () => { alive = false; ctl?.abort(); };
   }, [path, qs, tick]);
   // Refresh when the service worker revalidated this URL in the background, or when coming back online.
   const urlRef = useRef('');
@@ -175,31 +182,54 @@ export async function submitJob(type: string, params: Record<string, unknown>): 
   return apiPost<{ id: string }>('/api/jobs', { type, params });
 }
 
-export async function getJob(id: string): Promise<Job> {
-  return (await apiGet<Job>(`/api/jobs/${encodeURIComponent(id)}`, undefined, { noCache: true })).data;
+export async function getJob(id: string, signal?: AbortSignal): Promise<Job> {
+  return (await apiGet<Job>(`/api/jobs/${encodeURIComponent(id)}`, undefined, { noCache: true, signal })).data;
 }
 
 export async function cancelJob(id: string) {
   return apiPost(`/api/jobs/${encodeURIComponent(id)}/cancel`);
 }
 
-/** Poll a job until it reaches a terminal state; returns a stop function. */
+/**
+ * Poll a job until it reaches a terminal state; returns a stop function that also aborts the request in
+ * flight. Transient errors back off (×3, capped at 30 s); a 404 (job no longer exists) stops polling.
+ * Polling pauses while the tab is hidden and resumes when visible.
+ */
 export function pollJob(id: string, onUpdate: (j: Job) => void, onError: (e: ApiError) => void, intervalMs = 1500): () => void {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let ctl: AbortController | null = null;
+  let delay = intervalMs;
+  const schedule = (ms: number) => { if (!stopped) timer = setTimeout(tick, ms); };
   const tick = async () => {
     if (stopped) return;
+    if (typeof document !== 'undefined' && document.hidden) { schedule(intervalMs); return; }
+    ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     try {
-      const j = await getJob(id);
+      const j = await getJob(id, ctl?.signal);
       if (stopped) return;
+      delay = intervalMs;
       onUpdate(j);
-      if (j.status === 'queued' || j.status === 'running') timer = setTimeout(tick, intervalMs);
+      if (j.status === 'queued' || j.status === 'running') schedule(intervalMs);
     } catch (e) {
-      if (stopped) return;
-      onError(e instanceof ApiError ? e : new ApiError(0, String(e)));
-      timer = setTimeout(tick, intervalMs * 3);
+      if (stopped || e instanceof AbortedError) return;
+      const err = e instanceof ApiError ? e : new ApiError(0, String(e));
+      onError(err);
+      if (err.status === 404) { stopped = true; return; }
+      delay = Math.min(30_000, delay * 3);
+      schedule(delay);
     }
   };
   tick();
-  return () => { stopped = true; if (timer) clearTimeout(timer); };
+  return () => { stopped = true; if (timer) clearTimeout(timer); ctl?.abort(); };
+}
+
+/** Response of GET /api/health. */
+export interface HealthInfo {
+  status: string; version: string; uptime_s: number;
+  jobs: Record<string, number>;
+  schedule_last_run?: Record<string, string>;
+  native_kernel?: { available: boolean; reason?: string };
+  llm?: { providers?: Record<string, { configured: boolean; default_model?: string; url?: string }>; default?: string };
+  [k: string]: unknown;
 }

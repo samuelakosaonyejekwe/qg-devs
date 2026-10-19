@@ -220,9 +220,9 @@ ul.tight { margin: 0.2em 0 0.6em; padding-left: 1.2em; }
 ul.tight li { margin: 0.15em 0; }
 
 /* ---------------------------------------------------------------- tabs */
-.tabs [role="tablist"] { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 12px; overflow-x: auto; }
-.tabs [role="tab"] { border: none; background: none; padding: 9px 14px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; }
-.tabs [role="tab"][aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+[role="tablist"] { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 12px; overflow-x: auto; }
+[role="tab"] { border: none; background: none; padding: 9px 14px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; }
+[role="tab"][aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* ---------------------------------------------------------------- charts */
 .chart { margin: 0; min-width: 0; }
@@ -321,3 +321,57 @@ dialog::backdrop { background: rgba(10, 12, 30, 0.45); backdrop-filter: blur(3px
 @media (max-width: 420px) { .upd-head { padding: 14px 16px; } .upd-body { padding: 12px 16px; } .upd-chip { margin-left: 0; } .upd-actions .btn { flex: 1; justify-content: center; } }
 
 .chart-overlay { position: absolute; left: 0; top: 0; pointer-events: none; background: transparent !important; }
+
+/* typeset mathematics (KaTeX) */
+.tex { font-size: 1.04em; }
+.tex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; max-width: 100%; }
+.tex-display .katex-display { margin: 0.2em 0; }
+.tex-src { font-family: var(--mono); font-size: 0.86em; color: var(--muted); }
+.eq-card { margin: 10px 0 4px; }
+.eq-card > summary { list-style-position: inside; }
+.eq-list { display: grid; gap: 4px 18px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); margin: 8px 0 0; }
+.eq-item { border-top: 1px solid var(--border); padding-top: 6px; min-width: 0; }
+.eq-item dt { font-size: 0.8rem; font-weight: 650; color: var(--muted); }
+.eq-item dd { margin: 0; min-width: 0; }
+.eq-note { margin: 2px 0 4px; }
+
+/* friendly notices (errors, access, limits) */
+.notice { border-radius: var(--radius); border: 1px solid var(--border); padding: 12px 14px; font-size: 0.92rem; background: var(--bg-elev); display: grid; gap: 6px; }
+.notice p { margin: 0; }
+.notice-title { font-weight: 700; }
+.notice-access { border-color: var(--accent); background: var(--accent-soft); }
+.notice-access .notice-title { color: var(--accent); }
+.notice-busy { border-color: var(--warn); background: var(--warn-soft); }
+.notice-offline { border-color: var(--warn); background: var(--warn-soft); }
+.notice-input { border-color: var(--info); background: var(--info-soft); }
+.notice-error { border-color: var(--danger); background: var(--danger-soft); }
+.notice .btn { justify-self: start; }
+.lock-hint { text-decoration: none; }
+
+/* prominent play control */
+.play-big { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px 0 14px; border-radius: 22px; border: none; background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: var(--shadow); }
+.play-big:hover:not(:disabled) { filter: brightness(1.08); }
+.play-big:disabled { opacity: 0.45; cursor: not-allowed; }
+.play-big > span:first-child { font-size: 1.1rem; width: 1.2em; text-align: center; }
+.player-time { font-variant-numeric: tabular-nums; font-size: 0.95rem; min-width: 9ch; }
+
+/* ---------------------------------------------------------------- phone-width robustness (audit) */
+/* long badges wrap instead of widening the page; short ones are unaffected */
+.badge { white-space: normal; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+/* long URLs and identifiers never force horizontal scrolling */
+main a, .card a, .kv dd, td, .out-value, code { overflow-wrap: anywhere; }
+label select, .field-input select, .chart-toolbar select { max-width: 100%; }
+label.small, label.row { flex-wrap: wrap; min-width: 0; }
+.chart-toolbar select { min-width: 3.4em; }
+/* tab strips scroll horizontally inside themselves rather than clipping a label */
+[role="tablist"] { overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+[role="tab"] { flex: 0 0 auto; }
+.runbar { flex-wrap: wrap; align-items: center; }
+.runbar > .btn { flex: 0 1 auto; }
+@media (max-width: 400px) {
+  h1 { font-size: 1.15rem; }
+  .chart-toolbar .btn-icon[aria-label^="Zoom"] { display: none; }
+  .page-head p { font-size: 0.92rem; }
+}
+/* charts never exceed their container, even for the first paint before their ResizeObserver fires */
+.chart canvas, .chart-overlay { max-width: 100%; }

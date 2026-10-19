@@ -10,7 +10,7 @@ import { applyLocalCorrection, branchDistances, entanglingPhase, phasesFromEnerg
 import { modelState, protocolPhases } from './models';
 import { outcomeProbabilities, PAULI_SETTINGS } from './quantum';
 import { G } from './constants';
-import { scenarioFor } from './index';
+import { scenarioFor } from './scenario';
 
 export function bornProbabilities(design: Design, env: Environment, model: string, readoutError: number, settings: string[] = PAULI_SETTINGS): Record<string, number[]> {
   const { scenario } = scenarioFor(design, env);

@@ -9,39 +9,23 @@ import {
   applyLocalCorrection, branchDistances, branchPositions, checkGeometry, cpkWitnessBestSign, decomposePhases,
   entanglingPhase, gravitationalBranchEnergies, jointState, phasesFromEnergies, radiusOf,
 } from './bmv';
-import { e as eCharge } from './constants';
-import { decoherenceBudget } from './decoherence';
-import { Channel, branchEnergies, totalByBranch } from './em';
-import { clausiusMossotti, getMaterial } from './materials';
-import { ModelScenario, predictionsTable } from './models';
+import { predictionsTable } from './models';
 import { checkDensityMatrix, concurrence, logNegativity, negativity, pptWitness, purity } from './quantum';
 import { toArrays } from './linalg';
+import { scenarioFor } from './scenario';
+export { scenarioFor };
 
 export { CONSTANTS } from './constants';
 export { MATERIALS, clausiusMossotti, getMaterial } from './materials';
 export { checkGeometry, radiusOf, branchPositions, branchDistances, parallelDeltaPhiAnalytic, fmtE3 } from './bmv';
-export { decoherenceBudget, diosiPenroseRate } from './decoherence';
-export { minDistanceForGravityDominance, casimirPolderEnergy, casimirToGravityRatio } from './em';
-export { eftPotentialTerms, predictionsTable, modelState, IMPLEMENTED_IDS } from './models';
+export { decoherenceBudget, diosiPenroseRate, cslRate, CSL_DEFAULTS } from './decoherence';
+export { minDistanceForGravityDominance, casimirPolderEnergy, casimirToGravityRatio, spinDipolarBranchEnergies, diamagneticBranchEnergies } from './em';
+export { eftPotentialTerms, predictionsTable, modelState, IMPLEMENTED_IDS, SERVER_ONLY_IDS, ahBeta4 } from './models';
 export type { ModelScenario } from './models';
 
 export const LOCAL_EVIDENCE_STATUS = 'COMPUTED LOCALLY (offline engine) — computational prediction, not physical evidence';
 
 /** qgdevs.design.scenario_for: decoherence budgets of A and B and non-gravitational branch energies. */
-export function scenarioFor(design: Design, env: Environment) {
-  const mat = getMaterial(env.material);
-  const cm = clausiusMossotti(mat);
-  const RA = radiusOf(design.mass_A, design.density), RB = radiusOf(design.mass_B, design.density);
-  const common = { pressure: env.pressure, T_gas: env.T_gas, T_env: env.T_env, T_int: env.T_int, cm, t: design.time };
-  const budA = decoherenceBudget(design.mass_A, RA, design.dx_A, common);
-  const budB = decoherenceBudget(design.mass_B, RB, design.dx_B, common);
-  const include: Channel[] = env.include_casimir ? ['casimir', 'coulomb', 'induced'] : ['coulomb', 'induced'];
-  const q = env.residual_charge_e * eCharge;
-  const ch = branchEnergies(design, cm.re, cm.re, q, q, include);
-  const sc: ModelScenario = { design, gamma_env_A: budA.total_rate, gamma_env_B: budB.total_rate, nongrav: totalByBranch(ch) };
-  return { scenario: sc, decoherence_A: budA, decoherence_B: budB, nongrav_channels: ch };
-}
-
 function linspace(a: number, b: number, n: number): number[] {
   if (n === 1) return [a];
   const step = (b - a) / (n - 1);

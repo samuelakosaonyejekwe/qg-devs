@@ -11,6 +11,9 @@ export const e = 1.602176634e-19; // C
 export const eps0 = 8.8541878188e-12; // F m^-1
 export const amu = 1.66053906892e-27; // kg
 export const g_n = 9.80665; // m s^-2 (conventional)
+export const mu0 = 1.25663706127e-6; // N A^-2
+export const mu_B = 9.2740100657e-24; // J T^-1
+export const g_e = 2.00231930436092; // electron g-factor magnitude
 
 /** Planck length (derived): sqrt(ħG/c³). */
 export const l_P = Math.sqrt((hbar * G) / c ** 3);
@@ -18,4 +21,4 @@ export const l_P = Math.sqrt((hbar * G) / c ** 3);
 /** Riemann ζ(9) (used by the black-body scattering rate). */
 export const ZETA9 = 1.0020083928260822;
 
-export const CONSTANTS = { G, hbar, h, c, k_B, e, eps0, amu, g_n, l_P } as const;
+export const CONSTANTS = { G, hbar, h, c, k_B, e, eps0, amu, g_n, l_P, mu0, mu_B, g_e } as const;

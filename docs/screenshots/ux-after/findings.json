@@ -1,0 +1,465 @@
+{
+  "base": "http://127.0.0.1:8788",
+  "accessBase": "http://127.0.0.1:8788",
+  "generated": "2026-10-19T20:33:31.148Z",
+  "access": [
+    {
+      "flow": "preregistration without token",
+      "friendlyNotice": false,
+      "rawErrorText": false
+    },
+    {
+      "flow": "dataset ingest without token",
+      "friendlyNotice": false,
+      "rawErrorText": false
+    },
+    {
+      "flow": "job limit (429)",
+      "friendlyNotice": false,
+      "note": "no limit notice after 5 submissions (jobs may finish faster than they are submitted, or the limit is not per-tab)"
+    }
+  ],
+  "findings": [
+    {
+      "route": "/suite/lab",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "li",
+      "text": "Interleave null controls: (i) single-mass runs, (ii) masses swapped/displaced to large d, (iii) gradient off, (iv) charged-mass runs.",
+      "screenshot": "001-desktop-suite-lab-text-null-value.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "span",
+      "text": "one-sided z ≥ 5 on the preregistered witness, readout-corrected, with all null controls consistent with zero",
+      "screenshot": "002-desktop-suite-lab-text-null-value.png"
+    },
+    {
+      "route": "/suite/falsification",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "p.small.muted",
+      "text": "null hypothesis (no gravitational coupling)",
+      "screenshot": "003-desktop-suite-falsification-text-null-value.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.054571817 × 10⁻³⁴",
+      "screenshot": "004-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "6.62607015 × 10⁻³⁴",
+      "screenshot": "005-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "2.99792458 × 10⁸",
+      "screenshot": "006-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.602176634 × 10⁻¹⁹",
+      "screenshot": "007-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "8.8541878188 × 10⁻¹²",
+      "screenshot": "008-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.25663706127 × 10⁻⁶",
+      "screenshot": "009-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.66053906892 × 10⁻²⁷",
+      "screenshot": "010-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "9.1093837139 × 10⁻³¹",
+      "screenshot": "011-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "9.2740100657 × 10⁻²⁴",
+      "screenshot": "012-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "2.00231930436",
+      "screenshot": "013-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "desktop",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "6.02214076 × 10²³",
+      "screenshot": "014-desktop-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/builder",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=392 text=\"∣LL⟩,∣LR⟩,∣RL⟩,∣RR⟩|LL\\rangle, |LR\\rangle, |RL\\rangle, |RR\\rangle\"",
+      "screenshot": "015-phone-builder-element-overflows-viewport.png"
+    },
+    {
+      "route": "/builder",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=370 text=\"max⁡ij ∣ρijengine−ρijref∣\\max_{ij}\\,\\bigl|\\rho^{\\mathrm{engine}}_{ij} - \\rho^{\\m\"",
+      "screenshot": "016-phone-builder-element-overflows-viewport.png"
+    },
+    {
+      "route": "/builder",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=365 text=\"Δφch=−tℏ(ULL+URR−ULR−URL)\\Delta\\varphi_{\\mathrm{ch}} = -\\frac{t}{\\hbar}\\left(U_{\"",
+      "screenshot": "017-phone-builder-element-overflows-viewport.png"
+    },
+    {
+      "route": "/help",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=401 text=\"φLL+φRR−φLR−φRL\\varphi_{LL} + \\varphi_{RR} - \\varphi_{LR} - \\varphi_{RL}\"",
+      "screenshot": "018-phone-help-element-overflows-viewport.png"
+    },
+    {
+      "route": "/help",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=374 text=\"i,j∈{L,R}i, j \\in \\{L, R\\}\"",
+      "screenshot": "019-phone-help-element-overflows-viewport.png"
+    },
+    {
+      "route": "/help",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=364 text=\"N=C=0\\mathcal{N} = C = 0\"",
+      "screenshot": "020-phone-help-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/quantum",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=406 text=\"ρ˙=−i[H,ρ]+∑k(LkρLk†−12{Lk†Lk,ρ})\\dot\\rho = -i[H,\\rho] + \\sum_k \\bigl(L_k\\rho L_\"",
+      "screenshot": "021-phone-suite-quantum-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/qg-eft",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=486 text=\"Δφq=φLL+φRR−φLR−φRL\\Delta\\varphi_q = \\varphi_{LL} + \\varphi_{RR} - \\varphi_{LR} \"",
+      "screenshot": "022-phone-suite-qg-eft-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/qg-eft",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=390 text=\"φij=−Uij(q) t/ℏ\\varphi_{ij} = -U^{(q)}_{ij}\\,t/\\hbar\"",
+      "screenshot": "023-phone-suite-qg-eft-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/entanglement",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=491 text=\"Δφ=φLL+φRR−φLR−φRL\\Delta\\varphi = \\varphi_{LL} + \\varphi_{RR} - \\varphi_{LR} - \\\"",
+      "screenshot": "024-phone-suite-entanglement-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/entanglement",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=392 text=\"∣LL⟩,∣LR⟩,∣RL⟩,∣RR⟩|LL\\rangle, |LR\\rangle, |RL\\rangle, |RR\\rangle\"",
+      "screenshot": "025-phone-suite-entanglement-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/entanglement",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=370 text=\"max⁡ij ∣ρijengine−ρijref∣\\max_{ij}\\,\\bigl|\\rho^{\\mathrm{engine}}_{ij} - \\rho^{\\m\"",
+      "screenshot": "026-phone-suite-entanglement-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/entanglement",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=365 text=\"Δφch=−tℏ(ULL+URR−ULR−URL)\\Delta\\varphi_{\\mathrm{ch}} = -\\frac{t}{\\hbar}\\left(U_{\"",
+      "screenshot": "027-phone-suite-entanglement-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/interferometry",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=365 text=\"φij=−1ℏ∫Uij(t) dt\\varphi_{ij} = -\\frac{1}{\\hbar}\\int U_{ij}(t)\\,\\mathrm{d}t\"",
+      "screenshot": "028-phone-suite-interferometry-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/decoherence",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=443 text=\"∣ρLR(t)∣=∣ρLR(0)∣ e−Γt|\\rho_{LR}(t)| = |\\rho_{LR}(0)|\\,e^{-\\Gamma t}\"",
+      "screenshot": "029-phone-suite-decoherence-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/decoherence",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=396 text=\"∣ρLR(t)/ρLR(0)∣|\\rho_{LR}(t)/\\rho_{LR}(0)|\"",
+      "screenshot": "030-phone-suite-decoherence-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/environment",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=393 text=\"r6=23ℏcR6cm24πGm2 ratior^6 = \\dfrac{23\\hbar c R^6 c_m^2}{4\\pi G m^2\\,\\mathrm{rat\"",
+      "screenshot": "031-phone-suite-environment-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "li",
+      "text": "Interleave null controls: (i) single-mass runs, (ii) masses swapped/displaced to large d, (iii) gradient off, (iv) charged-mass runs.",
+      "screenshot": "032-phone-suite-lab-text-null-value.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "span",
+      "text": "one-sided z ≥ 5 on the preregistered witness, readout-corrected, with all null controls consistent with zero",
+      "screenshot": "033-phone-suite-lab-text-null-value.png"
+    },
+    {
+      "route": "/suite/inference",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=522 text=\"Δφ=λ ΔφNewton(design)\\Delta\\varphi = \\lambda\\,\\Delta\\varphi_{\\mathrm{Newton}}(\\t\"",
+      "screenshot": "034-phone-suite-inference-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/falsification",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "text: null value",
+      "selector": "p.small.muted",
+      "text": "null hypothesis (no gravitational coupling)",
+      "screenshot": "035-phone-suite-falsification-text-null-value.png"
+    },
+    {
+      "route": "/suite/discovery",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "element overflows viewport",
+      "selector": "math",
+      "text": "math right=430 text=\"ln⁡Δφ=c+∑ieiln⁡xi\\ln\\Delta\\varphi = c + \\sum_i e_i \\ln x_i\"",
+      "screenshot": "036-phone-suite-discovery-element-overflows-viewport.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.054571817 × 10⁻³⁴",
+      "screenshot": "037-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "6.62607015 × 10⁻³⁴",
+      "screenshot": "038-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "2.99792458 × 10⁸",
+      "screenshot": "039-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.602176634 × 10⁻¹⁹",
+      "screenshot": "040-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "8.8541878188 × 10⁻¹²",
+      "screenshot": "041-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.25663706127 × 10⁻⁶",
+      "screenshot": "042-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "1.66053906892 × 10⁻²⁷",
+      "screenshot": "043-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "9.1093837139 × 10⁻³¹",
+      "screenshot": "044-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "9.2740100657 × 10⁻²⁴",
+      "screenshot": "045-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "2.00231930436",
+      "screenshot": "046-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/data",
+      "viewport": "phone",
+      "scheme": "light",
+      "category": "unformatted long number",
+      "selector": "td.num",
+      "text": "6.02214076 × 10²³",
+      "screenshot": "047-phone-suite-data-unformatted-long-number.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "desktop",
+      "scheme": "dark",
+      "category": "text: null value",
+      "selector": "li",
+      "text": "Interleave null controls: (i) single-mass runs, (ii) masses swapped/displaced to large d, (iii) gradient off, (iv) charged-mass runs.",
+      "screenshot": "048-desktop-suite-lab-text-null-value.png"
+    },
+    {
+      "route": "/suite/lab",
+      "viewport": "desktop",
+      "scheme": "dark",
+      "category": "text: null value",
+      "selector": "span",
+      "text": "one-sided z ≥ 5 on the preregistered witness, readout-corrected, with all null controls consistent with zero",
+      "screenshot": "049-desktop-suite-lab-text-null-value.png"
+    }
+  ]
+}

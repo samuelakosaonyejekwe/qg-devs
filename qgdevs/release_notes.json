@@ -1,6 +1,25 @@
 {
   "releases": [
     {
+      "version": "0.2.1",
+      "date": "2026-10-20",
+      "title": "Typeset equations, reliable Reset and playback, security audit",
+      "highlights": [
+        "Every equation is now typeset in LaTeX (KaTeX), with a 'Governing equations' card on each suite",
+        "Reset returns a suite exactly to its first-visit state: inputs, outputs, animations and caches",
+        "Every animation visibly plays from t = 0 and loops, with an honest 'below display resolution' notice and labelled magnified view where changes are tiny",
+        "Readable 3-D views: brighter cyclic phase colours, in-canvas legends, auto-fit camera",
+        "Decoherence suite shows established mechanisms by default; collapse models are opt-in and labelled hypothetical",
+        "CSL collapse added as the 8th competing hypothesis; new dossier limits for electric dipoles, magnetic field and Stern–Gerlach precision"
+      ],
+      "fixes": [
+        "Clear messages instead of raw error codes; computations are open to everyone, evidence writes need a token",
+        "Comprehensive audit: evidence-ledger concurrency, blind-data protection, input validation, abuse limits, backup consistency, unequal-mass and collapse-model physics",
+        "Accessibility: zero automated violations across all pages; mobile layouts fixed",
+        "Strict content-security policy now enforced"
+      ]
+    },
+    {
       "version": "0.2.0",
       "date": "2026-10-19",
       "title": "Reset controls, more 3-D simulations, Aziz–Howl model",

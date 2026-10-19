@@ -1,8 +1,10 @@
+import { useImplementedModels } from './f2-shared';
 import { RunBar } from '../../components/Reset';
 /** Suite 13 — Experimental design and optimisation. */
 import { useMemo, useState } from 'preact/hooks';
 import { SuiteHeader } from '../../components/SuiteHeader';
 import { Card, ProvBadge, EvidenceBanner, ErrorBox, DataTable, Btn, Tabs, TabPanel, InfoBanner, Switch, Tip, Level, Seg } from '../../components/ui';
+import { Tex, MathText } from '../../components/Tex';
 import { View3D } from '../../components/View3D';
 import { usePlayer, PlayerControls } from '../../components/Player';
 import { NumberField, SelectField, useValidity } from '../../components/fields';
@@ -12,7 +14,7 @@ import { HeatMap, LinePlot } from '../../plot/Chart';
 import { apiPost, num } from '../../lib/api';
 import { useStore, scenario } from '../../lib/store';
 import { fmtNum, fmtQ, fmtDuration } from '../../lib/format';
-import { hypStyle, IMPLEMENTED_IDS } from '../../lib/hyp';
+import { hypStyle } from '../../lib/hyp';
 import type { Design, Geometry } from '../../lib/types';
 import { SWEEP_PARAMS, paramInfo, linspace, logspace, nullableMatrix } from './f3-shared';
 
@@ -53,7 +55,7 @@ function Optimiser() {
           <NumberField name="t0" label="Time min" unit="s" value={b.t0} min={0} max={1e4} minExclusive report={v.report} onChange={f('t0')} help="Lower bound of the interaction time." />
           <NumberField name="t1" label="Time max" unit="s" value={b.t1} min={0} max={1e4} minExclusive report={v.report} onChange={f('t1')} help="Upper bound of the interaction time." />
           <NumberField name="gap" label="Min surface gap" unit="m" value={b.gap} min={0} max={1} report={v.report} onChange={f('gap')} help="Closest allowed approach between any two branch surfaces (traps, shielding)." />
-          <NumberField name="frac" label="Max non-grav. phase fraction" unit="1" value={b.frac} min={0} max={10} minExclusive report={v.report} onChange={f('frac')} help="Allowed |Δφ_non-grav| / |Δφ_grav| (Casimir–Polder, Coulomb). Designs above it are rejected as confounded." />
+          <NumberField name="frac" label="Max non-grav. phase fraction" unit="1" value={b.frac} min={0} max={10} minExclusive report={v.report} onChange={f('frac')} help={<MathText text="Allowed $|\Delta\varphi_{\text{non-grav}}|/|\Delta\varphi_{\text{grav}}|$ (Casimir–Polder, Coulomb). Designs above it are rejected as confounded." />} />
           <SelectField label="Geometry" value={b.geometry} onChange={(g: Geometry) => setB({ ...b, geometry: g })} options={[{ v: 'linear', label: 'Linear' }, { v: 'parallel', label: 'Parallel' }]} help="Split-axis orientation used for all candidates." />
         </div>
         {!ordered && <p class="field-error">Each minimum must be smaller than its maximum.</p>}
@@ -71,7 +73,7 @@ function Optimiser() {
       <div class="stack">
         <EvidenceBanner />
         <Card title="Constrained design search">
-          <p class="small muted">Objective: minimise log₁₀(3 settings × shots for a 5σ witness violation × (t + 1 s overhead)) under QG-COH with all decoherence and readout effects; constraint violations are reported, never silently dropped.</p>
+          <p class="small muted"><MathText text="Objective: minimise $\log_{10}\!\big(3 \times N_{5\sigma} \times (t + 1\,\mathrm{s})\big)$, where $N_{5\sigma}$ is the shots per setting for a $5\sigma$ witness violation and 1 s is the per-shot overhead," /> under QG-COH with all decoherence and readout effects; constraint violations are reported, never silently dropped.</p>
           <JobRunner scenario type="design_optimise" label="Run optimisation job" disabled={!v.ok || !ordered}
             params={() => ({ environment: sc.environment, bounds: { mass: [b.m0, b.m1], separation: [b.d0, b.d1], dx: [b.x0, b.x1], time: [b.t0, b.t1], min_surface_gap: b.gap, max_casimir_fraction: b.frac, geometry: b.geometry }, seed: o.seed, maxiter: o.maxiter, popsize: o.popsize, top_k: o.top_k, robust_check: o.robust })}>
             {(r: OptResult) => (
@@ -81,7 +83,7 @@ function Optimiser() {
                 {r.candidates.map((c, i) => (
                   <div class="card">
                     <div class="row-between"><h3 style={{ margin: 0 }}>Candidate {i + 1}</h3><Btn onClick={() => { applyCandidate(c); setUsed(i); }}>{used === i ? '✓ In use' : 'Use this design'}</Btn></div>
-                    <DataTable head={['Mass', 'Separation', 'Δx', 'Time', 'Geometry', 'Total time', 'Shots / setting', 'Predicted ⟨W⟩', 'Δφ grav', 'Δφ non-grav', 'Γ_env (A)', 'Dominant decoherence']}
+                    <DataTable head={['Mass', 'Separation', 'Δx', 'Time', 'Geometry', 'Total time', 'Shots / setting', <>Predicted <Tex tex="\langle W\rangle" /></>, <Tex tex="\Delta\varphi_{\text{grav}}" />, <Tex tex="\Delta\varphi_{\text{non-grav}}" />, <><Tex tex="\Gamma_{\text{env}}" /> (A)</>, 'Dominant decoherence']}
                       numeric={[0, 1, 2, 3, 5, 6, 7, 8, 9, 10]}
                       rows={[[fmtQ(c.design.mass_A, 'kg'), fmtQ(c.design.separation, 'm'), fmtQ(c.design.dx_A, 'm'), fmtQ(c.design.time, 's'), c.design.geometry, fmtDuration(c.total_time_s),
                         fmtNum(num(c.witness_shots_per_setting), 4), fmtNum(c.predicted_witness, 4), `${fmtNum(c.delta_phi_grav, 4)} rad`, `${fmtNum(c.delta_phi_nongrav, 4)} rad`, fmtQ(c.decoherence_rate_A, 's⁻¹'), c.dominant_decoherence.replace(/_/g, ' ')]]} />
@@ -131,6 +133,7 @@ function AxisInputs({ name, x, set, report, others, maxN }: { name: string; x: A
 interface Sweep2D { x: { name: string; values: number[] }; y: { name: string; values: number[] }; negativity: (number | null)[][]; witness: (number | null)[][]; hypothesis: string }
 
 function Sweep2DView() {
+  const HYP_IDS = useImplementedModels(); // live registry (server implements more models than the local engine)
   const sc = useStore(scenario);
   const v = useValidity();
   const [ax, setAx] = useState<Axis>({ p: 'separation', a: 2e-4, b: 1e-3, n: 20, log: false });
@@ -190,7 +193,7 @@ function Sweep2DView() {
     const z = qty === 'witness' ? disp.wit : disp.neg;
     return {
       x: { label: xi.label, unit: xi.unit, log: ax.log }, y: { label: yi.label, unit: yi.unit, log: ay.log },
-      z: qty === 'witness' ? { label: '⟨W⟩', unit: '1', min: -zr.w, max: zr.w } : { label: 'negativity', unit: '1', min: 0, max: zr.n },
+      z: qty === 'witness' ? { label: '⟨W⟩', tex: String.raw`\langle W\rangle`, min: -zr.w, max: zr.w } : { label: 'negativity', tex: String.raw`\mathcal{N}`, min: 0, max: zr.n },
       surfaces: [{ name: qty, xs: res.x.values, ys: res.y.values, z, colormap: qty === 'witness' ? 'diverging' : 'viridis', cmin: qty === 'witness' ? -zr.w : 0, cmax: qty === 'witness' ? zr.w : zr.n, wire: true }],
     };
   }, [res, disp, qty, zr]);
@@ -201,7 +204,7 @@ function Sweep2DView() {
         <h2>2-D sweep</h2>
         <AxisInputs name="x axis" x={ax} set={setAx} report={v.report} others={ay.p} maxN={50} />
         <AxisInputs name="y axis" x={ay} set={setAy} report={v.report} others={ax.p} maxN={50} />
-        <SelectField label="Hypothesis" value={hyp} onChange={setHyp} options={IMPLEMENTED_IDS.map((i) => ({ v: i, label: `${i} — ${hypStyle(i).short}` }))} help="Model whose negativity and witness are mapped." />
+        <SelectField label="Hypothesis" value={hyp} onChange={setHyp} options={HYP_IDS.map((i) => ({ v: i, label: `${i} — ${hypStyle(i).short}` }))} help="Model whose negativity and witness are mapped." />
         <fieldset class="fieldset"><legend>Third parameter: interaction time</legend>
           <Switch checked={animate} onChange={setAnimate} label="Animate through interaction time" />
           {animate && (ax.p === 'time' || ay.p === 'time') && <p class="small muted">Time is already a sweep axis, so no time animation is made.</p>}
@@ -223,7 +226,7 @@ function Sweep2DView() {
         <EvidenceBanner />
         <ErrorBox error={err} what="running POST /api/bmv/sweep2d" />
         {res && neg && wit && xi && yi && disp && (<>
-          <InfoBanner>Hatched cells (2-D) and crossed floor marks (3-D) are <b>inadmissible geometry</b>: the branches overlap or touch, or Δx does not exceed the particle diameter (qgdevs.bmv.check_geometry) — no prediction is made. {nNull} of {neg.length * (neg[0]?.length ?? 0)} cells are inadmissible; {nCert} cells predict a certifiable witness (⟨W⟩ &lt; 0).</InfoBanner>
+          <InfoBanner>Hatched cells (2-D) and crossed floor marks (3-D) are <b>inadmissible geometry</b>: the branches overlap or touch, or <Tex tex="\Delta x" /> does not exceed the particle diameter (qgdevs.bmv.check_geometry) — no prediction is made. {nNull} of {neg.length * (neg[0]?.length ?? 0)} cells are inadmissible; {nCert} cells predict a certifiable witness (<Tex tex="\langle W\rangle < 0" />).</InfoBanner>
           <div class="row-between">
             <Seg label="View" value={view} onChange={setView} options={[{ v: '3d', label: '3-D surface' }, { v: '2d', label: '2-D heat maps' }]} />
             {view === '3d' && <Seg label="Quantity" value={qty} onChange={setQty} options={[{ v: 'witness', label: 'Witness ⟨W⟩' }, { v: 'negativity', label: 'Negativity' }]} />}
@@ -232,14 +235,19 @@ function Sweep2DView() {
           {view === '3d' && spec && (
             <View3D kind="plot3d" opts={spec} name={`sweep-${qty}`} title={`${qty === 'witness' ? 'CPK witness ⟨W⟩' : 'Negativity'} — ${res.hypothesis}, ${curT != null ? tLabel(disp.i) : 'base time'}`} badge="COMPUTED" playing={p.playing}
               label={`Surface of ${qty} over ${xi.label} and ${yi.label}`}
-              legend={qty === 'witness' ? [{ label: '⟨W⟩ < 0 (certified)', color: '#3182bd' }, { label: '⟨W⟩ > 0', color: '#e6550d' }, { label: 'inadmissible (floor marks)', color: '#888' }] : [{ label: 'negativity (viridis)', color: '#21918c' }, { label: 'inadmissible (floor marks)', color: '#888' }]}
+              legend={[{ label: 'inadmissible (floor marks)', color: '#888' }]}
+              colorbar={qty === 'witness'
+                ? { map: 'diverging', titleTex: String.raw`\langle W\rangle`, ticks: [{ at: 0, tex: fmtTex(-zr.w) }, { at: 0.5, tex: '0' }, { at: 1, tex: fmtTex(zr.w) }] }
+                : { map: 'viridis', titleTex: String.raw`\mathcal{N}`, ticks: [{ at: 0, tex: '0' }, { at: 1, tex: fmtTex(zr.n) }] }}
+              frame={n > 1 ? p.pos : undefined} isStatic={n <= 1}
+              change={n > 1 && mats ? { rel: maxChange(qty === 'witness' ? mats.map((m) => m.wit) : mats.map((m) => m.neg)) / (qty === 'witness' ? 2 * zr.w : zr.n), what: `${qty} between the first and last interaction time` } : undefined}
               onRecordStart={() => { p.setPos(0); p.setPlaying(true); }}
               frameData={() => ({ hypothesis: res.hypothesis, time_s: curT, x: res.x, y: res.y, quantity: qty, values: qty === 'witness' ? mats![disp.i].wit : mats![disp.i].neg })}
               fallback={<Heat2D res={res} neg={neg} wit={wit} xi={xi} yi={yi} />} />
           )}
           {n > 1 && <PlayerControls p={p} n={n} t={frames!.map((f) => f.t ?? sc.design.time)} label="Interaction time" />}
           {view === '2d' && <Heat2D res={res} neg={neg} wit={wit} xi={xi} yi={yi} />}
-          <p class="small muted">Axis ticks are cell centres{ax.log || ay.log ? ' (log-spaced grid)' : ''}. Blue (⟨W⟩ &lt; 0) certifies entanglement with three local settings in the preregistered protocol frame.</p>
+          <p class="small muted">Axis ticks are cell centres{ax.log || ay.log ? ' (log-spaced grid)' : ''}. Blue (<Tex tex="\langle W\rangle < 0" />) certifies entanglement with three local settings in the preregistered protocol frame.</p>
         </>)}
       </div>
     </div>
@@ -317,6 +325,11 @@ function Sweep1DView() {
     </div>
   );
 }
+
+/** Short TeX for a tick value. */
+const fmtTex = (v: number) => { if (v === 0) return '0'; const e = Math.floor(Math.log10(Math.abs(v))); return Math.abs(e) < 3 ? String(+v.toPrecision(2)) : `${+(v / 10 ** e).toPrecision(2)}\\times10^{${e}}`; };
+/** Largest absolute change of any admissible cell between the first and last frame. */
+const maxChange = (fr: (number | null)[][][]) => { let m = 0; const a = fr[0], b = fr[fr.length - 1]; a.forEach((r, i) => r.forEach((x, j) => { const y = b[i][j]; if (x != null && y != null) m = Math.max(m, Math.abs(y - x)); })); return m; };
 
 export default function Page(_props: { suite?: number }) {
   const [tab, setTab] = useState('opt');

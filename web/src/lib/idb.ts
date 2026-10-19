@@ -8,6 +8,17 @@ const KEYS: Record<StoreName, string> = { projects: 'id', results: 'id', queue: 
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
+/** Storage failure with a message suitable for showing to the user. */
+export class StorageError extends Error {}
+
+function friendly(e: unknown): StorageError {
+  const name = (e as DOMException)?.name ?? '';
+  const raw = e instanceof Error ? e.message : String(e);
+  if (name === 'QuotaExceededError' || /quota/i.test(raw)) return new StorageError('Storage on this device is full. Delete saved projects/results (Jobs → Saved on this device) or free browser storage, then try again.');
+  if (/not available|InvalidStateError|SecurityError|blocked/i.test(`${name} ${raw}`)) return new StorageError('Storage on this device is unavailable (private browsing, blocked site data, or another tab is upgrading it). Nothing was saved.');
+  return new StorageError(`Local storage error: ${raw}`);
+}
+
 function open(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
@@ -20,7 +31,12 @@ function open(): Promise<IDBDatabase> {
           if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath });
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // another tab upgrading the schema: close so it is not blocked; the next call reopens
+        db.onversionchange = () => { db.close(); dbPromise = null; };
+        resolve(db);
+      };
       req.onerror = () => reject(req.error ?? new Error('IndexedDB open failed'));
       req.onblocked = () => reject(new Error('IndexedDB open blocked by another tab'));
     } catch (e) {
@@ -32,6 +48,10 @@ function open(): Promise<IDBDatabase> {
 }
 
 async function run<T>(store: StoreName, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest): Promise<T> {
+  try { return await runRaw<T>(store, mode, fn); } catch (e) { throw e instanceof StorageError ? e : friendly(e); }
+}
+
+async function runRaw<T>(store: StoreName, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest): Promise<T> {
   const db = await open();
   return new Promise<T>((resolve, reject) => {
     try {

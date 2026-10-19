@@ -1,3 +1,5 @@
+import { Tex, MathText } from '../../components/Tex';
+import { T, F } from '../formulas-l1';
 import { RunBar } from '../../components/Reset';
 /** Suite 1 — Lindblad playground (POST /api/quantum/lindblad) with populations, purity, state checks and a Bloch sphere. */
 import { useMemo, useState } from 'preact/hooks';
@@ -28,11 +30,11 @@ const zerosN = (n: number): M => Array.from({ length: n }, () => new Array(n).fi
 type PresetId = 'rabi' | 'damping' | 'dephasing' | 'driven' | 'twoqubit';
 interface Params { omega: number; gamma: number; J: number }
 const PRESETS: { v: PresetId; label: string; desc: string }[] = [
-  { v: 'rabi', label: 'Rabi drive', desc: 'H/ħ = (Ω/2)σx — coherent population oscillation P₁(t) = sin²(Ωt/2); no dissipation, purity stays 1.' },
-  { v: 'damping', label: 'Amplitude damping', desc: 'H = 0, L = √γ σ− — spontaneous decay |1⟩ → |0⟩ with P₁(t) = e^{−γt}.' },
-  { v: 'dephasing', label: 'Pure dephasing', desc: 'H/ħ = (Ω/2)σz, L = √(γ/2) σz — coherences decay as e^{−γt} while populations stay fixed (the Bloch vector spirals onto the z axis).' },
-  { v: 'driven', label: 'Driven–damped qubit', desc: 'H/ħ = (Ω/2)σx, L = √γ σ− — damped Rabi oscillation relaxing to a mixed steady state.' },
-  { v: 'twoqubit', label: 'Two qubits, ZZ coupling + dephasing', desc: 'H/ħ = J σz⊗σz, L = √(γ/2) σz⊗1 — the gravity-like entangling interaction of the BMV protocol with dephasing on qubit A.' },
+  { v: 'rabi', label: 'Rabi drive', desc: T.s1_rabi },
+  { v: 'damping', label: 'Amplitude damping', desc: T.s1_damp },
+  { v: 'dephasing', label: 'Pure dephasing', desc: T.s1_deph },
+  { v: 'driven', label: 'Driven–damped qubit', desc: T.s1_driven },
+  { v: 'twoqubit', label: 'Two qubits, ZZ coupling + dephasing', desc: T.s1_two },
 ];
 
 function build(id: PresetId, p: Params): Model {
@@ -112,8 +114,11 @@ export default function Page(_props: { suite?: number }) {
     main.run(() => apiPost<LindbladOut>('/api/quantum/lindblad', body(tFinal, nTimes)));
     blochRun.setData(null);
   };
+  // ≥ 24 samples per fastest period (Ω or γ) over the run, capped by the server's POST rate limit
+  const fastest = Math.max(par.omega, par.gamma, 1e-300);
+  const nBloch = Math.min(72, Math.max(24, Math.ceil(((tFinal * fastest) / (2 * Math.PI)) * 24)));
   const runBloch = () => {
-    const N = 24;
+    const N = nBloch;
     const ts = Array.from({ length: N }, (_, k) => (tFinal * (k + 1)) / N);
     setBprog(0);
     blochRun.run(async () => {
@@ -131,24 +136,24 @@ export default function Page(_props: { suite?: number }) {
 
   return (
     <div>
-      <SuiteHeader n={1} intro="Open-system quantum dynamics: the server integrates the Lindblad master equation dρ/dt = −i[H,ρ] + Σ_k (L_k ρ L_k† − ½{L_k†L_k, ρ}) with a sparse Krylov propagator (H in units of ħ, i.e. rad/s). Use it to build intuition for the dephasing that competes with gravitational entanglement." />
+      <SuiteHeader n={1} intro={<MathText text={T.s1_intro} />} />
       <div class="split">
         <div class="card sticky-side">
           <h2>Model</h2>
           <SelectField label="Preset" value={preset} onChange={(p) => { setPreset(p as PresetId); setCustom(null); blochRun.setData(null); }}
             options={PRESETS.map((p) => ({ v: p.v, label: p.label }))} help="Exactly solvable reference systems. Each preset builds H and the Lindblad operators from the parameters below." />
-          <p class="small muted">{presetDesc}</p>
+          <p class="small muted"><MathText text={presetDesc} /></p>
           {!custom && (preset === 'rabi' || preset === 'dephasing' || preset === 'driven') && (
             <NumberField name="omega" label={preset === 'dephasing' ? 'Level splitting Ω' : 'Rabi frequency Ω'} unit="rad/s" value={par.omega} min={0} max={1e6} report={v.report}
-              onChange={(x) => setPar({ ...par, omega: x })} help="Angular frequency in H/ħ. A Rabi drive of strength Ω flips the qubit in time π/Ω; a splitting Ω makes the Bloch vector precess about z at rate Ω." />
+              onChange={(x) => setPar({ ...par, omega: x })} help={<MathText text={T.s1_omega} />} />
           )}
           {!custom && preset !== 'rabi' && (
             <NumberField name="gamma" label="Rate γ" unit="s⁻¹" value={par.gamma} min={0} max={1e6} report={v.report} onChange={(x) => setPar({ ...par, gamma: x })}
-              help="Dissipation rate. For amplitude damping, P₁ decays as e^{−γt}; for pure dephasing, coherences decay as e^{−γt} (operator √(γ/2) σz)." />
+              help={<MathText text={T.s1_gamma} />} />
           )}
           {!custom && preset === 'twoqubit' && (
             <NumberField name="J" label="Coupling J" unit="rad/s" value={par.J} min={0} max={1e6} report={v.report} onChange={(x) => setPar({ ...par, J: x })}
-              help="ZZ coupling H/ħ = J σz⊗σz: the same diagonal, branch-dependent energy structure as the gravitational BMV interaction. Entangling phase Δφ = 4Jt." />
+              help={<MathText text={T.s1_J} />} />
           )}
           <SelectField label="Initial state ρ₀" value={rid} onChange={(x) => { setRid(x as RhoId); blochRun.setData(null); }}
             options={[{ v: 'zero', label: model.dim === 2 ? '|0⟩' : '|00⟩' }, { v: 'one', label: model.dim === 2 ? '|1⟩' : '|11⟩' }, { v: 'plus', label: model.dim === 2 ? '|+⟩' : '|++⟩' }, { v: 'mixed', label: 'maximally mixed' }]}
@@ -158,7 +163,7 @@ export default function Page(_props: { suite?: number }) {
           <Level min="expert">
             <details>
               <summary>Edit matrices (H/ħ and Lindblad operators)</summary>
-              <p class="small muted">Entries in rad/s (H) and dimensionless operators (L = √rate · op). H must be Hermitian.</p>
+              <p class="small muted"><MathText text={T.s1_matrices} /></p>
               {!custom && <button type="button" class="btn-sm" onClick={() => setCustom(JSON.parse(JSON.stringify(model)))}>Start editing from this preset</button>}
               {custom && (<>
                 <MatrixEditor label="Re H/ħ" m={custom.H_re} onChange={(m) => setCustom({ ...custom, H_re: m })} />
@@ -166,7 +171,7 @@ export default function Page(_props: { suite?: number }) {
                 {custom.ops.map((o, k) => (
                   <div key={k}>
                     <NumberField name={`rate${k}`} label={`Rate of L${k + 1} (${o.name})`} unit="s⁻¹" value={o.rate} min={0} max={1e9} report={v.report}
-                      onChange={(x) => { const ops = custom.ops.slice(); ops[k] = { ...o, rate: x }; setCustom({ ...custom, ops }); }} help="L_k = √rate · operator." />
+                      onChange={(x) => { const ops = custom.ops.slice(); ops[k] = { ...o, rate: x }; setCustom({ ...custom, ops }); }} help={<MathText text={T.s1_Lk} />} />
                     <MatrixEditor label={`Re op ${k + 1}`} m={o.re} onChange={(m) => { const ops = custom.ops.slice(); ops[k] = { ...o, re: m }; setCustom({ ...custom, ops }); }} />
                   </div>
                 ))}
@@ -175,7 +180,7 @@ export default function Page(_props: { suite?: number }) {
             </details>
           </Level>
           {!hOk && <div class="field-error" role="alert">H is not Hermitian (max |H − H†| = {fmtNum(herr)}); fix it before running.</div>}
-          {!rhoCheck.passed && <div class="field-error" role="alert">ρ₀ is not a valid density matrix.</div>}
+          {!rhoCheck.passed && <div class="field-error" role="alert"><Tex tex={F.rho0} /> is not a valid density matrix.</div>}
           <div class="row" style={{ marginTop: '8px' }}>
             <RunBar label="Run Lindblad evolution" busy={main.busy} disabled={!canRun} onRun={run} />
           </div>
@@ -189,8 +194,8 @@ export default function Page(_props: { suite?: number }) {
           {d && (<>
             <Card title="Results" actions={<><ProvBadge kind="COMPUTED" /><span class="small muted">{fmtTime(main.at)}</span></>}>
               <div class="outs">
-                <Out label="Final purity tr ρ²" value={d.purity[d.purity.length - 1]} prov="COMPUTED" interp="1 = pure state; 1/d = maximally mixed. Dissipation lowers purity." />
-                {d.populations[0].map((_, k) => <Out label={`Final population ${model.basis[k]}`} value={d.populations[d.populations.length - 1][k]} prov="COMPUTED" interp="Diagonal element ρ_kk at the final time." />)}
+                <Out label="Final purity tr ρ²" value={d.purity[d.purity.length - 1]} prov="COMPUTED" interp={<MathText text={T.s1_purity} />} />
+                {d.populations[0].map((_, k) => <Out label={`Final population ${model.basis[k]}`} value={d.populations[d.populations.length - 1][k]} prov="COMPUTED" interp={<MathText text={T.s1_diag} />} />)}
                 <Out label="All state checks" value={d.checks.every((c) => c.passed) ? 'passed' : 'FAILED'} tone={d.checks.every((c) => c.passed) ? 'good' : 'bad'} prov="COMPUTED" interp="Unit trace, Hermiticity and positivity of ρ(t) at sampled times, within the server tolerance." />
               </div>
             </Card>
@@ -208,10 +213,10 @@ export default function Page(_props: { suite?: number }) {
             </Card>
             <Card title="Bloch sphere">
               {!single ? <p class="muted">The Bloch sphere represents a single qubit; this preset has two qubits.</p> : (<>
-                <p class="small muted">The path is assembled from {24} separate server evaluations of ρ(t_k) (t_k = k·t_final/24). During playback the display interpolates between neighbouring samples; the controls state which samples are shown. The arrow length is |r| (1 = pure).</p>
+                <p class="small muted">The path is assembled from {24} separate server evaluations of <Tex tex={F.rhotk} />. During playback the display interpolates between neighbouring samples; the controls state which samples are shown. The arrow length is <Tex tex={F.absr} /> (1 = pure).</p>
                 <div class="row">
-                  <RunBar label={path ? 'Recompute Bloch path' : 'Compute Bloch path (24 server calls)'} busy={blochRun.busy} disabled={!canRun} onRun={runBloch} />
-                  {blochRun.busy && <span class="small muted" aria-live="polite">{bprog}/24 evaluations…</span>}
+                  <RunBar label={path ? 'Recompute Bloch path' : `Compute Bloch path (${nBloch} server calls)`} busy={blochRun.busy} disabled={!canRun} onRun={runBloch} />
+                  {blochRun.busy && <span class="small muted" aria-live="polite">{bprog}/{nBloch} evaluations…</span>}
                 </div>
                 <ErrorBox error={blochRun.err} what="computing the Bloch path" />
                 {path && (<>
@@ -230,6 +235,12 @@ export default function Page(_props: { suite?: number }) {
 
 function BlochViews({ path, frame, t, p }: { path: [number, number, number][]; frame: number; t: number[]; p: PlayerState }) {
   const [view, setView] = useState<'3d' | '2d'>('3d');
+  const [mag, setMag] = useState(false);
+  // visibility rule: largest displacement of the Bloch vector from r(0) (Bloch-sphere radius = 1)
+  const r0 = path[0];
+  const rel = Math.max(...path.map((q) => Math.hypot(q[0] - r0[0], q[1] - r0[1], q[2] - r0[2])));
+  const factor = rel > 0 ? Math.max(1, 0.3 / rel) : 1;
+  const shown = mag ? path.map((q) => [0, 1, 2].map((k) => r0[k] + factor * (q[k] - r0[k])) as [number, number, number]) : path;
   const xs = path.map((p) => p[0]), ys = path.map((p) => p[1]), zs = path.map((p) => p[2]);
   const r = path[frame];
   const pos = Math.min(p.pos, path.length - 1);
@@ -245,7 +256,8 @@ function BlochViews({ path, frame, t, p }: { path: [number, number, number][]; f
   return (
     <div class="stack">
       <Seg label="Bloch view" value={view} onChange={setView} options={[{ v: '3d', label: '3-D sphere' }, { v: '2d', label: '2-D projections' }]} />
-      {view === '3d' ? <View3D kind="bloch" label="Bloch sphere with the computed state trajectory" opts={{ path, index: pos, labels: true }} frame={pos} fallback={fallback}
+      {view === '3d' ? <View3D kind="bloch" label="Bloch sphere with the computed state trajectory" opts={{ path: shown, index: pos, labels: true }} frame={pos} fallback={fallback}
+        change={{ rel, what: 'Bloch vector' }} magnify={rel < 5e-3 ? { on: mag, factor, onToggle: setMag, reference: 'r(0)' } : undefined}
         title="Bloch vector r(t) = (⟨σx⟩, ⟨σy⟩, ⟨σz⟩)" badge="COMPUTED" name="bloch" legend={[{ label: 'path through server samples', color: 'var(--accent)' }]}
         onRecordStart={() => { p.setPos(0); p.setPlaying(true); }} playing={p.playing}
         frameData={() => ({ nearest_sample: frame, t_s: t[frame], bloch_vector: path[frame], displayed_interpolated: cur, source: 'COMPUTED (server, POST /api/quantum/lindblad)' })} /> : fallback}
@@ -253,7 +265,7 @@ function BlochViews({ path, frame, t, p }: { path: [number, number, number][]; f
         <Out label={`⟨σx⟩ at nearest solver sample t = ${fmtNum(t[frame])} s`} value={r[0]} prov="COMPUTED" />
         <Out label="⟨σy⟩" value={r[1]} prov="COMPUTED" />
         <Out label="⟨σz⟩" value={r[2]} prov="COMPUTED" />
-        <Out label="|r|" value={Math.hypot(...r)} prov="COMPUTED" interp="1 for pure states, < 1 for mixed states (purity = (1 + |r|²)/2)." />
+        <Out label="|r|" value={Math.hypot(...r)} prov="COMPUTED" interp={<MathText text={T.s1_r} />} />
       </div>
     </div>
   );

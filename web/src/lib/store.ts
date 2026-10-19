@@ -63,13 +63,66 @@ export interface Settings {
   reducedMotion: 'system' | 'on' | 'off';
 }
 
+const SETTINGS_DEFAULTS: Settings = {
+  mode: 'beginner', theme: 'system', apiBase: '', apiToken: '', browserCompute: false,
+  computeTimeLimitS: 20, computeMaxCells: 2500, reducedMotion: 'system',
+};
+
+/** Repair persisted settings (older versions, manual edits or corruption must never break the app). */
+export function sanitizeSettings(v: Partial<Settings> & Record<string, unknown>): Settings {
+  const d = SETTINGS_DEFAULTS;
+  const pick = <T,>(x: unknown, ok: (y: unknown) => boolean, def: T): T => (ok(x) ? (x as T) : def);
+  const num = (x: unknown, lo: number, hi: number, def: number) => (typeof x === 'number' && Number.isFinite(x) && x >= lo && x <= hi ? x : def);
+  return {
+    mode: pick(v.mode, (y) => y === 'beginner' || y === 'advanced' || y === 'expert', d.mode),
+    theme: pick(v.theme, (y) => y === 'system' || y === 'light' || y === 'dark', d.theme),
+    apiBase: pick(v.apiBase, (y) => typeof y === 'string', d.apiBase),
+    apiToken: pick(v.apiToken, (y) => typeof y === 'string', d.apiToken),
+    browserCompute: pick(v.browserCompute, (y) => typeof y === 'boolean', d.browserCompute),
+    computeTimeLimitS: num(v.computeTimeLimitS, 1, 600, d.computeTimeLimitS),
+    computeMaxCells: num(v.computeMaxCells, 100, 10000, d.computeMaxCells),
+    reducedMotion: pick(v.reducedMotion, (y) => y === 'system' || y === 'on' || y === 'off', d.reducedMotion),
+  };
+}
+
 export const settings = createStore<Settings>({
   mode: 'beginner', theme: 'system', apiBase: '', apiToken: '', browserCompute: false,
   computeTimeLimitS: 20, computeMaxCells: 2500, reducedMotion: 'system',
 }, 'qg.settings');
+settings.set(sanitizeSettings(settings.get() as Settings & Record<string, unknown>));
 
 /** The working scenario shared by the flagship page, builder and all suite pages. */
-export const scenario = createStore<Scenario>({ design: { ...DEFAULT_DESIGN }, environment: { ...DEFAULT_ENV } }, 'qg.scenario');
+const sharedScenario = createStore<Scenario>({ design: { ...DEFAULT_DESIGN }, environment: { ...DEFAULT_ENV } }, 'qg.scenario');
+
+/**
+ * The working scenario shared by all suites. A page Reset puts a page-scoped override in front of it
+ * (the suite's default scenario) so the page looks exactly as on a first visit without touching other
+ * suites; the first edit on that page writes through to the shared scenario, and leaving the page drops
+ * the override.
+ */
+let scenarioOverride: Scenario | null = null;
+const overrideListeners = new Set<(v: Scenario) => void>();
+export const scenario: Store<Scenario> & { override(v: Scenario | null): void; hasOverride(): boolean } = {
+  get: () => scenarioOverride ?? sharedScenario.get(),
+  set(next) {
+    const cur = scenarioOverride ?? sharedScenario.get();
+    const v = typeof next === 'function' ? (next as (p: Scenario) => Scenario)(cur) : { ...cur, ...next };
+    scenarioOverride = null;
+    try { for (let i = sessionStorage.length - 1; i >= 0; i--) { const k = sessionStorage.key(i); if (k?.startsWith('qg.pageDefaults:')) sessionStorage.removeItem(k); } } catch { /* ignore */ }
+    sharedScenario.set(v);
+  },
+  subscribe(fn) {
+    overrideListeners.add(fn);
+    const un = sharedScenario.subscribe((v) => { if (!scenarioOverride) fn(v); });
+    return () => { overrideListeners.delete(fn); un(); };
+  },
+  override(v) {
+    scenarioOverride = v ? { design: { ...v.design }, environment: { ...v.environment } } : null;
+    const cur = scenarioOverride ?? sharedScenario.get();
+    overrideListeners.forEach((l) => l(cur));
+  },
+  hasOverride: () => scenarioOverride != null,
+};
 
 export const MODE_RANK: Record<Mode, number> = { beginner: 0, advanced: 1, expert: 2 };
 export function atLeast(mode: Mode, level: Mode): boolean {

@@ -1,3 +1,5 @@
+import { Tex, MathText } from '../components/Tex';
+import { T, F } from './formulas-l1';
 import { RunBar } from '../components/Reset';
 /**
  * Thought-Experiment Lab: prompt → interpretation → reviewable configuration → explicit approval →
@@ -12,7 +14,8 @@ import { scenario } from '../lib/store';
 import { navigate } from '../lib/router';
 import { fmtQ, fmtNum } from '../lib/format';
 import { hypStyle } from '../lib/hyp';
-import { modelCurves } from '../engine';
+import { modelCurves, IMPLEMENTED_IDS as ENGINE_IDS } from '../engine';
+import { parseNumber, toSI } from '../lib/numparse';
 import { DEFAULT_DESIGN, DEFAULT_ENV, type Design, type Environment, type Geometry } from '../lib/types';
 
 type LM = 'off' | 'anthropic' | 'ollama';
@@ -82,12 +85,12 @@ export default function Page(_props: any) {
   const [edited, setEdited] = useState(false);
   const [busy, setBusy] = useState<'interp' | 'exec' | null>(null);
   const [err, setErr] = useState<unknown>(null);
-  const [res, setRes] = useState<any>(null);
+  const [res, setRes] = useState<ThoughtResult | null>(null);
   const [designDone, setDesignDone] = useState(false);
   const pErr = prompt.trim().length < 3 ? 'At least 3 characters.' : prompt.length > 4000 ? 'At most 4000 characters.' : null;
 
   const interpret = async () => {
-    setBusy('interp'); setErr(null); setRes(null); setCfg(null); setEdited(false); setDesignDone(false);
+    setBusy('interp'); setErr(null); setRes(null); setCfg(null); setEdited(false); setDesignDone(false); setDrafts({});
     try { setCfg(await apiPost<Config>('/api/thought/interpret', { prompt: prompt.trim(), language_model: lmSel })); } catch (e) { setErr(e); } finally { setBusy(null); }
   };
   const update = (p: Partial<Config>) => { setCfg((c) => (c ? { ...c, ...p } : c)); setRes(null); setEdited(true); };
@@ -95,9 +98,17 @@ export default function Page(_props: any) {
     if (!cfg) return;
     const q = { ...cfg.quantities[role], ...p, source: 'USER_STATED' };
     const f = (UNITS[KIND[role]] ?? []).find((u) => u[0] === normUnit(q.unit))?.[1] ?? 1;
-    q.si_value = q.value * f;
+    q.si_value = toSI(q.value, f);
     update({ quantities: { ...cfg.quantities, [role]: q } });
   };
+  // draft text per quantity: partial input such as "1e" shows an inline error instead of "NaN"
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const editValue = (role: string, text: string) => {
+    setDrafts((d) => ({ ...d, [role]: text }));
+    const r = parseNumber(text);
+    if (r.ok) setQ(role, { value: r.value });
+  };
+  const draftErr = (role: string): string | null => { const t = drafts[role]; if (t == null) return null; const r = parseNumber(t); return r.ok ? null : r.error; };
   const qErr = (q: Q): string | null => {
     if (!Number.isFinite(q.value)) return 'Enter a number.';
     if (['mass', 'separation', 'branch_separation', 'time', 'frequency'].includes(q.role) && q.value <= 0) return 'Must be > 0.';
@@ -105,7 +116,7 @@ export default function Page(_props: any) {
     if (!(UNITS[KIND[q.role]] ?? []).some((u) => u[0] === normUnit(q.unit))) return `Unit "${q.unit}" not accepted for ${q.role}.`;
     return null;
   };
-  const cfgOk = cfg && Object.values(cfg.quantities).every((q) => !qErr(q));
+  const cfgOk = cfg && Object.values(cfg.quantities).every((q) => !qErr(q) && !draftErr(q.role));
 
   const execute = async () => {
     if (!cfg) return;
@@ -198,12 +209,12 @@ export default function Page(_props: any) {
           {Object.keys(cfg.quantities).length > 0 && (
             <DataTable caption="Quantities" head={['Quantity', 'Value', 'Unit', 'SI value', 'Source', 'From prompt']} numeric={[3]}
               rows={Object.values(cfg.quantities).map((q) => {
-                const e = qErr(q);
+                const e = draftErr(q.role) ?? qErr(q);
                 const units = UNITS[KIND[q.role]] ?? [[q.unit, 1]];
                 return [
                   <label for={`tl-q-${q.role}`}>{ROLE_LABEL[q.role] ?? q.role}</label>,
-                  <div class={`field ${e ? 'invalid' : ''}`} style={{ margin: 0 }}><div class="field-input"><input id={`tl-q-${q.role}`} inputMode="decimal" style={{ maxWidth: '140px' }} value={String(q.value)} aria-invalid={!!e}
-                    onChange={(ev: any) => setQ(q.role, { value: Number(ev.currentTarget.value.replace('−', '-')) })} /></div>{e && <div class="field-error">{e}</div>}</div>,
+                  <div class={`field ${e ? 'invalid' : ''}`} style={{ margin: 0 }}><div class="field-input"><input id={`tl-q-${q.role}`} inputMode="decimal" style={{ maxWidth: '140px' }} value={drafts[q.role] ?? String(q.value)} aria-invalid={!!e}
+                    onInput={(ev: any) => editValue(q.role, ev.currentTarget.value)} /></div>{e && <div class="field-error">{e}</div>}</div>,
                   <select class="input" aria-label={`${q.role} unit`} value={normUnit(q.unit)} onChange={(ev: any) => setQ(q.role, { unit: ev.currentTarget.value })}>
                     {!units.some((u) => u[0] === normUnit(q.unit)) && <option value={q.unit}>{q.unit}</option>}{units.map((u) => <option value={u[0]}>{u[0]}</option>)}</select>,
                   fmtQ(q.si_value, { mass: 'kg', length: 'm', time: 's', temperature: 'K', pressure: 'Pa', frequency: 'rad/s' }[KIND[q.role]] ?? ''),
@@ -238,12 +249,23 @@ export default function Page(_props: any) {
   );
 }
 
-function Results({ res, implied, cont }: { res: any; implied: { design: Design; env: Environment } | null; cont: (p: string) => void }) {
+/** Response of POST /api/thought/execute (fields present depend on the family). */
+interface ThoughtResult {
+  status?: string; reason?: string; domain_notes?: string[]; evidence_status?: string; family?: string | null; category?: string;
+  config?: unknown; next_steps?: string[]; phase_rad?: number; assumptions_used?: string[];
+  prediction?: Record<string, any>; decoherence?: { total_rate?: number; total_gamma_t?: number; coherence_factor?: number; dominant?: string | null };
+  competing_models?: { id: string; negativity: number; concurrence: number; witness_cpk: number; purity: number; coherence_A?: number; coherence_B?: number }[];
+  diosi_penrose?: { rate: number; E_delta_J: number; radius_m: number; convention_factor: number; regime: string };
+  oscillators?: { t: number[]; log_negativity: number[]; coupling_rate_rad_s: number; thermal_occupation_bath: number; note?: string };
+  mercury_precession_rad_per_orbit?: { numeric: number; analytic: number };
+}
+
+function Results({ res, implied, cont }: { res: ThoughtResult; implied: { design: Design; env: Environment } | null; cont: (p: string) => void }) {
   if (res.status === 'NOT_COMPUTED') {
     return (
       <Card title="3 · Result">
         <InfoBanner><strong>Not computed.</strong> {res.reason}</InfoBanner>
-        {res.domain_notes?.length > 0 && <ul class="tight small">{res.domain_notes.map((n: string) => <li>{n}</li>)}</ul>}
+        {(res.domain_notes?.length ?? 0) > 0 && <ul class="tight small">{res.domain_notes!.map((n: string) => <li>{n}</li>)}</ul>}
         <p class="small muted">This remains a THEORETICAL thought experiment. Choose a supported physical system above to compute something.</p>
       </Card>
     );
@@ -251,15 +273,15 @@ function Results({ res, implied, cont }: { res: any; implied: { design: Design; 
   return (
     <Card title="3 · Results" actions={<ProvBadge kind="COMPUTED" />}>
       <EvidenceBanner classification={res.evidence_status} />
-      <p class="small muted">Family: {FAMILIES[res.family] ?? res.family} · category {res.category}.</p>
+      <p class="small muted">Physical system: {res.family && res.family !== 'null' ? (FAMILIES[res.family] ?? String(res.family).replace(/_/g, ' ')) : 'none — no implemented model matches, so this remains a theoretical thought experiment'}{res.category ? ` · category ${res.category}` : ''}.</p>
       {res.family === 'bmv' && <BmvResult res={res} implied={implied} />}
       {res.family === 'collapse' && res.diosi_penrose && (
         <div class="outs">
           <Out label="Diósi–Penrose rate Γ_DP" value={res.diosi_penrose.rate} unit="s⁻¹" prov="COMPUTED" interp="Single-mass coherence decay rate predicted by gravitational collapse for this superposition (uniform-sphere density)." />
-          <Out label="Coherence time 1/Γ_DP" value={1 / res.diosi_penrose.rate} unit="s" prov="COMPUTED" interp="Time for the off-diagonal coherence to fall by 1/e under the collapse model alone." />
+          <Out label="Coherence time 1/Γ_DP" value={1 / res.diosi_penrose.rate} unit="s" prov="COMPUTED" interp={<>Time for the off-diagonal coherence to fall by <Tex tex={F.oneOverE} /> under the collapse model alone.</>} />
           <Out label="Self-energy difference E_Δ" value={res.diosi_penrose.E_delta_J} unit="J" prov="COMPUTED" />
           <Out label="Sphere radius" value={res.diosi_penrose.radius_m} unit="m" prov="COMPUTED" />
-          <Out label="Convention factor κ" value={res.diosi_penrose.convention_factor} prov="COMPUTED" interp="κ = 1 Diósi, κ = 2 Penrose; the literature differs by this factor." />
+          <Out label="Convention factor κ" value={res.diosi_penrose.convention_factor} prov="COMPUTED" interp={<MathText text={T.tl_kappa} />} />
           <div class="out"><div class="out-label">Regime</div><div class="small">{res.diosi_penrose.regime}</div></div>
         </div>
       )}
@@ -268,7 +290,7 @@ function Results({ res, implied, cont }: { res: any; implied: { design: Design; 
           <div class="outs" style={{ marginBottom: '10px' }}>
             <Out label="Gravitational coupling rate" value={res.oscillators.coupling_rate_rad_s} unit="rad/s" prov="COMPUTED" />
             <Out label="Bath thermal occupation" value={res.oscillators.thermal_occupation_bath} prov="COMPUTED" />
-            <Out label="Max log-negativity" value={Math.max(...res.oscillators.log_negativity)} prov="COMPUTED" interp="E_N > 0 means the oscillators are entangled; classical-mediator hypotheses predict E_N = 0 identically." />
+            <Out label="Max log-negativity" value={res.oscillators.log_negativity.length ? Math.max(...res.oscillators.log_negativity) : NaN} prov="COMPUTED" interp="E_N > 0 means the oscillators are entangled; classical-mediator hypotheses predict E_N = 0 identically." />
           </div>
           <LinePlot name="thought-optomech-logneg" title="Logarithmic negativity E_N(t)" desc="Entanglement of the two oscillators versus time"
             series={[{ name: 'E_N (QG-COH, Gaussian model)', x: res.oscillators.t, y: res.oscillators.log_negativity, color: hypStyle('QG-COH').color }]}
@@ -288,10 +310,10 @@ function Results({ res, implied, cont }: { res: any; implied: { design: Design; 
           <div>
             <div class="outs">
               <Out label="Precession per orbit (numerical)" value={p.numeric} unit="rad" prov="COMPUTED" sig={8} />
-              <Out label="Precession per orbit (analytic 6πGM/(c²a(1−e²)))" value={p.analytic} unit="rad" prov="COMPUTED" sig={8} />
+              <Out label="Precession per orbit (analytic)" value={p.analytic} unit="rad" prov="COMPUTED" sig={8} interp={<Tex tex={F.precAnalytic} />} />
               <Out label="Relative difference" value={Math.abs(p.numeric - p.analytic) / Math.abs(p.analytic)} prov="COMPUTED" interp="Agreement between the geodesic integration and the closed form (a verification of the solver)." />
             </div>
-            <p class="small muted">The orbit family always computes Mercury (M = 1.98847×10³⁰ kg, a = 5.7909×10¹⁰ m, e = 0.2056); prompt quantities are not used. For other orbits use Suite 2.</p>
+            <p class="small muted"><MathText text={T.tl_mercury} /></p>
           </div>
         );
       })()}
@@ -309,34 +331,37 @@ function Results({ res, implied, cont }: { res: any; implied: { design: Design; 
   );
 }
 
-function BmvResult({ res, implied }: { res: any; implied: { design: Design; env: Environment } | null }) {
+function BmvResult({ res, implied }: { res: ThoughtResult; implied: { design: Design; env: Environment } | null }) {
   const p = res.prediction ?? {};
-  const models: any[] = res.competing_models ?? [];
+  const models = res.competing_models ?? [];
   const dec = res.decoherence;
   const curves = useMemo(() => {
     if (!implied || !p.design) return null;
     const T = implied.design.time;
     const t = Array.from({ length: 41 }, (_, i) => (T * i) / 40);
-    const ids = models.map((m) => m.id);
+    // only hypotheses the local engine implements (the server may list more, e.g. CG-QFT-AH, CSL-COLL)
+    const ids = models.map((m) => m.id).filter((id) => (ENGINE_IDS as readonly string[]).includes(id));
     try { return { t, c: modelCurves(implied.design, implied.env, ids, t) }; } catch { return null; }
   }, [res]);
   return (
     <div class="stack">
       {p.admissibility_issues?.length > 0 && <div class="error-box" role="alert"><strong>Inadmissible configuration:</strong> {p.admissibility_issues.join('; ')}</div>}
-      <h3>Coherent prediction (QG-COH, without environmental decoherence)</h3>
+      <h3>Coherent prediction (QG-COH{typeof p.purity === 'number' && p.purity < 1 - 1e-12 ? ', including environmental decoherence' : ', without environmental decoherence'})</h3>
       <div class="outs">
-        <Out label="Entangling phase Δφ" value={p.delta_phi_total_rad} unit="rad" prov="COMPUTED" interp="Δφ = φ_LL + φ_RR − φ_LR − φ_RL; entanglement is maximal at Δφ = π." />
-        <Out label="Concurrence (ideal)" value={p.concurrence} prov="COMPUTED" interp={<>Pure-state value |sin(Δφ/2)|; 0 = separable, 1 = maximal.</>} />
+        <Out label="Entangling phase Δφ" value={p.delta_phi_total_rad} unit="rad" prov="COMPUTED" interp={<MathText text={T.tl_dphi} />} />
+        <Out label="Concurrence (ideal)" value={p.concurrence} prov="COMPUTED" interp={<>Pure-state value <Tex tex={F.sinBound} />; 0 = separable, 1 = maximal.</>} />
         <Out label="Negativity (ideal)" value={p.negativity} prov="COMPUTED" interp="N > 0 ⇔ entangled (two qubits)." />
         <Out label="CPK witness (ideal)" value={p.witness_cpk_local_corrected} prov="COMPUTED" tone={p.witness_cpk_local_corrected < 0 ? 'good' : null} interp="< 0 certifies entanglement with three local settings." />
       </div>
-      <p class="small muted">This block is the server's <code>prediction</code> field, evaluated without decoherence. The competing-model table below includes the environmental decoherence budget, so its QG-COH row is the realistic value.</p>
+      <p class="small muted">{typeof p.purity === 'number' && p.purity < 1 - 1e-12
+        ? <>This block is the server's <code>prediction</code> field, including the environmental decoherence budget; it agrees with the QG-COH row of the competing-model table below.</>
+        : <>This block is the server's <code>prediction</code> field, evaluated without decoherence (older server). The competing-model table below includes the environmental decoherence budget, so its QG-COH row is the realistic value.</>}</p>
       {dec && (
         <div>
           <h3>Environmental decoherence (per mass)</h3>
           <div class="outs">
             <Out label="Total rate Γ" value={dec.total_rate} unit="s⁻¹" prov="COMPUTED" />
-            <Out label="Γ t" value={dec.total_gamma_t} prov="COMPUTED" interp={`Coherence factor e^{−Γt} = ${fmtNum(dec.coherence_factor, 4)}.`} />
+            <Out label="Γ t" value={dec.total_gamma_t} prov="COMPUTED" interp={<>Coherence factor <Tex tex={F.expGt} /> = {fmtNum(dec.coherence_factor, 4)}.</>} />
             <Out label="Dominant mechanism" value={String(dec.dominant ?? '—').replace(/_/g, ' ')} prov="COMPUTED" />
           </div>
         </div>

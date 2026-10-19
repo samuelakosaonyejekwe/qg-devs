@@ -26,7 +26,7 @@ export function qgServiceWorker(): Plugin {
       const byName = new Map(items.map((c) => [c.fileName, c]));
 
       // Shell = entry chunks + their static imports (transitively) + the CSS they reference.
-      const shell = new Set<string>(['/', '/index.html', '/manifest.webmanifest']);
+      const shell = new Set<string>(['/', '/index.html', '/manifest.webmanifest', '/theme-init.js']);
       const visit = (name: string) => {
         const url = '/' + name;
         if (shell.has(url)) return;
@@ -45,7 +45,7 @@ export function qgServiceWorker(): Plugin {
 
       const lazy = items
         .map((c) => c.fileName)
-        .filter((f) => /\.(js|css)$/.test(f) && !shell.has('/' + f) && f !== 'sw.js')
+        .filter((f) => /\.(js|css|woff2)$/.test(f) && !shell.has('/' + f) && f !== 'sw.js')
         .map((f) => '/' + f)
         .sort();
 

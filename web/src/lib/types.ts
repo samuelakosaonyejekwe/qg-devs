@@ -29,6 +29,7 @@ export interface Environment {
   residual_charge_e: number; // elementary charges
   include_casimir: boolean;
   readout_error: number; // probability
+  bias_field_T?: number; // T, uniform magnetic field along z during the interaction (default 0)
 }
 
 export interface Scenario {
@@ -43,7 +44,7 @@ export const DEFAULT_DESIGN: Design = {
 
 export const DEFAULT_ENV: Environment = {
   pressure: 1e-15, T_gas: 0.15, T_env: 0.15, T_int: 0.15, material: 'diamond',
-  residual_charge_e: 0, include_casimir: true, readout_error: 0.01,
+  residual_charge_e: 0, include_casimir: true, readout_error: 0.01, bias_field_T: 0,
 };
 
 export interface DecoMechanism {
@@ -51,6 +52,8 @@ export interface DecoMechanism {
   gamma_t: number;
   coherence_factor: number;
   regime?: string;
+  /** set for hypothetical collapse models (Diósi–Penrose, CSL), which are opt-in */
+  hypothetical?: boolean;
   [k: string]: unknown;
 }
 
@@ -60,6 +63,11 @@ export interface DecoBudget {
   total_gamma_t: number;
   coherence_factor: number;
   dominant: string | null;
+  /** sum over established environmental mechanisms only (excludes hypothetical collapse models) */
+  environmental_total_rate?: number;
+  includes_hypothetical?: boolean;
+  /** ≈ 5 / fastest rate, capped at the interaction time */
+  suggested_display_window_s?: number;
 }
 
 export interface ModelPrediction {

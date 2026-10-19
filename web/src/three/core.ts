@@ -17,11 +17,14 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { mapRgb } from '../lib/colormaps';
+import { loadKatex, renderTex } from '../components/Tex';
 
 export interface Handle {
   update(opts: any): void;
   dispose(): void;
   resetView(): void;
+  fitView?(): void;
   /** Fractional frame index: modules interpolate between solver samples for display only. */
   setFrame?(f: number): void;
   toPNG?(scale?: number, transparent?: boolean): string;
@@ -81,6 +84,8 @@ export interface Stage {
   requestRender(): void;
   setHome(pos: THREE.Vector3, target: THREE.Vector3): void;
   resetView(): void;
+  /** Frame a bounding sphere at the current aspect ratio (re-applied on resize until the user moves the camera). */
+  fit(radius: number, center?: THREE.Vector3, dir?: THREE.Vector3): void;
   toPNG(scale?: number, transparent?: boolean): string;
   composite(ctx: CanvasRenderingContext2D, scale: number, transparent: boolean): void;
   canvasSize(): { w: number; h: number };
@@ -120,10 +125,13 @@ export function createStage(el: HTMLElement): Stage {
     scene.environment = envRT.texture;
     pmrem.dispose();
   }
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8890a0, 0.35));
-  const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(2.5, 3.5, 4); scene.add(key);
-  const fill = new THREE.DirectionalLight(0xdfe6ff, 0.45); fill.position.set(-3, 1.5, 2); scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffffff, 0.6); rim.position.set(0, 2, -4); scene.add(rim);
+  // Key / fill / rim plus hemisphere and ambient light: bright enough that mid-lightness colours read
+  // clearly on both the light and the dark theme background.
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xb4bcd4, 0.9));
+  scene.add(new THREE.AmbientLight(0xffffff, tier === 'high' ? 0.25 : 0.7));
+  const key = new THREE.DirectionalLight(0xffffff, 1.8); key.position.set(2.5, 3.5, 4); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xe6ecff, 0.8); fill.position.set(-3, 1.5, 2); scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xffffff, 0.7); rim.position.set(0, 2, -4); scene.add(rim);
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.001, 1000);
   const controls = new OrbitControls(camera, canvas);
@@ -132,6 +140,18 @@ export function createStage(el: HTMLElement): Stage {
   controls.autoRotate = false;
 
   const home = { pos: new THREE.Vector3(0, 0, 3), target: new THREE.Vector3() };
+  let fitSpec: { r: number; c: THREE.Vector3; dir: THREE.Vector3 } | null = null;
+  let userMoved = false;
+  controls.addEventListener('start', () => { userMoved = true; });
+  const applyFit = () => {
+    if (!fitSpec) return;
+    const v = THREE.MathUtils.degToRad(camera.fov);
+    const h = 2 * Math.atan(Math.tan(v / 2) * camera.aspect);
+    const d = (fitSpec.r / Math.sin(Math.min(v, h) / 2)) * 1.04;
+    home.pos.copy(fitSpec.c).addScaledVector(fitSpec.dir, d);
+    home.target.copy(fitSpec.c);
+    camera.near = d / 100; camera.far = d * 10; camera.updateProjectionMatrix();
+  };
   let pending = false, disposed = false, lost = false, visible = true, dirtyHidden = false;
   let ema = 16, slowFrames = 0, fastFrames = 0, lastDraw = 0;
 
@@ -169,6 +189,7 @@ export function createStage(el: HTMLElement): Stage {
     labels.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    if (fitSpec && !userMoved) { applyFit(); camera.position.copy(home.pos); controls.target.copy(home.target); controls.update(); }
     syncLines();
     requestRender();
   };
@@ -220,7 +241,16 @@ export function createStage(el: HTMLElement): Stage {
   return {
     scene, camera, renderer, controls, theme, labels, requestRender,
     setHome(pos, target) { home.pos.copy(pos); home.target.copy(target); },
+    fit(radius, center = new THREE.Vector3(), dir = new THREE.Vector3(0.62, 0.45, 0.68)) {
+      fitSpec = { r: radius, c: center.clone(), dir: dir.clone().normalize() };
+      userMoved = false;
+      applyFit();
+      camera.position.copy(home.pos); controls.target.copy(home.target); camera.up.set(0, 1, 0); controls.update();
+      requestRender();
+    },
     resetView() {
+      userMoved = false;
+      applyFit();
       camera.position.copy(home.pos);
       controls.target.copy(home.target);
       camera.up.set(0, 1, 0);
@@ -289,6 +319,13 @@ export function textSprite(text: string, css: string, height: number, cls = ''):
   return o;
 }
 export const label = textSprite;
+
+/** HTML label typeset with KaTeX (falls back to the plain text until KaTeX has loaded). */
+export function texLabel(tex: string, plain: string, css: string, cls = ''): CSS2DObject {
+  const o = textSprite(plain, css, 0.08, cls);
+  loadKatex().then((k) => { const html = renderTex(k, tex, false); if (html) o.element.innerHTML = html; }).catch(() => undefined);
+  return o;
+}
 
 /** Anti-aliased screen-space line segments (pairs of points), width in CSS pixels. */
 export function lineSegments(points: number[], css: string | THREE.Color, opacity = 1, widthPx = 1.6, dashed = false): LineSegments2 {
@@ -360,22 +397,10 @@ export function scaleBar(L: number, text: string, css: string, origin: THREE.Vec
   return g;
 }
 
-/** Perceptually uniform colour maps (matplotlib viridis/magma/cividis; cyclic twilight for phase). */
-const MAPS: Record<string, number[][]> = {
-  viridis: [[68, 1, 84], [72, 40, 120], [62, 74, 137], [49, 104, 142], [38, 130, 142], [31, 158, 137], [53, 183, 121], [110, 206, 88], [181, 222, 43], [253, 231, 37]],
-  magma: [[0, 0, 4], [28, 16, 68], [79, 18, 123], [129, 37, 129], [181, 54, 122], [229, 80, 100], [251, 135, 97], [254, 194, 135], [252, 253, 191]],
-  cividis: [[0, 34, 78], [18, 53, 112], [59, 73, 108], [87, 92, 109], [112, 113, 115], [138, 134, 120], [165, 156, 116], [195, 179, 105], [225, 204, 85], [254, 232, 56]],
-  twilight: [[226, 217, 226], [166, 191, 203], [109, 148, 196], [95, 94, 176], [79, 40, 113], [47, 20, 52], [96, 31, 76], [158, 54, 81], [196, 112, 103], [214, 175, 162], [226, 217, 226]],
-  diverging: [[8, 81, 156], [49, 130, 189], [107, 174, 214], [189, 215, 231], [247, 247, 247], [253, 208, 162], [253, 174, 107], [230, 85, 13], [166, 54, 3]],
-};
-
+/** Colour maps (stop tables in lib/colormaps.ts, shared with 2-D charts and HTML colour bars). */
 export function colormap(name: string, t: number, out: THREE.Color): THREE.Color {
-  const s = MAPS[name] ?? MAPS.viridis;
-  const u = Math.min(1, Math.max(0, isFinite(t) ? t : 0)) * (s.length - 1);
-  const i = Math.min(s.length - 2, Math.floor(u));
-  const f = u - i;
-  const a = s[i], b = s[i + 1];
-  return out.setRGB((a[0] + (b[0] - a[0]) * f) / 255, (a[1] + (b[1] - a[1]) * f) / 255, (a[2] + (b[2] - a[2]) * f) / 255, THREE.SRGBColorSpace);
+  const c = mapRgb(name, t);
+  return out.setRGB(c[0] / 255, c[1] / 255, c[2] / 255, THREE.SRGBColorSpace);
 }
 export function colormapCss(name: string, t: number): string {
   const c = colormap(name, t, new THREE.Color());
