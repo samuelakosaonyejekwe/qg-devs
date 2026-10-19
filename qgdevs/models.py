@@ -83,8 +83,9 @@ class Hypothesis:
         return self._state(sc, e)
 
     def describe(self) -> dict:
+        from .equations import model_tex
         return {"id": self.id, "name": self.name, "family": self.family, "implemented": self.implemented,
-                "nuisance": [n.__dict__ for n in self.nuisance], **self.meta}
+                "nuisance": [n.__dict__ for n in self.nuisance], **self.meta, "tex": model_tex(self.id)}
 
 
 def _env_decay(sc: Scenario, e: dict) -> tuple[float, float]:

@@ -174,6 +174,13 @@ def release():
     return J({"version": __version__, **notes})
 
 
+@app.get("/api/equations")
+def equations():
+    """Every displayed equation as KaTeX-compatible LaTeX: per suite, per hypothesis and for the dossier."""
+    from .equations import SUITE_TEX, MODEL_TEX, PROTOCOL_TEX
+    return J({"suites": SUITE_TEX, "models": MODEL_TEX, "protocol": PROTOCOL_TEX, "renderer": "KaTeX (display mode)"})
+
+
 @app.get("/api/suites")
 def suites():
     from .suites import SUITES

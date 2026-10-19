@@ -163,7 +163,8 @@ def generate_dossier(design: bmv.BMVDesign, env: Environment = Environment(), bo
             "branch_phase": "φ_ij = -U_ij t / ħ",
             "entangling_phase": "Δφ = φ_LL + φ_RR - φ_LR - φ_RL",
             "state": "ρ_{ij,kl} = ¼ e^{i(φ_ij-φ_kl)} e^{-Γ_A t[i≠k]} e^{-Γ_B t[j≠l]}",
-            "classical_channel_threshold": "Γ ≥ |dΔφ/dt| / 2 forbids gravitational entanglement (this platform, numerically derived)"},
+            "classical_channel_threshold": "separable for all t ≥ 0 iff Γ ≥ |dΔφ/dt| / 2 (machine-checked in Lean 4)"},
+        "3_equations_tex": __import__("qgdevs.equations", fromlist=["PROTOCOL_TEX"]).PROTOCOL_TEX,
         "4_predictions": {
             "delta_phi_rad": {"value": dphi, "status": CALC},
             "delta_phi_time_dependent_SG_rad": {"value": sg["delta_phi"], "status": CALC,
