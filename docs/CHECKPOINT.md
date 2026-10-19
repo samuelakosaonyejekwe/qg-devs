@@ -26,19 +26,24 @@ _Last updated: 2026-10-19 21:10. If a session is interrupted, resume from "IN PR
 
 ## IN PROGRESS (resume here)
 
-- **0.2.0 is LIVE** (commit 03daa70, plus start.sh forwarded-IP fix). It includes Reset, update dialogs, the 1–18 order and HD 2-D/3-D views on all suites; public computation jobs (rate-limited); evidence writes need a token. Verified live: 43 Lean theorems, 8 hypotheses, `/api/equations`.
-- **Next (web agent):**
-  - (1) KaTeX/LaTeX rendering of every equation, using `/api/equations` and the models' `tex` fields; and add katex to `web/package.json` so `tests/test_equations.py` runs;
-  - (2) friendly 401/403/429/503 UX, plus an audit of every page for raw errors and layout issues.
-  - (3) URGENT 3-D legibility fixes: the density-matrix city plot's bars are near-black (cyclic colour map plus dim lighting), the legend is clipped, the camera framing clips bars and labels, and the axis title is not typeset;
-  - (4) a visible Play/Pause control and auto-play on every animated view, plus "Play all" for synchronised comparisons;
-  - (5) a visual QA pass of all views in both themes at 1440 px and 360 px.
-  - (6) Player bug: Play at the last sample does nothing (must rewind; loop on by default; start at t=0). Invisible dynamics, e.g. S06 vacuum with g~1e-10: use visible physical defaults, resolve motion in time (≥24 samples per period), show a "below display resolution" notice and an opt-in labelled MAGNIFIED deviation view; Playwright frame-diff checks.
-  - (7) S07: environmental-only default is live (commit 0b52566). UI work remaining: opt-in collapse toggles, time-window selector, trail, synced 2-D plot, legend colours.
-  - (8) RESET = exact first-visit state per route: defaults, all outputs and caches cleared, auto-run pages show their original default result at t=0. Playwright snapshot-equality test on every route.
-  - (9) Audits running: backend (separate agent, qgdevs/cpp/deploy) and a web hidden-issues audit (web agent). Server hardening DONE: HSTS, frame, permissions and COOP headers, CSP report-only (`deploy/Caddyfile`); root SSH disabled; off-site backups verified in the S3 bucket. TODO: enforce CSP after the web app is verified clean under it.
-  - (10) Backend audit DONE and LIVE (commit 8ff9bc7; pytest 194 passed, C++ tests pass, V&V 35/35). Open policy items (not changed): G6/G7 are unreachable even with sign-off; the ledger head hash is not externally anchored; actor/reviewer are free text; no retention policy for job results. The web TS engine must adopt "user γ adds to the environmental budget".
-- **Then:** verify (pytest, `cd web && npm run typecheck && npm test && npm run build`), add a 0.2.1 entry to `qgdevs/release_notes.json`, bump the version, commit with an explicit file list, and deploy. The server build uses the full Dockerfile: `sudo docker build -t qgdevs:<ver> .` then `run` (see Live system).
+**0.2.1 is LIVE** (commits c24875a and the CSP enforcement, 2026-10-20). It contains:
+- LaTeX everywhere, Reset that restores the exact first-visit state, visible playback, readable 3-D, and friendly errors;
+- the backend and web audits;
+- an enforced CSP.
+
+Verified:
+- pytest: 194 passed;
+- web: 637 unit tests; axe: 0 violations; CSP: 0 violations; motion: 12/12; 3-D captures: 34/34;
+- live: 43 Lean theorems, 8 hypotheses, KaTeX rendering with no console errors.
+
+Open items:
+- The Suite 8 Reset check failed once under load (its default computation was still running); it passed 3/3 when run alone. Make the test wait for the default computation to finish.
+- Policy decisions for the owner:
+  - G6/G7 cannot be passed even with sign-off;
+  - external anchoring of the ledger head hash;
+  - tying reviewer identity to tokens;
+  - a retention policy for job results.
+- Optional: publish the static mirror to Cloudflare Pages (wrangler is logged in) for redundancy.
 
 ## Rules
 
