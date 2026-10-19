@@ -140,7 +140,7 @@ L += ["", "## 4. Closing the loop on synthetic data\n",
       f"true, the coherent quantum model can mimic it unless environmental decoherence is independently bounded to within "
       f"a factor s* = 1 + |Δφ_g| / (2 Γ_env t); the closed form agrees with the full robust engine to "
       f"{f(R['calibration_tradeoff']['max_rel_diff'] * 100)} % over {len(R['calibration_tradeoff']['rows'])} random designs. "
-      "It follows from the decoherence threshold Γ* = |dΔφ/dt|/2 established numerically here and is closely related to "
+      "It follows from the decoherence threshold Γ* = |dΔφ/dt|/2 (sufficiency machine-checked in Lean 4 as `QGDEVS.dephasing_threshold`; sharpness verified numerically) and is closely related to "
       "known decoherence–coupling trade-offs for classical channels (Kafri–Taylor–Milburn 2014; Oppenheim 2023). "
       "A DOI-linked literature review is required before any novelty claim (gate G2).\n"]
 o = R["optimised"]
