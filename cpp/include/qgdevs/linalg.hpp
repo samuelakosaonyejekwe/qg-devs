@@ -13,6 +13,11 @@ namespace qgdevs {
 void eigh(const CMat& A, std::vector<double>& w, CMat* V = nullptr);
 std::vector<double> eigvalsh(const CMat& A);
 
+// Singular values (descending) by the one-sided Hestenes–Jacobi method: columns are orthogonalised
+// pairwise with the rotation that diagonalises their 2×2 Gram matrix; σ_k are the final column norms.
+// Small σ carry absolute error O(ε‖A‖) (no squaring as in eig(A†A)) (Demmel & Veselić 1992).
+std::vector<double> singular_values(const CMat& A);
+
 // f(A) = V diag(f(w)) V† for Hermitian A with f(w) = sqrt(max(w, 0)).
 CMat sqrtm_psd(const CMat& A);
 

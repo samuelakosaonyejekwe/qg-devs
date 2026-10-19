@@ -51,6 +51,19 @@ static void test_jacobi() {
     check(worst_res < 1e-13, "Jacobi: max |V diag(w) V^+ - A| / max|A|, n <= 16", worst_res, 1e-13);
     check(worst_orth < 1e-13, "Jacobi: max |V^+ V - I|, n <= 16", worst_orth, 1e-13);
     check(worst_trace < 1e-13, "Jacobi: |sum w - tr A| / (n max|A|)", worst_trace, 1e-13);
+
+    // Singular values: σ_k² must match eig(A†A) and Σσ² = ‖A‖_F² for random complex A.
+    std::normal_distribution<double> g;
+    double worst_sv = 0.0;
+    for (int n = 1; n <= 8; ++n)
+        for (int rep = 0; rep < 20; ++rep) {
+            CMat A(n, n);
+            for (std::size_t k = 0; k < A.size(); ++k) A.data()[k] = cplx(g(rng), g(rng));
+            const auto sv = singular_values(A);
+            const auto ev = eigvalsh(A.adjoint() * A);
+            for (int k = 0; k < n; ++k) worst_sv = std::max(worst_sv, std::abs(sv[k] * sv[k] - ev[n - 1 - k]) / ev[n - 1]);
+        }
+    check(worst_sv < 1e-13, "Hestenes SVD: max |sigma_k^2 - eig_k(A^+A)| / sigma_max^2", worst_sv, 1e-13);
 }
 
 static void test_unitary_limit() {

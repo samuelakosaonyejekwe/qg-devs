@@ -145,12 +145,17 @@ def log_negativity(rho: np.ndarray, dims: list[int] = (2, 2), sys: int = 1) -> f
 
 
 def concurrence(rho: np.ndarray) -> float:
-    """Wootters concurrence for two qubits (Wootters 1998)."""
-    yy = np.kron(Y, Y)
-    rt = yy @ rho.conj() @ yy
-    ev = np.sqrt(np.abs(np.linalg.eigvals(rho @ rt)))
-    ev = np.sort(np.real(ev))[::-1]
-    return float(max(0.0, ev[0] - ev[1] - ev[2] - ev[3]))
+    """Wootters concurrence for two qubits (Wootters, PRL 80, 2245 (1998)).
+
+    With ρ = V diag(w) V†, the square roots of the eigenvalues of ρ ρ̃ equal the singular values of
+    diag(√w) V† (Y⊗Y) V* diag(√w); computing them by SVD avoids square-rooting round-off-sized
+    eigenvalues, which would otherwise cost ~√ε accuracy on rank-deficient (e.g. pure) states.
+    """
+    w, V = np.linalg.eigh(0.5 * (rho + rho.conj().T))
+    sw = np.sqrt(np.clip(w, 0, None))
+    M = (sw[:, None] * (V.conj().T @ np.kron(Y, Y) @ V.conj())) * sw[None, :]
+    s = np.sort(np.linalg.svd(M, compute_uv=False))[::-1]
+    return float(max(0.0, s[0] - s[1] - s[2] - s[3]))
 
 
 def fidelity(rho: np.ndarray, sigma: np.ndarray) -> float:
@@ -231,15 +236,18 @@ def evolve_lindblad(rho0, H, Ls, times, method: str = "expm"):
 
     method="expm"  : sparse Krylov action of the exact propagator exp(L t) (Al-Mohy & Higham 2011)
     method="rk"    : adaptive DOP853 integration of d vec(rho)/dt = L vec(rho) (independent check)
+    rho0 is the state at times[0] for both methods.
     """
     d = rho0.shape[0]
     times = np.asarray(times, dtype=float)
     if method == "expm":
         Lv = liouvillian_sparse(H, Ls)
-        if len(times) > 1 and np.allclose(np.diff(times), times[1] - times[0]):
-            out = expm_multiply(Lv, vec(rho0), start=times[0], stop=times[-1], num=len(times), endpoint=True)
+        rel = times - times[0]
+        steps = np.diff(rel)
+        if len(times) > 2 and np.allclose(steps, steps[0], rtol=1e-12, atol=0.0):
+            out = expm_multiply(Lv, vec(rho0), start=0.0, stop=rel[-1], num=len(times), endpoint=True)
             return np.array([unvec(v, d) for v in out])
-        return np.array([unvec(expm_multiply(Lv * t, vec(rho0)), d) for t in times])
+        return np.array([unvec(expm_multiply(Lv * t, vec(rho0)), d) for t in rel])
     if method == "rk":
         Lv = liouvillian(H, Ls)
         sol = solve_ivp(lambda t, y: Lv @ y, (times[0], times[-1]), vec(rho0).astype(complex),

@@ -116,17 +116,27 @@ double negativity(const CMat& rho) {
 }
 
 double concurrence(const CMat& rho) {
-    // ρ̃ = (Y⊗Y) ρ* (Y⊗Y). Y⊗Y = antidiag(-1, 1, 1, -1), so ρ̃_{ij} = s_i s_j conj(ρ_{3-i,3-j}).
+    // C = max(0, λ1 - λ2 - λ3 - λ4), λ_i the decreasing square roots of the eigenvalues of ρρ̃,
+    // ρ̃ = (Y⊗Y) ρ* (Y⊗Y) (Wootters 1998). These eigenvalues equal those of the Hermitian PSD matrix
+    // sqrt(ρ) ρ̃ sqrt(ρ) = A A†, A = sqrt(ρ)(Y⊗Y) sqrt(ρ)*, so λ_i are the singular values of A. With
+    // ρ = V diag(w) V†, A is unitarily equivalent to B = diag(√w) [V†(Y⊗Y)V*] diag(√w), whose singular
+    // values are obtained directly (no square root of round-off-level eigenvalues).
+    // Y⊗Y = antidiag(-1, 1, 1, -1), i.e. (Y⊗Y)_{i,3-i} = s_i.
     static const double s[4] = {-1.0, 1.0, 1.0, -1.0};
-    CMat rt(4, 4);
-    for (int i = 0; i < 4; ++i)
-        for (int j = 0; j < 4; ++j) rt(i, j) = s[i] * s[j] * std::conj(rho(3 - i, 3 - j));
-    // Eigenvalues of ρρ̃ equal those of the Hermitian PSD matrix sqrt(ρ) ρ̃ sqrt(ρ); C uses their square roots.
-    const CMat sr = sqrtm_psd(rho);
-    const CMat M = sr * rt * sr;
-    auto w = eigvalsh(M);
-    double l[4];
-    for (int k = 0; k < 4; ++k) l[k] = std::sqrt(std::max(w[3 - k], 0.0));  // descending
+    std::vector<double> w;
+    CMat V;
+    eigh(rho, w, &V);
+    const double wmax = std::max(std::abs(w.front()), std::abs(w.back()));
+    double sw[4];
+    for (int k = 0; k < 4; ++k) sw[k] = w[k] > 16 * 2.220446049250313e-16 * wmax ? std::sqrt(w[k]) : 0.0;
+    CMat B(4, 4);
+    for (int a = 0; a < 4; ++a)
+        for (int b = 0; b < 4; ++b) {
+            cplx acc = 0.0;  // [V† (Y⊗Y) V*]_{ab} = Σ_i conj(V_ia) s_i conj(V_{3-i,b})
+            for (int i = 0; i < 4; ++i) acc += std::conj(V(i, a)) * s[i] * std::conj(V(3 - i, b));
+            B(a, b) = sw[a] * acc * sw[b];
+        }
+    const auto l = singular_values(B);
     return std::max(0.0, l[0] - l[1] - l[2] - l[3]);
 }
 
@@ -148,10 +158,32 @@ CMat pauli(char a) {
     }
     return P;
 }
+
+int pauli_index(char a) {
+    switch (a) {
+        case 'I': return 0;
+        case 'X': return 1;
+        case 'Y': return 2;
+        case 'Z': return 3;
+        default: throw std::invalid_argument("unknown Pauli label");
+    }
+}
+
+// All 16 two-qubit Pauli products σ_a ⊗ σ_b, built once (thread-safe static initialisation).
+const std::vector<CMat>& pauli_products() {
+    static const std::vector<CMat> table = [] {
+        std::vector<CMat> t;
+        const char* labels = "IXYZ";
+        for (int a = 0; a < 4; ++a)
+            for (int b = 0; b < 4; ++b) t.push_back(kron(pauli(labels[a]), pauli(labels[b])));
+        return t;
+    }();
+    return table;
+}
 }  // namespace
 
 double pauli_expectation(const CMat& rho, char a, char b) {
-    const CMat P = kron(pauli(a), pauli(b));
+    const CMat& P = pauli_products()[4 * pauli_index(a) + pauli_index(b)];
     cplx s = 0.0;  // tr(ρ P) = Σ_ij ρ_ij P_ji
     for (int i = 0; i < 4; ++i)
         for (int j = 0; j < 4; ++j) s += rho(i, j) * P(j, i);

@@ -5,7 +5,9 @@
 
 CXX      ?= g++
 CXXFLAGS ?= -O3 -march=x86-64-v2
-CXXFLAGS += -std=c++17 -fopenmp -fPIC -Wall -Wextra -Iinclude
+# -fcx-limited-range: textbook complex multiply instead of the Annex-G __muldc3 call (inf/NaN recovery).
+# All operands in the kernel are finite and complex divisions are only by real magnitudes.
+CXXFLAGS += -std=c++17 -fopenmp -fPIC -fcx-limited-range -Wall -Wextra -Iinclude
 LDFLAGS  += -fopenmp
 
 BUILD := build
