@@ -17,7 +17,7 @@ _Last updated: 2026-10-19 (session in progress). If a session is interrupted, re
 - 18 suites, 7 hypotheses including Aziz–Howl, nuisance-robust discrimination, design optimisation, discovery engine, dossiers, evidence ledger, thought lab, and the optional language model.
 - pytest: 102 passed, 2 skipped (MATLAB/Octave not installed). V&V: 33/33 benchmarks.
 - C++ kernel: 18 comparison tests. Lean 4: 43 theorems proved, 0 open (`lean/check.sh`).
-- Web app v1 deployed. Web tests: 129 passed.
+- Web app v1 deployed with a hot-fix: sidebar and Dashboard suites in strict 1–18 order (built from commit 1d8b29a + nav.ts patch; served from /opt/qgdevs/web/dist mounted into the container). Web tests: 129 passed. The full v0.2.0 web release must keep the 1–18 order.
 
 ## IN PROGRESS (resume here)
 
