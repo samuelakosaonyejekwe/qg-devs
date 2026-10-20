@@ -75,6 +75,17 @@ for (let rep = 1; rep <= REPEAT; rep++) for (const cfg0 of CONFIGS) {
       row.pages[slug] = { ...m, views3d: await page.locator('.view3d canvas').count(), tierPref: tier };
       await page.screenshot({ path: path.join(OUT, `${cfg.name.replace(/\W+/g, '-')}-${slug}.png`) });
     }
+    // 3. regression check: scenes created and disposed in quick succession (fast navigation between 3-D pages)
+    //    — the condition under which disposing a scene while its shaders were still being compiled raised
+    //    page errors on GPUs. Any page error here fails the run.
+    const churn = ['entanglement', 'decoherence', 'lab', 'gravity', 'environment', 'optomechanics'];
+    for (let i = 0; i < 24; i++) {
+      await page.click(`nav.sidenav a[href="${base}suite/${churn[i % churn.length]}"]`);
+      await page.waitForTimeout([30, 120, 400][i % 3]);
+    }
+    await page.waitForSelector('.view3d canvas', { timeout: 120000 });
+    await page.waitForTimeout(1500);
+    row.churn = 'done';
   } catch (e) { row.error = String(e.message).split('\n')[0].slice(0, 300); }
   results.push(row);
   await browser.close();
@@ -91,6 +102,7 @@ for (const r of results) {
   md.push(`- In-app graphics test: median **${pick('Median frame rate')}**, p95 frame ${pick('95th-percentile frame time')}, slowest ${pick('Slowest frame')}, tier ${pick('Quality tier')}, ${pick('Device pixel ratio · canvas')}`);
   md.push('', '| Page (playing) | Median fps | p95 frame (ms) | Slowest (ms) | 3-D views |', '|---|---|---|---|---|');
   for (const [k, v] of Object.entries(r.pages)) md.push(`| ${k} | ${v.fps.toFixed(1)} | ${v.p95.toFixed(1)} | ${v.worst.toFixed(0)} | ${v.views3d} |`);
+  md.push('', `- Rapid 3-D page switching (24 switches): ${r.churn || 'not reached'}`);
   md.push('', `- Page errors: ${r.pageErrors?.length ? r.pageErrors.length : 'none'}`);
   for (const e of (r.pageErrors || []).slice(0, 5)) md.push('', '```', e, '```');
   if (r.error) md.push('', `Error: ${r.error}`);

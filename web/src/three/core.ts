@@ -159,7 +159,6 @@ export function createStage(el: HTMLElement): Stage {
     camera.near = d / 100; camera.far = d * 10; camera.updateProjectionMatrix();
   };
   let pending = false, disposed = false, lost = false, visible = true, dirtyHidden = false;
-  let compileState: 'pending' | 'running' | 'done' = 'pending';
   let ema = 16, slowFrames = 0, fastFrames = 0, lastDraw = 0;
 
   const size = () => renderer.getSize(new THREE.Vector2());
@@ -169,24 +168,9 @@ export function createStage(el: HTMLElement): Stage {
     pending = false;
     if (disposed || lost) return;
     if (!visible) { dirtyHidden = true; return; } // offscreen: render when scrolled back into view
-    // Compile all shaders asynchronously before the first frame (parallel compilation where the driver supports
-    // it), so the page never freezes on the one-off shader build of the physically based materials.
-    if (compileState === 'pending') {
-      compileState = 'running';
-      const finish = () => { if (compileState !== 'done') { compileState = 'done'; requestRender(); } };
-      try {
-        // only with parallel shader compilation (real GPUs); three r170's polling fallback throws without it
-        const parallel = renderer.extensions.has('KHR_parallel_shader_compile');
-        const p = parallel && (renderer as any).compileAsync ? (renderer as any).compileAsync(scene, camera) : null;
-        if (p && typeof p.then === 'function') {
-          p.then(finish, finish);
-          setTimeout(finish, 3000); // never wait longer than this for the first frame
-          return;
-        }
-      } catch { /* fall through: render normally (shaders compile on first use) */ }
-      compileState = 'done';
-    }
-    if (compileState === 'running') return;
+    // Shaders compile synchronously on first use. (three's compileAsync is deliberately not used: it polls
+    // programs across frames, and a scene disposed meanwhile — fast navigation, Reset, data refresh — leaves
+    // it reading deleted programs: 'VALIDATE_STATUS false', null info logs, undefined 'isReady'.)
     if (controls.update()) requestRender();
     renderer.render(scene, camera);
     labels.render(scene, camera);
