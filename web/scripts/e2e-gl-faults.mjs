@@ -96,6 +96,12 @@ for (const [skip, what, type, gfx, n] of [[0, 'environment map', '', '', 4], [0,
   await pg.goto(`${BASE}/suite/entanglement`, { waitUntil: 'networkidle' });
   await pg.waitForSelector('.view3d canvas', { timeout: 120000 });
   await visitViews(pg);
+  // a failed program is rebuilt when its view next draws: keep bringing the views on screen (up to ~15 s)
+  for (let k = 0; k < 6; k++) {
+    const g = await pg.evaluate(() => window.__gl);
+    if (g.relinkedFailed >= g.failed) break;
+    await visitViews(pg, 1);
+  }
   const gl = await pg.evaluate(() => window.__gl);
   const relink = await pg.evaluate(() => [...document.querySelectorAll('[data-gl-relink]')].map((e) => e.dataset.glRelink));
   out(gl.failed === n && gl.relinkedFailed >= gl.failed, `${what}: transient link failures rebuilt — ${gl.failed} injected failures, ${gl.relinkedFailed} failed programs linked again, ${gl.links} links in total`);
