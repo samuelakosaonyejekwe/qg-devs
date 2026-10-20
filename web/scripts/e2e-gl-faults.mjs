@@ -199,14 +199,22 @@ for (const gfx of ['', 'high']) {
   const lostFlags = await pg.evaluate(() => document.querySelectorAll('.view3d[data-gl-lost]').length);
   // wipe the views' pixels: only a genuine re-render after restoration can paint them again
   await pg.evaluate(() => { for (const c of document.querySelectorAll('.view3d canvas')) c.getContext('2d').clearRect(0, 0, c.width, c.height); });
+  const tR = Date.now();
   await pg.evaluate(() => window.__lc.restoreContext());
-  await pg.waitForTimeout(1500);
+  // wait for the browser to restore the context (asynchronous on real GPUs), then for the first view to repaint
+  const restored = await pg.waitForFunction(() => document.querySelectorAll('.view3d[data-gl-lost]').length === 0, null, { timeout: 20000 }).then(() => Date.now() - tR, () => -1);
   await visitViews(pg, 1);
-  await pg.locator('.view3d').first().scrollIntoViewIfNeeded(); await firstPainted(); await pg.waitForTimeout(1000);
+  await pg.locator('.view3d').first().scrollIntoViewIfNeeded();
+  const repaint = await pg.waitForFunction(() => {
+    const c = document.querySelector('.view3d canvas'); const x = c?.getContext('2d'); if (!x || c.width < 4) return false;
+    const d = x.getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 64) if (d[i] > 0) return true; return false;
+  }, null, { timeout: 20000 }).then(() => Date.now() - tR, () => -1);
+  await pg.waitForTimeout(500);
   const after = await painted(pg);
   const stillLost = await pg.evaluate(() => document.querySelectorAll('.view3d[data-gl-lost]').length);
+  const glState = await pg.evaluate(() => ({ lost: window.__glAll[0].isContextLost(), err: window.__glAll[0].getError(), w: window.__glAll[0].drawingBufferWidth, h: window.__glAll[0].drawingBufferHeight }));
   out(lostFlags > 0 && stillLost === 0 && after[0] > 0 && after[0] >= before[0] * 0.5,
-    `[${tierName} tier] context lost → ${lostFlags} view(s) paused; restored → repainted (painted samples first view ${before[0]} → ${after[0]}), contexts ${await pg.evaluate(() => window.__glAll.length)}`);
+    `[${tierName} tier] context lost → ${lostFlags} view(s) paused; restored after ${restored} ms (views still paused: ${stillLost}), repainted after ${repaint} ms (painted samples first view ${before[0]} → ${after[0]}; context ${JSON.stringify(glState)}), contexts ${await pg.evaluate(() => window.__glAll.length)}`);
   out(errors.length === 0, `[${tierName} tier] no page errors across loss and restore${errors.length ? ': ' + errors.slice(0, 2).join(' | ') : ''}`);
   // lost for good: the views fall back to their 2-D views
   await pg.evaluate(() => window.__glAll[0].getExtension('WEBGL_lose_context').loseContext());
