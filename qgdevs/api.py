@@ -92,9 +92,54 @@ async def limits(request: Request, call_next):
     return resp
 
 
+def _token_table() -> dict[str, tuple[str, str]]:
+    """QGDEVS_API_TOKENS = "token:role:Name of person, ..." (comma-separated; name optional, role defaults to
+    researcher). Returns {token: (role, name)}."""
+    out = {}
+    for t in os.environ.get("QGDEVS_API_TOKENS", "").split(","):
+        t = t.strip()
+        if not t:
+            continue
+        parts = t.split(":", 2)
+        tok = parts[0]
+        rl = parts[1] if len(parts) > 1 and parts[1] else "researcher"
+        name = parts[2].strip() if len(parts) > 2 and parts[2].strip() else f"unnamed {rl}"
+        out[tok] = (rl, name)
+    return out
+
+
 def _tokens() -> dict[str, str]:
-    raw = os.environ.get("QGDEVS_API_TOKENS", "")
-    return dict(t.split(":", 1) if ":" in t else (t, "researcher") for t in raw.split(",") if t)
+    return {k: v[0] for k, v in _token_table().items()}
+
+
+def principal(authorization: str | None = Header(default=None)) -> dict:
+    """Authenticated identity behind a request: role, the name bound to the token, and a token fingerprint
+    (first 12 hex of SHA-256; the token itself is never stored)."""
+    import hashlib as _h
+    table = _token_table()
+    if not table:
+        r = "public" if _require_tokens() else "researcher"
+        return {"role": r, "name": "development user" if r == "researcher" else "anonymous", "token_id": None,
+                "verified": False}
+    given = authorization[7:] if authorization and authorization.startswith("Bearer ") else ""
+    if not given:
+        return {"role": "public", "name": "anonymous", "token_id": None, "verified": False}
+    match = None
+    for tok, (rl, name) in table.items():
+        if hmac.compare_digest(given.encode(), tok.encode()):
+            match = (rl, name)
+    if match is None:
+        raise HTTPException(403, "invalid access token (check Settings → API bearer token)")
+    return {"role": match[0], "name": match[1], "token_id": _h.sha256(given.encode()).hexdigest()[:12], "verified": True}
+
+
+def need_identity(*roles):
+    def dep(p: dict = Depends(principal)):
+        if p["role"] not in roles and p["role"] != "admin":
+            raise HTTPException(401 if p["role"] == "public" else 403,
+                                RESEARCHER_ONLY if p["role"] == "public" else f"requires role {roles}")
+        return p
+    return dep
 
 
 RESEARCHER_ONLY = ("Researcher access required: this action writes to the permanent evidence record. "
@@ -768,7 +813,7 @@ class PreregIn(BaseModel):
 
 
 @app.post("/api/evidence/preregister")
-def preregister(p: PreregIn, r: str = Depends(need("researcher"))):
+def preregister(p: PreregIn, who: dict = Depends(need_identity("researcher"))):
     from .evidence import preregister as prereg
     from .design import scenario_for
     from .discrimination import predictions_table
@@ -779,19 +824,21 @@ def preregister(p: PreregIn, r: str = Depends(need("researcher"))):
     nuis = {h: [n.__dict__ for n in models.HYPOTHESES[h].nuisance] for h in p.hypotheses if h in models.HYPOTHESES}
     e = prereg(_ledger(), title=p.title, hypotheses=p.hypotheses, design=p.scenario.model_dump(), predictions=preds,
                decision_rules=p.decision_rules, analysis_plan=p.analysis_plan, seeds=p.seeds,
-               sample_size=p.sample_size, nuisance_ranges=nuis, actor=p.actor)
+               sample_size=p.sample_size, nuisance_ranges=nuis, actor=who["name"],
+               identity={"name": who["name"], "token_id": who["token_id"], "verified": who["verified"]})
     return J(e)
 
 
 @app.post("/api/evidence/datasets")
 async def ingest_dataset(file: UploadFile = File(...), label: str = Form(...), role: str = Form(...),
                          source: str = Form(...), description: str = Form(""), prereg_id: str | None = Form(None),
-                         r: str = Depends(need("researcher", "operator"))):
+                         who: dict = Depends(need_identity("researcher", "operator"))):
     from .evidence import BlindVault
     raw = await _read_upload(file)
     try:
-        rec = BlindVault(paths()["vault"], _ledger()).ingest(raw, label=label, role=role, source=source,
-                                                             description=description, prereg_id=prereg_id)
+        rec = BlindVault(paths()["vault"], _ledger()).ingest(
+            raw, label=label, role=role, source=source, description=description, prereg_id=prereg_id,
+            actor=who["name"], identity={"name": who["name"], "token_id": who["token_id"], "verified": who["verified"]})
     except ValueError as e:
         raise HTTPException(422, str(e))
     return J(rec.__dict__)
@@ -800,14 +847,14 @@ async def ingest_dataset(file: UploadFile = File(...), label: str = Form(...), r
 class UnblindIn(BaseModel):
     dataset_id: str
     prereg_id: str
-    actor: str = "researcher"
+    actor: str | None = None  # ignored: the actor is the authenticated identity
 
 
 @app.post("/api/evidence/unblind")
-def unblind(u: UnblindIn, r: str = Depends(need("researcher"))):
+def unblind(u: UnblindIn, who: dict = Depends(need_identity("researcher"))):
     from .evidence import BlindVault
     try:
-        return J(BlindVault(paths()["vault"], _ledger()).unblind(u.dataset_id, u.prereg_id, u.actor))
+        return J(BlindVault(paths()["vault"], _ledger()).unblind(u.dataset_id, u.prereg_id, who["name"]))
     except KeyError:
         raise HTTPException(404, "unknown dataset")
     except PermissionError as e:
@@ -816,14 +863,51 @@ def unblind(u: UnblindIn, r: str = Depends(need("researcher"))):
 
 class SignoffIn(BaseModel):
     gate: Literal["G1", "G2", "G3", "G4", "G5", "G6", "G7"]
-    reviewer: str
-    affiliation: str
-    statement: str
+    affiliation: str = Field(min_length=2, max_length=300)
+    statement: str = Field(min_length=10, max_length=5000)
+    dataset_id: str | None = None   # G6/G7: the REAL dataset this assessment concerns
+    reviewer: str | None = None     # ignored: the reviewer is the identity bound to the access token
+
+
+@app.get("/api/evidence/anchors")
+def evidence_anchors():
+    """External anchors of the ledger head (object store + OpenTimestamps) and verification against them.
+    Third parties should archive these records: any later truncation of the ledger then becomes detectable."""
+    from .anchor import local_anchors, remote_anchors, verify
+    led = _ledger()
+    local = local_anchors(led)
+    try:
+        remote, remote_err = remote_anchors(), None
+    except Exception as e:  # object store unavailable: report, do not fail
+        remote, remote_err = [], type(e).__name__
+    seen = {a["anchor_sha256"]: a for a in local + remote}
+    return J({"anchors": sorted(seen.values(), key=lambda a: a["ledger_index"])[-200:],
+              "verification": verify(led, list(seen.values())),
+              "remote_available": remote_err is None, "remote_error": remote_err,
+              "how_to_verify": "Archive these anchors. Later POST them to /api/evidence/verify-anchors; each anchored "
+                               "(ledger_index, entry_hash) must still exist. OpenTimestamps proofs (.ots) can be "
+                               "upgraded and verified with the standard 'ots' client."})
+
+
+class AnchorsIn(BaseModel):
+    anchors: list[dict] = Field(max_length=10000)
+
+
+@app.post("/api/evidence/verify-anchors")
+def verify_external_anchors(a: AnchorsIn):
+    """Verify the ledger against anchors archived by a third party (detects truncation and rewrites)."""
+    from .anchor import verify
+    return J(verify(_ledger(), a.anchors))
 
 
 @app.post("/api/evidence/signoff")
-def signoff(s: SignoffIn, r: str = Depends(need("researcher"))):
-    return J(_ledger().append("human_signoff", s.model_dump(), s.reviewer))
+def signoff(s: SignoffIn, who: dict = Depends(need_identity("researcher"))):
+    """The reviewer is the identity bound to the access token, never a free-text field."""
+    payload = {k: v for k, v in s.model_dump().items() if k != "reviewer"}
+    payload.update({"reviewer": who["name"], "token_id": who["token_id"], "identity_verified": who["verified"]})
+    if s.reviewer and s.reviewer != who["name"]:
+        payload["claimed_reviewer_ignored"] = s.reviewer
+    return J(_ledger().append("human_signoff", payload, who["name"]))
 
 
 @app.post("/api/evidence/gates")

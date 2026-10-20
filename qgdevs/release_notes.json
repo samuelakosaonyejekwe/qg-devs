@@ -1,6 +1,18 @@
 {
   "releases": [
     {
+      "version": "0.2.2",
+      "date": "2026-10-20",
+      "title": "Verifiable evidence gates, ledger anchoring, signed reviews",
+      "highlights": [
+        "Evidence gates G6 and G7 can now pass — only with REAL preregistered and unblinded data plus identity-verified sign-offs; replication must come from an independent identity and reviewer",
+        "Hourly external anchoring of the evidence ledger (off-site object store and public OpenTimestamps calendars): deleting recent entries is now detectable",
+        "Sign-offs, preregistrations, unblinding and dataset ingestion record the identity bound to the access token, never a typed name",
+        "Retention policy: old job results are removed after 30 days unless referenced by the evidence ledger"
+      ],
+      "fixes": []
+    },
+    {
       "version": "0.2.1",
       "date": "2026-10-20",
       "title": "Typeset equations, reliable Reset and playback, security audit",

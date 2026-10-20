@@ -139,11 +139,11 @@ class Ledger:
 
 def preregister(ledger: Ledger, *, title: str, hypotheses: list[str], design: dict, predictions: dict,
                 decision_rules: dict, analysis_plan: str, seeds: list[int], sample_size: dict,
-                nuisance_ranges: dict, actor: str = "researcher") -> dict:
+                nuisance_ranges: dict, actor: str = "researcher", identity: dict | None = None) -> dict:
     payload = {"prereg_id": sha256_bytes(canonical([title, design, predictions, now()]))[:16], "title": title,
                "hypotheses": hypotheses, "design": design, "predictions": predictions,
                "decision_rules": decision_rules, "analysis_plan": analysis_plan, "seeds": seeds,
-               "sample_size": sample_size, "nuisance_ranges": nuisance_ranges,
+               "sample_size": sample_size, "nuisance_ranges": nuisance_ranges, "identity": identity,
                "software_version": __version__, "code_sha256": code_hash(),
                "python": platform.python_version()}
     return ledger.append("preregistration", payload, actor)
@@ -168,7 +168,7 @@ class BlindVault:
         self.ledger = ledger
 
     def ingest(self, data: bytes, *, label: str, role: str, source: str, description: str,
-               prereg_id: str | None = None) -> DatasetRecord:
+               prereg_id: str | None = None, actor: str = "system", identity: dict | None = None) -> DatasetRecord:
         if label not in DATA_LABELS:
             raise ValueError(f"label must be one of {DATA_LABELS}")
         if role not in ROLES:
@@ -189,7 +189,7 @@ class BlindVault:
             f.write_bytes(data)
             os.chmod(f, 0o440)
         rec = DatasetRecord(h[:16], label, role, h, source, description)
-        self.ledger.append("dataset_ingest", {**rec.__dict__, "prereg_id": prereg_id, "bytes": len(data)})
+        self.ledger.append("dataset_ingest", {**{**rec.__dict__, "prereg_id": prereg_id, "bytes": len(data)}, "identity": identity}, actor)
         return rec
 
     def unblind(self, dataset_id: str, prereg_id: str, actor: str = "researcher") -> dict:
@@ -243,7 +243,9 @@ def evaluate_gates(*, model_meta: dict | None, vv_report: dict | None, lean_stat
                    second_implementation_match: bool | None = None) -> list[dict]:
     """Evaluate the seven gates from recorded evidence. Status ∈ PASSED, PARTIAL, NOT_PASSED, REQUIRES_HUMAN."""
     entries = ledger.entries() if ledger else []
-    signoffs = {e["payload"].get("gate"): e for e in entries if e["kind"] == "human_signoff"}
+    # only sign-offs bound to an authenticated identity count (free-text names are not evidence)
+    signoffs = {e["payload"].get("gate"): e for e in entries
+                if e["kind"] == "human_signoff" and e["payload"].get("identity_verified")}
     out = []
 
     def rec(g, status, evidence, missing):
@@ -297,16 +299,54 @@ def evaluate_gates(*, model_meta: dict | None, vv_report: dict | None, lean_stat
         ([] if preregs else ["preregistration record"]) + ([] if chain_ok or not preregs else
                                                            ["ledger hash chain fails verification"]))
 
+    # G6/G7 can pass, but only on recorded physical evidence AND identity-verified human assessment.
+    verified = [e for e in entries if e["kind"] == "human_signoff" and e["payload"].get("identity_verified")]
+    by_gate: dict[str, list[dict]] = {}
+    for e in verified:
+        by_gate.setdefault(e["payload"].get("gate"), []).append(e)
+
+    def ident(e):
+        return (e["payload"].get("identity") or {}).get("token_id") or e.get("actor")
+
     g = GATES[5]
     real = [e for e in entries if e["kind"] == "dataset_ingest" and e["payload"].get("label") == "REAL"]
-    rec(g, "NOT_PASSED" if not real else "REQUIRES_HUMAN", [f"{len(real)} REAL dataset(s) ingested"] if real else [],
-        ["authentic instrument-native physical measurements"] if not real else
-        ["assessment of results against preregistered criteria and alternative models"])
+    blind = [e for e in real if e["payload"].get("role") == "blind_test" and e["payload"].get("prereg_id")]
+    unblinded = [e for e in blind if any(u["payload"].get("dataset_id") == e["payload"]["dataset_id"]
+                                         and u["payload"].get("prereg_id") == e["payload"]["prereg_id"]
+                                         for u in entries if u["kind"] == "unblinding")]
+    s6 = by_gate.get("G6", [])
+    miss = []
+    if not real:
+        miss.append("authentic instrument-native physical measurements (REAL dataset)")
+    elif not unblinded:
+        miss.append("a REAL blind-test dataset ingested under a preregistration and unblinded against it")
+    if not s6:
+        miss.append("identity-verified sign-off that the results meet the preregistered criteria (G6)")
+    if not chain_ok:
+        miss.append("valid ledger hash chain")
+    rec(g, "PASSED" if not miss else ("REQUIRES_HUMAN" if unblinded and chain_ok else "NOT_PASSED"),
+        [f"{len(real)} REAL dataset(s); {len(unblinded)} preregistered and unblinded" if real else None]
+        + [f"G6 assessed by {e['payload'].get('reviewer')} ({e['payload'].get('affiliation')})" for e in s6], miss)
 
     g = GATES[6]
-    repl = [e for e in entries if e["kind"] == "dataset_ingest" and e["payload"].get("role") == "replication"
-            and e["payload"].get("label") == "REAL"]
-    rec(g, "NOT_PASSED" if not repl else "REQUIRES_HUMAN", [], ["independent laboratory replication"])
+    repl = [e for e in real if e["payload"].get("role") == "replication"]
+    g6_signers = {ident(e) for e in s6}
+    original_sources = {ident(e) for e in unblinded}
+    independent_repl = [e for e in repl if ident(e) not in original_sources]
+    s7 = [e for e in by_gate.get("G7", []) if ident(e) not in g6_signers]
+    miss = []
+    if not repl:
+        miss.append("REAL replication dataset from an independent laboratory")
+    elif not independent_repl:
+        miss.append("replication data submitted by an identity different from the original data")
+    if not s7:
+        miss.append("identity-verified G7 sign-off by a reviewer independent of the G6 assessment")
+    if st6 := next((o["status"] for o in out if o["gate"] == "G6"), None):
+        if st6 != "PASSED":
+            miss.append("G6 must pass first")
+    rec(g, "PASSED" if not miss else ("REQUIRES_HUMAN" if independent_repl else "NOT_PASSED"),
+        [f"{len(independent_repl)} independent REAL replication dataset(s)" if independent_repl else None]
+        + [f"G7 assessed by {e['payload'].get('reviewer')} ({e['payload'].get('affiliation')})" for e in s7], miss)
     for o in out:
         o["evidence"] = [x for x in o["evidence"] if x]
     return out

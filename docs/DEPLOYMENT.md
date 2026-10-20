@@ -58,3 +58,25 @@ Airplane mode never yields "fresh" data. The UI shows connectivity state and cac
 
 Restore drill: `tests/test_workflows.py::test_backup_restore_roundtrip` runs a snapshot → verify → restore → chain check
 on every CI run.
+
+
+## Identities, anchoring and retention
+
+* **Tokens carry identities.** `QGDEVS_API_TOKENS="token:role:Full Name, token2:researcher:Dr B. Reviewer"`.
+  Evidence writes (preregistrations, dataset ingestion, unblinding, sign-offs) record that name plus a 12-hex
+  fingerprint of the token (never the token). Typed reviewer names are ignored.
+* **G6/G7 policy.**
+  - G6 passes only with a REAL blind-test dataset that was ingested under a preregistration and unblinded
+    against it, plus an identity-verified G6 sign-off.
+  - G7 additionally needs REAL replication data from a different identity, plus a G7 sign-off by someone who did
+    not sign G6.
+* **Ledger anchoring.**
+  - Every hour (when the head changes) the head `(index, entry_hash)` is published to the backup bucket and to
+    three public OpenTimestamps calendars (Bitcoin-anchored).
+  - `GET /api/evidence/anchors` lists the anchors and verifies the ledger against them.
+  - Third parties should archive the anchors and later `POST` them to `/api/evidence/verify-anchors`; truncation or
+    rewriting is then detected.
+* **Retention.**
+  - Results and checkpoints of jobs finished more than `QGDEVS_RESULT_RETENTION_DAYS` (default 30) days ago are
+    deleted daily, unless the evidence ledger references them.
+  - Job records themselves are kept.

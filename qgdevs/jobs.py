@@ -395,6 +395,50 @@ def _h_backup(p, ctx):
     return {"archive": str(a), **verify(a), **upload(a)}
 
 
+@handler("anchor_ledger")
+def _h_anchor(p, ctx):
+    from .anchor import publish
+    from .evidence import Ledger
+    return publish(Ledger(paths()["ledger"]))
+
+
+def referenced_job_ids(ledger_path: Path) -> set[str]:
+    """Job ids mentioned anywhere in the evidence ledger (such results are evidence and are never expired)."""
+    import re
+    if not ledger_path.exists():
+        return set()
+    return set(re.findall(r"\b[0-9a-f]{12}\b", ledger_path.read_text()))
+
+
+@handler("retention")
+def _h_retention(p, ctx):
+    """Delete result and checkpoint files of finished jobs older than QGDEVS_RESULT_RETENTION_DAYS (default 30),
+    except results referenced by the evidence ledger. Job rows are kept (status, timing) with result_path cleared."""
+    days = float(os.environ.get("QGDEVS_RESULT_RETENTION_DAYS", p.get("days", 30)))
+    cutoff = datetime.now(timezone.utc).timestamp() - days * 86400
+    keep = referenced_job_ids(paths()["ledger"])
+    st = JobStore()
+    removed, kept, freed = 0, 0, 0
+    with st._c() as c:
+        rows = c.execute("select id, finished, result_path from jobs where status in "
+                         "('succeeded','failed','cancelled') and finished is not null").fetchall()
+    for r in rows:
+        if datetime.fromisoformat(r["finished"]).timestamp() > cutoff:
+            continue
+        if r["id"] in keep:
+            kept += 1
+            continue
+        for f in (Path(r["result_path"]) if r["result_path"] else None, paths()["checkpoints"] / f"{r['id']}.json"):
+            if f is not None and f.exists():
+                freed += f.stat().st_size
+                f.unlink()
+        with st._c() as c:
+            c.execute("update jobs set result_path=null, message='result expired (retention policy)' where id=?",
+                      (r["id"],))
+        removed += 1
+    return {"retention_days": days, "expired": removed, "kept_as_evidence": kept, "bytes_freed": freed}
+
+
 SCHEDULE = [  # (name, period seconds, job type, params) — cadences match each source's publication rhythm
     ("ingest-arxiv", 86400, "fetch_source", {"connector": "arxiv"}),
     ("ingest-crossref", 86400, "fetch_source", {"connector": "crossref"}),
@@ -404,6 +448,8 @@ SCHEDULE = [  # (name, period seconds, job type, params) — cadences match each
     ("nightly-vv", 86400, "vv_run", {}),
     ("weekly-discovery", 7 * 86400, "discovery_cycle", {}),
     ("daily-backup", 86400, "backup", {}),
+    ("hourly-ledger-anchor", 3600, "anchor_ledger", {}),
+    ("daily-retention", 86400, "retention", {}),
 ]
 
 
