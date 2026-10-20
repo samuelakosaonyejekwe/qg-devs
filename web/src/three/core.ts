@@ -232,7 +232,7 @@ function getShared(): Shared {
   const progLog = gl.getProgramInfoLog.bind(gl), shaderLog = gl.getShaderInfoLog.bind(gl);
   gl.getProgramInfoLog = (p: WebGLProgram) => progLog(p) ?? '';
   gl.getShaderInfoLog = (s: WebGLShader) => shaderLog(s) ?? '';
-  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: GL_ATTRIBUTES.antialias, alpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: GL_ATTRIBUTES.antialias, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
   detectTier(gl);
   renderer.setPixelRatio(1); // sizes below are device pixels
   renderer.setClearColor(0x000000, 0);
