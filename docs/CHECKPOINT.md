@@ -30,7 +30,7 @@ _Last updated: 2026-10-19 21:10. If a session is interrupted, resume from "IN PR
 - `GET /api/auth/whoami`;
 - CORS restricted to https://samuelakosaonyejekwe.github.io and the server origin.
 
-**Target public URL: https://samuelakosaonyejekwe.github.io/qg-devs/** (the owner wants the app on their GitHub). Pages is enabled (build_type=workflow). `.github/workflows/pages.yml` is written but UNCOMMITTED on purpose: push it only together with the web sub-path support, otherwise a broken site is published.
+**PUBLIC URL (LIVE): https://samuelakosaonyejekwe.github.io/qg-devs/** — GitHub Pages, deployed by .github/workflows/pages.yml on every push touching web/. Version 0.2.3 is live on both the Pages site and the API server.
 
 Web agent round (in progress):
 - (1) Suite 18 "Signing as <identity>", no reviewer box, "acting as" on all evidence forms;
