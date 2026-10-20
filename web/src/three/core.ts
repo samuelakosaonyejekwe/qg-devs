@@ -311,11 +311,15 @@ export function createStage(el: HTMLElement): Stage {
   let shadows = false;
 
   // the view's own visible canvas (2-D): receives a copy of the frame rendered by the shared renderer
-  const canvas = document.createElement('canvas');
-  canvas.className = 'qg3d-canvas';
-  Object.assign(canvas.style, { display: 'block', width: '100%', height: '100%', touchAction: 'none' });
+  const makeCanvas = () => {
+    const c = document.createElement('canvas');
+    c.className = 'qg3d-canvas';
+    Object.assign(c.style, { display: 'block', width: '100%', height: '100%', touchAction: 'none' });
+    return c;
+  };
+  let canvas = makeCanvas();
   el.appendChild(canvas);
-  const ctx2d = canvas.getContext('2d')!;
+  let ctx2d = canvas.getContext('2d')!;
 
   const labels = new CSS2DRenderer();
   Object.assign(labels.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none', overflow: 'hidden' });
@@ -418,7 +422,20 @@ export function createStage(el: HTMLElement): Stage {
     need: () => (visible && !disposed ? devSize() : { w: 0, h: 0 }),
     requestRender,
     onLost: () => { el.dataset.glLost = '1'; },
-    onRestored: () => { delete el.dataset.glLost; if (useEnv && sh.env) scene.environment = sh.env.texture; requestRender(); },
+    onRestored: () => {
+      // A 2-D canvas that copied from the WebGL canvas before the loss no longer receives its copies after the
+      // context is restored (seen on real GPUs: frames render, the copy stays blank). Give the view a fresh canvas.
+      const fresh = makeCanvas();
+      el.replaceChild(fresh, canvas);
+      canvas = fresh;
+      ctx2d = canvas.getContext('2d')!;
+      controls.disconnect();
+      controls.domElement = canvas;
+      controls.connect();
+      delete el.dataset.glLost;
+      if (useEnv && sh.env) scene.environment = sh.env.texture;
+      requestRender();
+    },
     onFailed: () => { el.dispatchEvent(new CustomEvent('qg3d-failed', { bubbles: false })); },
   };
   sh.stages.add(link);
