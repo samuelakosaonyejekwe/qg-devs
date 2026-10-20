@@ -38,11 +38,11 @@ async function page(failLinks, skip = 0, onlyType = '', gfx = '', withLog = '') 
       for (const fn of ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced']) { const o = P2[fn]; P2[fn] = function (...a) { window.__draws++; return o.apply(this, a); }; }
     }
     { const di = CanvasRenderingContext2D.prototype.drawImage; CanvasRenderingContext2D.prototype.drawImage = function (src, ...a) {
-      if (src && src.getContext && window.__glAll?.length && src === window.__glAll[0].canvas) {
+      if (src && src.getContext && window.__glAll?.length && src === window.__glAll[window.__glAll.length - 1].canvas) {
         window.__copies++;
         // what the app copies: source rectangle and the rendered pixel at its centre (read in the same task)
         if (a.length >= 8) {
-          const gl = window.__glAll[0], [sx, sy, sw, sh] = a, px = new Uint8Array(4);
+          const gl = window.__glAll[window.__glAll.length - 1], [sx, sy, sw, sh] = a, px = new Uint8Array(4);
           gl.readPixels(Math.floor(sx + sw / 2), Math.floor(gl.drawingBufferHeight - (sy + sh / 2)), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
           window.__lastCopy = { rect: [sx, sy, sw, sh], buf: [gl.drawingBufferWidth, gl.drawingBufferHeight], centre: [...px].join(','), err: gl.getError() };
         }
@@ -63,7 +63,8 @@ async function page(failLinks, skip = 0, onlyType = '', gfx = '', withLog = '') 
         p.__key = key;
         if (!this.__failed) this.__failed = new Set(); // per context: other views legitimately link the same source
         if (this.__failed.has(key)) window.__gl.relinkedFailed++;
-        const typed = !onlyType || key.includes(`#define SHADER_TYPE ${onlyType}\n`);
+        // onlyType: a regular expression over SHADER_TYPE; the environment-map generator's own programs are excluded
+        const typed = !onlyType || (new RegExp(`#define SHADER_TYPE (${onlyType})\\n`).test(key) && !/SHADER_NAME PMREM/.test(key));
         if (typed && (n < 0 || (window.__gl.links > skip && window.__gl.failed < n))) { bad.add(p); window.__gl.failed++; this.__failed.add(key); }
         return link.call(this, p);
       };
@@ -89,14 +90,15 @@ async function visitViews(pg, rounds = 2) {
 
 // 1. transient link failures are rebuilt: environment-map generator programs (first links) and scene
 //    material programs (later links)
-for (const [skip, what, type, gfx] of [[0, 'environment map', '', ''], [6, 'scene materials', '', ''], [0, 'shadow-map depth material', 'MeshDepthMaterial', 'high']]) {
-  const { ctx, pg, errors, warns } = await page(type ? 1 : 4, skip, type, gfx);
+const SCENE_TYPES = 'MeshStandardMaterial|MeshPhysicalMaterial|MeshBasicMaterial|MeshLambertMaterial|MeshPhongMaterial|LineBasicMaterial';
+for (const [skip, what, type, gfx, n] of [[0, 'environment map', '', '', 4], [0, 'scene materials', SCENE_TYPES, '', 4], [0, 'shadow-map depth material', 'MeshDepthMaterial', 'high', 1]]) {
+  const { ctx, pg, errors, warns } = await page(n, skip, type, gfx);
   await pg.goto(`${BASE}/suite/entanglement`, { waitUntil: 'networkidle' });
   await pg.waitForSelector('.view3d canvas', { timeout: 120000 });
   await visitViews(pg);
   const gl = await pg.evaluate(() => window.__gl);
   const relink = await pg.evaluate(() => [...document.querySelectorAll('[data-gl-relink]')].map((e) => e.dataset.glRelink));
-  out(gl.failed === (type ? 1 : 4) && gl.relinkedFailed >= gl.failed, `${what}: transient link failures rebuilt — ${gl.failed} injected failures, ${gl.relinkedFailed} failed programs linked again, ${gl.links} links in total`);
+  out(gl.failed === n && gl.relinkedFailed >= gl.failed, `${what}: transient link failures rebuilt — ${gl.failed} injected failures, ${gl.relinkedFailed} failed programs linked again, ${gl.links} links in total`);
   out(relink.length > 0, `${what}: view reports the rebuild (data-gl-relink = ${relink.join(',') || 'none'}); ${warns.length} warning(s)`);
   out(errors.length === 0, `${what}: no page errors after recovery${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
   await ctx.close();
@@ -222,15 +224,13 @@ for (const gfx of ['', 'high']) {
   const restored = await pg.waitForFunction(() => document.querySelectorAll('.view3d[data-gl-lost]').length === 0, null, { timeout: 40000 }).then(() => Date.now() - tR, () => -1);
   await visitViews(pg, 1);
   await pg.locator('.view3d').first().scrollIntoViewIfNeeded();
-  const repaint = await pg.waitForFunction(() => {
-    const c = document.querySelector('.view3d canvas'); const x = c?.getContext('2d'); if (!x || c.width < 4) return false;
-    const d = x.getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 64) if (d[i] > 0) return true; return false;
-  }, null, { timeout: 20000 }).then(() => Date.now() - tR, () => -1);
+  let repaint = -1;
+  for (let t = 0; t < 80 && repaint < 0; t++) { if (((await painted(pg))[0] ?? 0) > 0) repaint = Date.now() - tR; else await pg.waitForTimeout(250); }
   await pg.waitForTimeout(500);
   const after = await painted(pg);
   const stillLost = await pg.evaluate(() => document.querySelectorAll('.view3d[data-gl-lost]').length);
   const glState = await pg.evaluate(async () => {
-    const gl = window.__glAll[0];
+    const gl = window.__glAll[window.__glAll.length - 1]; // after a restore the app moves to a fresh context
     const d0 = window.__draws, c0 = window.__copies;
     await new Promise((r) => setTimeout(r, 1000));
     const views = [...document.querySelectorAll('.view3d')].map((v) => ({ frames: v.__qgFrames, skip: v.__qgSkip, w: v.querySelector('canvas')?.width, pending: v.__qgPending }));
@@ -247,10 +247,10 @@ for (const gfx of ['', 'high']) {
     function repaintFailedProbe() { const c = document.querySelector('.view3d canvas'); if (!c) return true; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 64) if (d[i] > 0) return false; return true; }
   });
   out(lostFlags > 0 && stillLost === 0 && after[0] > 0 && after[0] >= before[0] * 0.5,
-    `[${tierName} tier] context lost → ${lostFlags} view(s) paused; restored after ${restored} ms (views still paused: ${stillLost}), repainted after ${repaint} ms (painted samples first view ${before[0]} → ${after[0]}; context ${JSON.stringify(glState)}; copy before loss ${copyBefore}), contexts ${await pg.evaluate(() => window.__glAll.length)}`);
+    `[${tierName} tier] context lost → ${lostFlags} view(s) paused; restored after ${restored} ms (views still paused: ${stillLost}), repainted after ${repaint} ms (painted samples first view ${before[0]} → ${after[0]}; context ${JSON.stringify(glState)}; copy before loss ${copyBefore}), contexts created ${await pg.evaluate(() => window.__glAll.length)}, live ${await pg.evaluate(() => window.__glAll.filter((c) => !c.isContextLost()).length)}`);
   out(errors.length === 0, `[${tierName} tier] no page errors across loss and restore${errors.length ? ': ' + errors.slice(0, 2).join(' | ') : ''}`);
   // lost for good: the views fall back to their 2-D views
-  await pg.evaluate(() => window.__glAll[0].getExtension('WEBGL_lose_context').loseContext());
+  await pg.evaluate(() => window.__glAll[window.__glAll.length - 1].getExtension('WEBGL_lose_context').loseContext()); // the live context
   await pg.waitForTimeout(32000); // the app waits 30 s for the browser to restore the context
   const fallback = await pg.evaluate(() => ({ views: document.querySelectorAll('.view3d').length, notes: [...document.querySelectorAll('[role="note"]')].filter((n) => /could not be restored/.test(n.textContent || '')).length }));
   out(fallback.views === 0 && fallback.notes > 0, `[${tierName} tier] context not restored → 3-D views replaced by their 2-D views (${fallback.notes} note(s), ${fallback.views} 3-D view(s) left)`);

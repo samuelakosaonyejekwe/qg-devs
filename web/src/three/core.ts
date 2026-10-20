@@ -218,6 +218,30 @@ function onShaderError(gl: WebGLRenderingContext, program: WebGLProgram, vs: Web
   }
 }
 
+/** Configure a three.js renderer on a WebGL 2 context (null-safe info logs, tone mapping, sRGB, soft shadows). */
+function makeRenderer(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext): THREE.WebGLRenderer {
+  // WebGL returns null for every info log once the context is lost, but three reads them without a null check
+  // (`getProgramInfoLog(p).trim()`), so a GPU reset that landed while a shader was being built threw
+  // "Cannot read properties of null (reading 'trim')". Lost-context logs read as empty here.
+  const progLog = gl.getProgramInfoLog.bind(gl), shaderLog = gl.getShaderInfoLog.bind(gl);
+  gl.getProgramInfoLog = (p: WebGLProgram) => progLog(p) ?? '';
+  gl.getShaderInfoLog = (s: WebGLShader) => shaderLog(s) ?? '';
+  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: GL_ATTRIBUTES.antialias, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(1); // sizes below are device pixels
+  renderer.setClearColor(0x000000, 0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.debug.onShaderError = onShaderError;
+  return renderer;
+}
+
+function maxSizeOf(gl: WebGL2RenderingContext): number {
+  const dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array;
+  return Math.max(256, Math.min(dims?.[0] ?? 4096, dims?.[1] ?? 4096, gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number || 4096, 8192));
+}
+
 /** The shared renderer, created on first use from the page's single WebGL 2 context. Throws without WebGL 2. */
 function getShared(): Shared {
   if (shared && !shared.failed) return shared;
@@ -226,48 +250,53 @@ function getShared(): Shared {
   if (!ctx) throw new Error('WebGL 2 is not available');
   const { canvas, gl } = ctx;
   if (gl.isContextLost()) throw new Error('the graphics context is not available');
-  // WebGL returns null for every info log once the context is lost, but three reads them without a null check
-  // (`getProgramInfoLog(p).trim()`), so a GPU reset that landed while a shader was being built threw
-  // "Cannot read properties of null (reading 'trim')". Lost-context logs read as empty here.
-  const progLog = gl.getProgramInfoLog.bind(gl), shaderLog = gl.getShaderInfoLog.bind(gl);
-  gl.getProgramInfoLog = (p: WebGLProgram) => progLog(p) ?? '';
-  gl.getShaderInfoLog = (s: WebGLShader) => shaderLog(s) ?? '';
-  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: GL_ATTRIBUTES.antialias, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
   detectTier(gl);
-  renderer.setPixelRatio(1); // sizes below are device pixels
-  renderer.setClearColor(0x000000, 0);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.debug.onShaderError = onShaderError;
-  const dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array;
-  const maxSize = Math.max(256, Math.min(dims?.[0] ?? 4096, dims?.[1] ?? 4096, gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number || 4096, 8192));
-  const sh: Shared = { renderer, canvas, stages: new Set(), lost: false, failed: false, env: null, envFailed: false, inEnv: false, maxSize, bufW: 0, bufH: 0 };
+  const sh: Shared = { renderer: makeRenderer(canvas, gl), canvas, stages: new Set(), lost: false, failed: false, env: null, envFailed: false, inEnv: false, maxSize: maxSizeOf(gl), bufW: 0, bufH: 0 };
   shared = sh;
-  // One handler for the whole app: on loss every view pauses; on restore three re-creates its GL state and every
-  // live view's geometry, materials and textures are uploaded again on its next draw (the environment map, a
-  // render target, is regenerated). If the browser does not restore the context, the views fall back to 2-D.
+  watch(sh, canvas);
+  return sh;
+}
+
+/**
+ * Context loss, one handler for the whole app. On loss every view pauses. When the browser signals that the GPU is
+ * back (webglcontextrestored), the app moves to a brand-new WebGL canvas and context and releases the restored one:
+ * on real GPUs, frames copied out of a restored context's canvas with drawImage intermittently arrive blank, while a
+ * fresh context behaves exactly like a first page load. Every live view's geometry, materials and textures are then
+ * uploaded again on its next draw, the environment map is regenerated and each view gets a fresh canvas. If no
+ * restoration comes, or a new context cannot be created, the views fall back to their 2-D views.
+ */
+function watch(sh: Shared, canvas: HTMLCanvasElement) {
   let failTimer = 0;
-  canvas.addEventListener('webglcontextlost', (e) => {
+  const fail = () => { sh.failed = true; for (const s of [...sh.stages]) s.onFailed(); };
+  const onLost = (e: Event) => {
     e.preventDefault();
     sh.lost = true;
     for (const s of sh.stages) s.onLost();
-    failTimer = window.setTimeout(() => {
-      if (!sh.lost) return;
-      sh.failed = true;
-      for (const s of [...sh.stages]) s.onFailed();
-    }, 30_000); // real GPUs can take several seconds to restore a context
-  });
-  canvas.addEventListener('webglcontextrestored', () => {
+    failTimer = window.setTimeout(() => { if (sh.lost) fail(); }, 30_000); // real GPUs can take several seconds
+  };
+  const onRestored = () => {
     clearTimeout(failTimer);
+    canvas.removeEventListener('webglcontextlost', onLost);
+    canvas.removeEventListener('webglcontextrestored', onRestored);
+    const old = sh.renderer;
+    let fresh: HTMLCanvasElement, gl: WebGL2RenderingContext | null = null;
+    try { fresh = document.createElement('canvas'); gl = fresh.getContext('webgl2', GL_ATTRIBUTES) as WebGL2RenderingContext | null; } catch { /* below */ }
+    if (!gl || gl.isContextLost()) { fail(); return; }
+    sh.renderer = makeRenderer(fresh!, gl);
+    sh.canvas = fresh!;
+    sh.maxSize = maxSizeOf(gl);
     sh.lost = false; sh.bufW = sh.bufH = 0;
-    sh.env = null; // contents were lost with the context
+    sh.env = null; // belonged to the old context
+    depthMat = null;
+    watch(sh, fresh!);
+    // release the old context's GPU memory now (its objects are re-created on the new context)
+    try { old.dispose(); old.forceContextLoss(); } catch { /* already gone */ }
     if ([...sh.stages].some((s) => s.wantsEnv())) buildEnv(sh);
     fitBuffer(sh);
     for (const s of sh.stages) s.onRestored();
-  });
-  return sh;
+  };
+  canvas.addEventListener('webglcontextlost', onLost);
+  canvas.addEventListener('webglcontextrestored', onRestored);
 }
 
 export interface Stage {
@@ -303,7 +332,6 @@ function setLineResolution(scene: THREE.Scene, w: number, h: number) {
 
 export function createStage(el: HTMLElement): Stage {
   const sh = getShared();
-  const renderer = sh.renderer;
   const theme = readTheme(el);
   if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
   const maxPR = tier === 'high' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
@@ -365,6 +393,7 @@ export function createStage(el: HTMLElement): Stage {
   /** Render this view's scene into the shared buffer's bottom-left w×h region (device pixels). */
   const renderRegion = (w: number, h: number, lineW: number, lineH: number) => {
     if (w > sh.bufW || h > sh.bufH) fitBuffer(sh, w, h);
+    const renderer = sh.renderer;
     renderer.shadowMap.enabled = shadows;
     renderer.setViewport(0, 0, w, h);
     renderer.setScissor(0, 0, w, h);
@@ -498,7 +527,8 @@ export function createStage(el: HTMLElement): Stage {
   }
 
   return {
-    scene, camera, renderer, controls, theme, labels, requestRender,
+    scene, camera, controls, theme, labels, requestRender,
+    get renderer() { return sh.renderer; },
     setHome(pos, target) { home.pos.copy(pos); home.target.copy(target); },
     fit(radius, center = new THREE.Vector3(), dir = new THREE.Vector3(0.62, 0.45, 0.68)) {
       fitSpec = { r: radius, c: center.clone(), dir: dir.clone().normalize() };
@@ -525,7 +555,7 @@ export function createStage(el: HTMLElement): Stage {
       composite(c.getContext('2d')!, k, transparent);
       return c.toDataURL('image/png');
     },
-    memory() { return { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures }; },
+    memory() { return { geometries: sh.renderer.info.memory.geometries, textures: sh.renderer.info.memory.textures }; },
     enableShadows(radius: number) {
       if (tier !== 'high') return; // soft shadows only on capable GPUs
       shadows = true;
