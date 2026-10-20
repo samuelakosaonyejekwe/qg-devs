@@ -244,20 +244,29 @@ export function createStage(el: HTMLElement): Stage {
     requestRender();
   };
   renderer.debug.onShaderError = (gl, program, vs, fs) => {
-    const log = (gl.getProgramInfoLog(program) ?? '').trim();
-    const compiled = !!gl.getShaderParameter(vs, gl.COMPILE_STATUS) && !!gl.getShaderParameter(fs, gl.COMPILE_STATUS);
     if (inEnv) envFailed = true;
     const type = /#define SHADER_TYPE (\w+)/.exec(gl.getShaderSource(vs) ?? '')?.[1];
     if (type) failedTypes.add(type);
-    if (!gl.isContextLost() && compiled && !log && relinkAttempts < 3) {
-      console.warn(`QG-DEVS 3-D: the graphics driver failed to link a shader program without a diagnostic; rebuilding it (attempt ${relinkAttempts + 1} of 3)`);
-      if (!relinkTimer) relinkTimer = window.setTimeout(relink, 50 * 2 ** relinkAttempts);
+    const logs = { programLog: (gl.getProgramInfoLog(program) ?? '').trim(), vertexLog: (gl.getShaderInfoLog(vs) ?? '').trim(), fragmentLog: (gl.getShaderInfoLog(fs) ?? '').trim() };
+    if (logs.programLog || logs.vertexLog || logs.fragmentLog) {
+      // a genuine shader error always comes with a compiler or linker message: report it, never retry
+      console.error('QG-DEVS 3-D: shader program failed to compile or link', { type, ...logs });
       return;
     }
-    if (gl.isContextLost()) return; // context loss is handled by the webglcontextlost / restored listeners
-    console.error('QG-DEVS 3-D: shader program failed to link', {
-      programLog: log, vertexLog: (gl.getShaderInfoLog(vs) ?? '').trim(), fragmentLog: (gl.getShaderInfoLog(fs) ?? '').trim(), attempts: relinkAttempts,
-    });
+    // No message at all: the GPU or driver failed (out of video memory, context being lost). Rebuild the failed
+    // programs a bounded number of times; a lost context is rebuilt by three when the browser restores it.
+    if (gl.isContextLost()) return;
+    if (relinkAttempts < 3) {
+      if (!relinkTimer) {
+        console.warn(`QG-DEVS 3-D: the GPU failed to build a shader program without a message; rebuilding (attempt ${relinkAttempts + 1} of 3)`);
+        relinkTimer = window.setTimeout(relink, 50 * 2 ** relinkAttempts);
+      }
+      return;
+    }
+    if (!el.dataset.glFault) {
+      el.dataset.glFault = '1';
+      console.warn('QG-DEVS 3-D: the GPU could not build some shader programs after 3 attempts; parts of this view may be missing');
+    }
   };
   if (tier === 'high') buildEnv();
 
@@ -378,7 +387,12 @@ export function createStage(el: HTMLElement): Stage {
         if ((o as any).isCSS2DObject) (o as CSS2DObject).element.remove();
       });
       envRT?.dispose();
+      key.shadow.dispose();
       renderer.dispose();
+      // Release the WebGL context (drawing buffers, shadow map, environment map) now rather than whenever the
+      // canvas is garbage-collected: on GPUs with little memory, contexts left behind by closed views
+      // exhausted video memory (Metal GL_OUT_OF_MEMORY), after which shader links failed and contexts were lost.
+      renderer.forceContextLoss();
       canvas.remove();
       labels.domElement.remove();
     },
