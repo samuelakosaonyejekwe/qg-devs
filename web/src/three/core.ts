@@ -35,9 +35,14 @@ export interface Handle {
   info?: any;
 }
 
+/**
+ * Minimal devices only (≤ 2 logical cores or ≤ 2 GB memory). Ordinary 4-core laptops and phones with a GPU get
+ * the full-quality tier; if their frames are genuinely slow, the runtime safety net in draw() lowers the pixel
+ * ratio and then the tier automatically (measured, not guessed).
+ */
 export const lowEnd: boolean =
   typeof navigator !== 'undefined' &&
-  ((navigator.hardwareConcurrency || 8) <= 4 || ((navigator as any).deviceMemory ?? 8) <= 4);
+  ((navigator.hardwareConcurrency || 8) <= 2 || ((navigator as any).deviceMemory ?? 8) <= 2);
 
 /**
  * Rendering quality tier. 'high' on capable GPUs; 'low' for software renderers (SwiftShader, llvmpipe) and

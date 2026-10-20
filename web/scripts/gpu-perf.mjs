@@ -19,9 +19,15 @@ const OUT = process.argv[3] || 'gpu-perf-out';
 fs.mkdirSync(OUT, { recursive: true });
 const base = new URL(APP).pathname;
 
+// Each browser is measured with the automatically chosen quality tier and with the full-quality tier forced
+// (Settings value qg.gfx = 'high'), so the cost of the high-fidelity rendering itself is measured on the GPU.
+const CHROME = { channel: 'chrome', headless: false, args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization'] };
+const CHROMIUM = { headless: false, args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--use-angle=metal'] };
 const CONFIGS = [
-  { name: 'Chrome (installed), GPU', launch: { channel: 'chrome', headless: false, args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization'] } },
-  { name: 'Chromium (Playwright), GPU', launch: { headless: false, args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--use-angle=metal'] } },
+  { name: 'Chrome (installed), GPU, automatic tier', launch: CHROME, gfx: null },
+  { name: 'Chrome (installed), GPU, full-quality tier', launch: CHROME, gfx: 'high' },
+  { name: 'Chromium (Playwright), GPU, automatic tier', launch: CHROMIUM, gfx: null },
+  { name: 'Chromium (Playwright), GPU, full-quality tier', launch: CHROMIUM, gfx: 'high' },
 ];
 
 async function fps(page, ms = 4000) {
@@ -37,7 +43,7 @@ for (const cfg of CONFIGS) {
   let browser;
   try { browser = await chromium.launch(cfg.launch); } catch (e) { results.push({ config: cfg.name, error: `launch failed: ${String(e.message).split('\n')[0]}` }); continue; }
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
-  await ctx.addInitScript(() => { try { localStorage.setItem('qg.lastSeenVersion', '999.0.0'); } catch { /* */ } });
+  await ctx.addInitScript((gfx) => { try { localStorage.setItem('qg.lastSeenVersion', '999.0.0'); if (gfx) localStorage.setItem('qg.gfx', gfx); } catch { /* */ } }, cfg.gfx);
   const page = await ctx.newPage();
   const row = { config: cfg.name, pages: {} };
   try {
