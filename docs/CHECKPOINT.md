@@ -26,20 +26,24 @@ _Last updated: 2026-10-19 21:10. If a session is interrupted, resume from "IN PR
 
 ## IN PROGRESS (resume here)
 
-**0.2.2 is LIVE** (2026-10-20). Changes in this release:
-- G6/G7 can pass, with safeguards (REAL preregistered and unblinded data, identity-verified and independent sign-offs);
-- hourly ledger anchoring to the S3 bucket and 3 OpenTimestamps calendars (verified live);
-- token-bound identities (`QGDEVS_API_TOKENS=token:role:Name`; the server token is named "Project owner");
-- a 30-day result retention policy that never touches ledger-referenced results.
+**0.2.2 is LIVE** at https://63-186-135-183.sslip.io. Additions since:
+- `GET /api/auth/whoami`;
+- CORS restricted to https://samuelakosaonyejekwe.github.io and the server origin.
 
-pytest: 198 passed.
+**Target public URL: https://samuelakosaonyejekwe.github.io/qg-devs/** (the owner wants the app on their GitHub). Pages is enabled (build_type=workflow). `.github/workflows/pages.yml` is written but UNCOMMITTED on purpose: push it only together with the web sub-path support, otherwise a broken site is published.
 
-Small follow-ups for the web app (not started):
-- the Suite 18 sign-off form should show "signing as <token identity>" and drop the reviewer text field;
-- show the external anchors on Suite 18 (`GET /api/evidence/anchors`) with a "download anchors for archiving" button;
-- make the Suite 8 Reset check wait for its default computation to finish.
+Web agent round (in progress):
+- (1) Suite 18 "Signing as <identity>", no reviewer box, "acting as" on all evidence forms;
+- (2) an anchors panel with download and verify buttons;
+- (3) the Suite 8 Reset check waits for its default computation (data-state="ready");
+- (4) VITE_BASE support for GitHub Pages: router, service worker, manifest, KaTeX fonts, workers, 404.html deep links, meta CSP with connect-src to the API.
 
-Optional: a Cloudflare Pages static mirror.
+Then:
+- verify;
+- commit web + pages.yml and push; watch the Actions run (`gh run watch`);
+- check the live github.io URL in a headless browser;
+- bump to 0.2.3 with release notes;
+- redeploy the server.
 
 ## Rules
 
