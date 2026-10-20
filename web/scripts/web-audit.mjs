@@ -108,11 +108,18 @@ for (const width of [360, 390, 768]) {
 {
   const ctx = await ctxFor(1280, 'light');
   const p = await ctx.newPage();
+  // Links may already carry the deployment base (e.g. /qg-devs/…); on static hosts (STATIC_404_OK=1, GitHub
+  // Pages) deep links are served from 404.html with HTTP 404 by design, so the app's own not-found state decides.
+  const basePath = new URL(BASE + '/').pathname;
+  const origin = new URL(BASE).origin;
   for (const href of [...seenLinks].sort()) {
-    const r = await p.goto(BASE + href, { waitUntil: 'domcontentloaded' });
+    const url = basePath !== '/' && href.startsWith(basePath) ? origin + href : BASE + href;
+    const r = await p.goto(url, { waitUntil: 'domcontentloaded' });
+    await p.waitForSelector('main h1', { timeout: 15000 }).catch(() => undefined);
     await p.waitForTimeout(500);
     const nf = await p.locator('main h1', { hasText: 'Page not found' }).count();
-    if (!r || r.status() >= 400 || nf) findings.links.push({ href, status: r?.status(), notFound: !!nf });
+    const badStatus = !r || (r.status() >= 400 && !(process.env.STATIC_404_OK && r.status() === 404));
+    if (badStatus || nf) findings.links.push({ href, status: r?.status(), notFound: !!nf });
   }
   await ctx.close();
 }
