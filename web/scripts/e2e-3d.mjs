@@ -50,7 +50,7 @@ for (const scheme of ['light', 'dark']) {
   await ctx.addInitScript(() => { try { localStorage.setItem('qg.lastSeenVersion', '999.0.0'); localStorage.setItem('qg.gfx', 'high'); } catch { /* */ } });
   const p = await ctx.newPage();
   p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`${p.url()}: ${m.text()}`); });
-  p.on('pageerror', (e) => errors.push(`${p.url()}: pageerror ${e.message}`));
+  p.on('pageerror', (e) => errors.push(`${p.url()}: pageerror ${e.message} @ ${(e.stack || '').split('\n').slice(1, 6).join(' <- ')}`));
   for (const [name, route, steps, steps2d] of RECIPES) {
     if (FILTER && !FILTER.test(name)) continue;
     const t0 = Date.now();

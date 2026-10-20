@@ -1,13 +1,23 @@
 # Measures QG-DEVS graphics performance on real GPU hardware: GitHub's macOS (Apple-silicon) runners render
-# WebGL through Metal on the GPU. Runs the in-app graphics test and per-page playback frame rates against the
-# published GitHub Pages site and reports them in the job summary (plus screenshots as an artifact).
+# WebGL through Metal on the GPU. Runs the in-app graphics test and per-page playback frame rates and reports
+# them (plus any page errors with stack traces) in the job summary, with screenshots as an artifact.
+#   - default: measures the published GitHub Pages site (also runs after every successful Pages deployment)
+#   - local_build: builds THIS commit (optionally unminified, for readable stacks) and serves it on the runner,
+#     so fixes can be verified on real GPUs before they are published; repeat = passes per configuration
 name: gpu-perf
 on:
   workflow_dispatch:
     inputs:
       url:
-        description: App URL to measure
+        description: App URL to measure (ignored with local_build)
         default: https://samuelakosaonyejekwe.github.io/qg-devs/
+      local_build:
+        description: Build and serve this commit on the runner instead of using the URL
+        type: boolean
+        default: false
+      repeat:
+        description: Passes per configuration (for intermittent problems)
+        default: "1"
   workflow_run:
     workflows: [pages]
     types: [completed]
@@ -24,16 +34,34 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
-        with: { node-version: "22" }
+        with: { node-version: "22", cache: npm, cache-dependency-path: web/package-lock.json }
       - name: Install Playwright (Chromium)
         run: |
           mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
           npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.49.1
           npx playwright install chromium
+      - uses: actions/setup-python@v6
+        if: ${{ github.event.inputs.local_build == 'true' }}
+        with: { python-version: "3.12" }
+      - name: Build this commit (unminified) and serve it with its API on the runner
+        if: ${{ github.event.inputs.local_build == 'true' }}
+        env:
+          QG_NO_MINIFY: "1"
+        run: |
+          pip install -q -e .
+          (cd web && npm ci --no-audit --no-fund && npm run build)
+          mkdir -p "$RUNNER_TEMP/qghome"
+          QGDEVS_HOME="$RUNNER_TEMP/qghome" nohup uvicorn qgdevs.api:app --port 8790 > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 60); do curl -sf http://127.0.0.1:8790/api/health >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:8790/ | head -c 200
       - name: Measure on the GPU
         env:
           PLAYWRIGHT_MODULE: ${{ runner.temp }}/pw/node_modules/playwright/index.mjs
-        run: node web/scripts/gpu-perf.mjs "${{ github.event.inputs.url || 'https://samuelakosaonyejekwe.github.io/qg-devs/' }}" gpu-perf-out
+          REPEAT: ${{ github.event.inputs.repeat || '1' }}
+        run: |
+          URL="${{ github.event.inputs.url || 'https://samuelakosaonyejekwe.github.io/qg-devs/' }}"
+          if [ "${{ github.event.inputs.local_build }}" = "true" ]; then URL="http://127.0.0.1:8790/"; fi
+          node web/scripts/gpu-perf.mjs "$URL" gpu-perf-out
       - uses: actions/upload-artifact@v7
         if: always()
         with:

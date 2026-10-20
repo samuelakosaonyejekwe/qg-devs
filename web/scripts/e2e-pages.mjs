@@ -39,7 +39,7 @@ await ctx.addInitScript(initScript);
 let page = ctx.pages()[0] ?? await ctx.newPage();
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); if (/Refused to/.test(m.text())) errors.push(m.text()); });
-page.on('pageerror', (e) => errors.push(`pageerror ${e.message}`));
+page.on('pageerror', (e) => errors.push(`pageerror ${e.message} @ ${(e.stack || '').split('\n').slice(1, 6).join(' <- ')}`));
 const csp = async () => page.evaluate(() => window.__csp ?? []);
 const shot = (n) => page.screenshot({ path: path.join(OUT, `${n}.png`) });
 
@@ -147,7 +147,7 @@ await step('offline: shell and deep link from cache, flagship computes locally',
     ctx = await chromium.launchPersistentContext(PROFILE, { viewport: { width: 1366, height: 900 }, args: ['--host-resolver-rules=MAP * ~NOTFOUND'] });
     await ctx.addInitScript(initScript);
     page = ctx.pages()[0] ?? await ctx.newPage();
-    page.on('pageerror', (e) => errors.push(`pageerror ${e.message}`));
+    page.on('pageerror', (e) => errors.push(`pageerror ${e.message} @ ${(e.stack || '').split('\n').slice(1, 6).join(' <- ')}`));
     how = 'all host names unresolvable in the test browser (servers untouched)';
   }
   await page.goto(`${APP}suite/entanglement`, { waitUntil: 'domcontentloaded' });

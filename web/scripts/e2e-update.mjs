@@ -32,7 +32,7 @@ const errors = [];
 async function ctxFor(opts = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 2, colorScheme: 'light', serviceWorkers: 'block', ...opts });
   const page = await ctx.newPage();
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => errors.push(`${e.message} @ ${(e.stack || '').split('\n').slice(1, 6).join(' <- ')}`));
   return { ctx, page };
 }
 const lastSeen = (page) => page.evaluate(() => localStorage.getItem('qg.lastSeenVersion'));

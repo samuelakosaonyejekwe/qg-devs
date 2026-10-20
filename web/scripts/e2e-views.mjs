@@ -43,7 +43,7 @@ const newPage = async (opts = {}, gfx = 'auto') => {
   await ctx.addInitScript((g) => { try { localStorage.setItem('qg.lastSeenVersion', '999.0.0'); localStorage.setItem('qg.gfx', g); } catch { /* ignore */ } }, gfx);
   const p = await ctx.newPage();
   p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) consoleErrors.push(`${p.url()}: ${m.text()}`); });
-  p.on('pageerror', (e) => consoleErrors.push(`${p.url()}: pageerror ${e.message}`));
+  p.on('pageerror', (e) => consoleErrors.push(`${p.url()}: pageerror ${e.message} @ ${(e.stack || '').split('\n').slice(1, 6).join(' <- ')}`));
   return { ctx, p };
 };
 

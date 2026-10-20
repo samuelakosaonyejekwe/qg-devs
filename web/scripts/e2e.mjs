@@ -37,7 +37,7 @@ const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, d
 const page = await ctx.newPage();
 const consoleErrors = [];
 page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
-page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
+page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message} @ ${(e.stack || '').split('\n').slice(1, 6).join(' <- ')}`));
 const shot = (name, p = page, full = false) => p.screenshot({ path: path.join(OUT, `${name}.png`), fullPage: full });
 const idbQueue = () => page.evaluate(() => new Promise((r) => { const o = indexedDB.open('qg-devs'); o.onsuccess = () => { const t = o.result.transaction('queue').objectStore('queue').getAll(); t.onsuccess = () => r(t.result.map((x) => ({ label: x.label, status: x.status, error: x.error }))); }; o.onerror = () => r([]); }));
 const serverJobCount = async () => { try { const r = await fetch(BASE + '/api/jobs?limit=500'); return (await r.json()).jobs.filter((j) => j.type === 'discrimination_matrix').length; } catch { return -1; } };

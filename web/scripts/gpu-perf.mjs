@@ -38,15 +38,18 @@ async function fps(page, ms = 4000) {
   }), ms);
 }
 
+const REPEAT = Math.max(1, Number(process.env.REPEAT || 1));
 const results = [];
-for (const cfg of CONFIGS) {
+for (let rep = 1; rep <= REPEAT; rep++) for (const cfg0 of CONFIGS) {
+  const cfg = REPEAT > 1 ? { ...cfg0, name: `${cfg0.name} (pass ${rep}/${REPEAT})` } : cfg0;
   let browser;
   try { browser = await chromium.launch(cfg.launch); } catch (e) { results.push({ config: cfg.name, error: `launch failed: ${String(e.message).split('\n')[0]}` }); continue; }
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
   await ctx.addInitScript((gfx) => { try { localStorage.setItem('qg.lastSeenVersion', '999.0.0'); if (gfx) localStorage.setItem('qg.gfx', gfx); } catch { /* */ } }, cfg.gfx);
   const page = await ctx.newPage();
   const row = { config: cfg.name, pages: {}, pageErrors: [] };
-  page.on('pageerror', (e) => row.pageErrors.push(e.message));
+  // full stack traces (the source location matters for intermittent errors)
+  page.on('pageerror', (e) => row.pageErrors.push(`${e.message}\n${(e.stack || '').split('\n').slice(0, 14).join('\n')}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) row.pageErrors.push(m.text()); });
   try {
     await page.goto(APP, { waitUntil: 'networkidle', timeout: 120000 });
@@ -88,7 +91,8 @@ for (const r of results) {
   md.push(`- In-app graphics test: median **${pick('Median frame rate')}**, p95 frame ${pick('95th-percentile frame time')}, slowest ${pick('Slowest frame')}, tier ${pick('Quality tier')}, ${pick('Device pixel ratio · canvas')}`);
   md.push('', '| Page (playing) | Median fps | p95 frame (ms) | Slowest (ms) | 3-D views |', '|---|---|---|---|---|');
   for (const [k, v] of Object.entries(r.pages)) md.push(`| ${k} | ${v.fps.toFixed(1)} | ${v.p95.toFixed(1)} | ${v.worst.toFixed(0)} | ${v.views3d} |`);
-  md.push('', `- Page errors: ${r.pageErrors?.length ? r.pageErrors.slice(0, 5).join(' | ') : 'none'}`);
+  md.push('', `- Page errors: ${r.pageErrors?.length ? r.pageErrors.length : 'none'}`);
+  for (const e of (r.pageErrors || []).slice(0, 5)) md.push('', '```', e, '```');
   if (r.error) md.push('', `Error: ${r.error}`);
   md.push('');
 }

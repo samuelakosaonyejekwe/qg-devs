@@ -34,6 +34,8 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
+    // diagnostic builds (gpu-perf local_build): readable stack traces
+    minify: process.env.QG_NO_MINIFY ? false : 'esbuild',
     cssCodeSplit: true,
     modulePreload: { polyfill: false },
     chunkSizeWarningLimit: 700,
