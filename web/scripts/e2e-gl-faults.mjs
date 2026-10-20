@@ -37,7 +37,18 @@ async function page(failLinks, skip = 0, onlyType = '', gfx = '', withLog = '') 
     for (const P2 of [WebGL2RenderingContext.prototype]) {
       for (const fn of ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced']) { const o = P2[fn]; P2[fn] = function (...a) { window.__draws++; return o.apply(this, a); }; }
     }
-    { const di = CanvasRenderingContext2D.prototype.drawImage; CanvasRenderingContext2D.prototype.drawImage = function (src, ...a) { if (src && src.getContext && window.__glAll?.length && src === window.__glAll[0].canvas) window.__copies++; return di.call(this, src, ...a); }; }
+    { const di = CanvasRenderingContext2D.prototype.drawImage; CanvasRenderingContext2D.prototype.drawImage = function (src, ...a) {
+      if (src && src.getContext && window.__glAll?.length && src === window.__glAll[0].canvas) {
+        window.__copies++;
+        // what the app copies: source rectangle and the rendered pixel at its centre (read in the same task)
+        if (a.length >= 8) {
+          const gl = window.__glAll[0], [sx, sy, sw, sh] = a, px = new Uint8Array(4);
+          gl.readPixels(Math.floor(sx + sw / 2), Math.floor(gl.drawingBufferHeight - (sy + sh / 2)), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          window.__lastCopy = { rect: [sx, sy, sw, sh], buf: [gl.drawingBufferWidth, gl.drawingBufferHeight], centre: [...px].join(','), err: gl.getError() };
+        }
+      }
+      return di.call(this, src, ...a);
+    }; }
     const bad = new WeakSet();
     const og = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (t, ...a) { const c = og.call(this, t, ...a); if (c && /webgl/.test(t) && !this.__n) { this.__n = 1; window.__gl.contexts++; window.__glAll.push(c); } return c; };
@@ -199,6 +210,7 @@ for (const gfx of ['', 'high']) {
   await pg.locator('.view3d').first().scrollIntoViewIfNeeded(); await firstPainted(); await pg.waitForTimeout(500);
   const tierName = gfx || 'automatic';
   const before = await painted(pg);
+  const copyBefore = await pg.evaluate(() => JSON.stringify(window.__lastCopy));
   await pg.evaluate(() => { window.__lc = window.__glAll[0].getExtension('WEBGL_lose_context'); window.__lc.loseContext(); });
   await pg.waitForTimeout(800);
   const lostFlags = await pg.evaluate(() => document.querySelectorAll('.view3d[data-gl-lost]').length);
@@ -221,7 +233,7 @@ for (const gfx of ['', 'high']) {
     const gl = window.__glAll[0];
     const d0 = window.__draws, c0 = window.__copies;
     await new Promise((r) => setTimeout(r, 1000));
-    const st = { lost: gl.isContextLost(), err: gl.getError(), w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, drawsPerSec: window.__draws - d0, copiesPerSec: window.__copies - c0 };
+    const st = { lost: gl.isContextLost(), err: gl.getError(), w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, drawsPerSec: window.__draws - d0, copiesPerSec: window.__copies - c0, lastCopy: window.__lastCopy };
     if (repaintFailedProbe()) {
       // does a plain clear on the restored context reach a 2-D canvas through drawImage?
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.disable(gl.SCISSOR_TEST); gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -234,7 +246,7 @@ for (const gfx of ['', 'high']) {
     function repaintFailedProbe() { const c = document.querySelector('.view3d canvas'); if (!c) return true; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 64) if (d[i] > 0) return false; return true; }
   });
   out(lostFlags > 0 && stillLost === 0 && after[0] > 0 && after[0] >= before[0] * 0.5,
-    `[${tierName} tier] context lost → ${lostFlags} view(s) paused; restored after ${restored} ms (views still paused: ${stillLost}), repainted after ${repaint} ms (painted samples first view ${before[0]} → ${after[0]}; context ${JSON.stringify(glState)}), contexts ${await pg.evaluate(() => window.__glAll.length)}`);
+    `[${tierName} tier] context lost → ${lostFlags} view(s) paused; restored after ${restored} ms (views still paused: ${stillLost}), repainted after ${repaint} ms (painted samples first view ${before[0]} → ${after[0]}; context ${JSON.stringify(glState)}; copy before loss ${copyBefore}), contexts ${await pg.evaluate(() => window.__glAll.length)}`);
   out(errors.length === 0, `[${tierName} tier] no page errors across loss and restore${errors.length ? ': ' + errors.slice(0, 2).join(' | ') : ''}`);
   // lost for good: the views fall back to their 2-D views
   await pg.evaluate(() => window.__glAll[0].getExtension('WEBGL_lose_context').loseContext());
