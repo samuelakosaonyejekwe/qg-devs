@@ -45,6 +45,7 @@ export function mountApparatus(el: HTMLElement, opts: ApparatusOpts): Handle & {
   st.scene.add(root);
   let o = opts;
   let spheres: { mesh: THREE.Mesh; mat: THREE.MeshStandardMaterial }[] = [];
+const ARC_SEGMENTS = 96;
   let dial: { hand: LineSegments2; arc: THREE.Mesh; r: number; label: THREE.Object3D } | null = null;
   let dphiMax = 0;
 
@@ -150,7 +151,7 @@ export function mountApparatus(el: HTMLElement, opts: ApparatusOpts): Handle & {
       root.add(lineSegments(ring, th.muted, 1, 1.4));
       const hand = lineSegments([c.x, c.y, 0.001, c.x + r, c.y, 0.001], th.fg, 1, 2.6);
       const arc = new THREE.Mesh(
-        new THREE.RingGeometry(0, r, 48, 1, 0, 0.0001),
+        new THREE.RingGeometry(0, r, ARC_SEGMENTS, 1, 0, 2 * Math.PI), // built once; frames only change the drawn range
         new THREE.MeshBasicMaterial({ color: ORANGE, transparent: true, opacity: 0.45, side: THREE.DoubleSide }),
       );
       arc.position.copy(c);
@@ -199,9 +200,10 @@ export function mountApparatus(el: HTMLElement, opts: ApparatusOpts): Handle & {
       const c: THREE.Vector3 = (dial as any).centre;
       const ang = dphi; // dial angle equals Δφ (radians, counter-clockwise)
       dial.hand.geometry.setPositions([c.x, c.y, 0.001, c.x + dial.r * Math.cos(ang), c.y + dial.r * Math.sin(ang), 0.001]);
-      dial.arc.geometry.dispose();
-      const sweep = ((Math.abs(dphi) % (2 * Math.PI)) || (dphi !== 0 ? 2 * Math.PI : 0.0001));
-      dial.arc.geometry = new THREE.RingGeometry(0, dial.r, 48, 1, dphi < 0 ? -sweep : 0, sweep);
+      // filled sector |Δφ| mod 2π: draw that fraction of the ring's segments (6 indices each), mirrored for Δφ < 0
+      const sweep = ((Math.abs(dphi) % (2 * Math.PI)) || (dphi !== 0 ? 2 * Math.PI : 0));
+      dial.arc.geometry.setDrawRange(0, 6 * Math.round((ARC_SEGMENTS * sweep) / (2 * Math.PI)));
+      dial.arc.scale.y = dphi < 0 ? -1 : 1;
     }
     st.requestRender();
   }

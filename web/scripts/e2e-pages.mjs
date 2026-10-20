@@ -26,14 +26,17 @@ const step = async (name, fn) => {
 };
 const assert = (c, m) => { if (!c) throw new Error(m); };
 
-const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
-await ctx.addInitScript(() => {
+// Persistent profile, so the service worker and its caches survive a browser relaunch (used by the offline step).
+const PROFILE = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'qg-pages-profile-'));
+let ctx = await chromium.launchPersistentContext(PROFILE, { viewport: { width: 1366, height: 900 } });
+const browser = { close: () => ctx.close() };
+const initScript = () => {
   try { if (!localStorage.getItem('qg.lastSeenVersion')) localStorage.setItem('qg.lastSeenVersion', '999.0.0'); } catch { /* */ }
   window.__csp = [];
   document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
-});
-const page = await ctx.newPage();
+};
+await ctx.addInitScript(initScript);
+let page = ctx.pages()[0] ?? await ctx.newPage();
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); if (/Refused to/.test(m.text())) errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push(`pageerror ${e.message}`));
@@ -130,17 +133,31 @@ await step('installable: manifest under the base, service worker scoped to the b
 });
 
 await step('offline: shell and deep link from cache, flagship computes locally', async () => {
-  if (process.env.SKIP_OFFLINE) return 'skipped (would require taking the production API offline; verified locally)';
-  if (process.env.QG_API_DOWN) execSync(process.env.QG_API_DOWN, { stdio: 'inherit' });
-  await ctx.setOffline(true);
+  if (process.env.SKIP_OFFLINE) return 'skipped';
+  let how;
+  if (process.env.QG_API_DOWN) {
+    // local runs: really stop the API, and emulate offline for page requests
+    execSync(process.env.QG_API_DOWN, { stdio: 'inherit' });
+    await ctx.setOffline(true);
+    how = 'API stopped + browser offline';
+  } else {
+    // live site: never touch production. Relaunch this browser profile with every host name unresolvable,
+    // so the app (page and service worker alike) is genuinely offline.
+    await ctx.close();
+    ctx = await chromium.launchPersistentContext(PROFILE, { viewport: { width: 1366, height: 900 }, args: ['--host-resolver-rules=MAP * ~NOTFOUND'] });
+    await ctx.addInitScript(initScript);
+    page = ctx.pages()[0] ?? await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`pageerror ${e.message}`));
+    how = 'all host names unresolvable in the test browser (servers untouched)';
+  }
   await page.goto(`${APP}suite/entanglement`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('section[aria-label="Key predictions"] .badge.b-local', { timeout: 60000 });
   await shot('03-offline-local-engine');
   await page.click(`nav.sidenav a[href="${base}suite/quantum"]`);
   await page.waitForSelector('main h1');
-  await ctx.setOffline(false);
-  if (process.env.QG_API_UP) execSync(process.env.QG_API_UP, { stdio: 'inherit' });
-  return 'offline flagship result badged COMPUTED LOCALLY; lazy page loaded from cache';
+  const h1 = await page.locator('main h1').first().innerText();
+  if (process.env.QG_API_DOWN) { await ctx.setOffline(false); if (process.env.QG_API_UP) execSync(process.env.QG_API_UP, { stdio: 'inherit' }); }
+  return `${how}: flagship badged COMPUTED LOCALLY from the cached app; lazy page from cache: "${h1}"`;
 });
 
 await step('no CSP violations, no console errors', async () => {
@@ -151,7 +168,8 @@ await step('no CSP violations, no console errors', async () => {
   return 'CSP (meta) enforced: 0 violations';
 });
 
-await browser.close();
+await ctx.close();
+try { fs.rmSync(PROFILE, { recursive: true, force: true }); } catch { /* ignore */ }
 console.log(log.join('\n'));
 console.log(`\n${log.length - fails}/${log.length} GitHub Pages checks passed (${APP} → API ${API})`);
 process.exit(fails ? 1 : 0);

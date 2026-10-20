@@ -6,7 +6,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { View3D } from './View3D';
-import { Btn, KV } from './ui';
+import { KV } from './ui';
+import { RunBar, useResultFlag } from './Reset';
 import type { PredictResult } from '../lib/types';
 import { DEFAULT_DESIGN, DEFAULT_ENV } from '../lib/types';
 
@@ -30,6 +31,7 @@ export function PerfTest() {
   const [res, setRes] = useState<Result | null>(null);
   const [err, setErr] = useState('');
   const box = useRef<HTMLDivElement>(null);
+  useResultFlag(res != null);
 
   const start = async () => {
     setErr(''); setRes(null);
@@ -75,7 +77,7 @@ export function PerfTest() {
   return (
     <div>
       <p class="small muted">Animates the flagship apparatus view (phases from the reference design, computed in this browser) for {DURATION_MS / 1000} s after a {WARMUP_MS / 1000} s warm-up and measures every frame. Use it on any phone or computer to see how smoothly the 3-D views run there.</p>
-      <div class="row"><Btn kind="primary" busy={running} onClick={start}>{running ? 'Measuring…' : 'Run 8-second graphics test'}</Btn><span class="small muted">GPU: {rendererName()}</span></div>
+      <RunBar label={running ? 'Measuring…' : 'Run 8-second graphics test'} busy={running} onRun={start}><span class="small muted">GPU: {rendererName()}</span></RunBar>
       {err && <p class="field-error">{err}</p>}
       {d && ts && (running || res) && (
         <div ref={box} style={{ marginTop: '8px' }}>

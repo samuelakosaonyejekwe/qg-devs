@@ -49,6 +49,7 @@ function detectTier(gl: WebGLRenderingContext | WebGL2RenderingContext) {
   let pref = 'auto';
   try { pref = localStorage.getItem('qg.gfx') || 'auto'; } catch { /* ignore */ }
   if (pref === 'high' || pref === 'low') { tier = pref; return; }
+  try { if (sessionStorage.getItem('qg.gfx.auto') === 'low') { tier = 'low'; return; } } catch { /* ignore */ }
   let name = '';
   try { const ext = gl.getExtension('WEBGL_debug_renderer_info'); name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); } catch { /* ignore */ }
   tier = lowEnd || /swiftshader|llvmpipe|software|basic render/i.test(name) ? 'low' : 'high';
@@ -171,6 +172,15 @@ export function createStage(el: HTMLElement): Stage {
     if (dt > 0 && dt < 1000) {
       ema = 0.8 * ema + 0.2 * dt;
       if (ema > 33 && pr > 1) { if (++slowFrames > 3) { pr = Math.max(1, pr * 0.75); renderer.setPixelRatio(pr); syncLines(); slowFrames = 0; } }
+      else if (ema > 40 && pr <= 1 && tier === 'high') {
+        // Still too slow at 1× pixels on a GPU we classed as capable: drop the costly effects now and use the
+        // lighter tier for the rest of this session (rendering cost only — positions and values are unchanged).
+        if (++slowFrames > 90) {
+          renderer.shadowMap.enabled = false; scene.environment = null; tier = 'low'; slowFrames = 0;
+          try { sessionStorage.setItem('qg.gfx.auto', 'low'); } catch { /* ignore */ }
+          el.dataset.gfxDowngraded = '1';
+        }
+      }
       else if (ema < 18 && pr < maxPR) { if (++fastFrames > 120) { pr = Math.min(maxPR, pr / 0.75); renderer.setPixelRatio(pr); syncLines(); fastFrames = 0; } }
       else slowFrames = 0;
     }
