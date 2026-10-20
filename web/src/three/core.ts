@@ -104,7 +104,10 @@ export interface Stage {
 export function createStage(el: HTMLElement): Stage {
   const theme = readTheme(el);
   if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+  // Multisampling (MSAA) only below 2× pixel density: on high-density screens the pixels are already small
+  // enough, and 4× multisampled colour + depth buffers at 2× resolution cost ~4× the view's video memory
+  // (≈70 MB per 1085×518 view), which exhausted the GPU memory of smaller devices.
+  const renderer = new THREE.WebGLRenderer({ antialias: (window.devicePixelRatio || 1) < 2, alpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
   detectTier(renderer.getContext());
   const maxPR = tier === 'high' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
   let pr = maxPR;

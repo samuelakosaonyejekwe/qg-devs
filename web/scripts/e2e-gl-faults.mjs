@@ -47,6 +47,7 @@ async function page(failLinks, skip = 0, onlyType = '', gfx = '', withLog = '') 
     }
   }, [failLinks, skip, onlyType, gfx, withLog]);
   const pg = await ctx.newPage();
+  pg.setDefaultTimeout(120000); pg.setDefaultNavigationTimeout(120000);
   const errors = [], warns = [];
   pg.on('pageerror', (e) => errors.push(e.message));
   pg.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text().slice(0, 200)); if (m.type() === 'warning' && /QG-DEVS 3-D/.test(m.text())) warns.push(m.text()); });
