@@ -9,14 +9,12 @@
 const DPR = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
 
 /**
- * Context attributes of the shared renderer (multisampling only below 2× pixel density — see core.ts). The shared
- * canvas is never displayed: every frame is read back into a view's canvas with drawImage, so its drawing buffer
- * is preserved — with preserveDrawingBuffer false the browser may discard it at any frame boundary, which on real
- * GPUs left views blank after a context restore.
+ * Context attributes of the shared renderer (multisampling only below 2× pixel density — see core.ts). The drawing
+ * buffer is not preserved: each frame is copied into its view's canvas within the same task as it is rendered.
  */
 export const GL_ATTRIBUTES: WebGLContextAttributes = {
   alpha: true, depth: true, stencil: false, antialias: DPR < 2, premultipliedAlpha: true,
-  preserveDrawingBuffer: true, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false,
+  preserveDrawingBuffer: false, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false,
 };
 
 interface Probe { available: boolean; renderer: string; canvas: HTMLCanvasElement | null; gl: WebGL2RenderingContext | null }

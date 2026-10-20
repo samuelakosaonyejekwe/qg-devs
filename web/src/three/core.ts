@@ -226,7 +226,7 @@ function makeRenderer(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext): TH
   const progLog = gl.getProgramInfoLog.bind(gl), shaderLog = gl.getShaderInfoLog.bind(gl);
   gl.getProgramInfoLog = (p: WebGLProgram) => progLog(p) ?? '';
   gl.getShaderInfoLog = (s: WebGLShader) => shaderLog(s) ?? '';
-  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: GL_ATTRIBUTES.antialias, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: GL_ATTRIBUTES.antialias, alpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(1); // sizes below are device pixels
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -258,45 +258,30 @@ function getShared(): Shared {
 }
 
 /**
- * Context loss, one handler for the whole app. On loss every view pauses. When the browser signals that the GPU is
- * back (webglcontextrestored), the app moves to a brand-new WebGL canvas and context and releases the restored one:
- * on real GPUs, frames copied out of a restored context's canvas with drawImage intermittently arrive blank, while a
- * fresh context behaves exactly like a first page load. Every live view's geometry, materials and textures are then
- * uploaded again on its next draw, the environment map is regenerated and each view gets a fresh canvas. If no
- * restoration comes, or a new context cannot be created, the views fall back to their 2-D views.
+ * Context loss, one handler for the whole app. On loss every view pauses; on restore three re-creates its GL state
+ * and every live view's geometry, materials and textures are uploaded again on its next draw (the environment map,
+ * a render target, is regenerated). If the browser does not restore the context, the views fall back to 2-D.
  */
 function watch(sh: Shared, canvas: HTMLCanvasElement) {
   let failTimer = 0;
-  const fail = () => { sh.failed = true; for (const s of [...sh.stages]) s.onFailed(); };
-  const onLost = (e: Event) => {
+  canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
     sh.lost = true;
     for (const s of sh.stages) s.onLost();
-    failTimer = window.setTimeout(() => { if (sh.lost) fail(); }, 30_000); // real GPUs can take several seconds
-  };
-  const onRestored = () => {
+    failTimer = window.setTimeout(() => {
+      if (!sh.lost) return;
+      sh.failed = true;
+      for (const s of [...sh.stages]) s.onFailed();
+    }, 30_000); // real GPUs can take several seconds to restore a context
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
     clearTimeout(failTimer);
-    canvas.removeEventListener('webglcontextlost', onLost);
-    canvas.removeEventListener('webglcontextrestored', onRestored);
-    const old = sh.renderer;
-    let fresh: HTMLCanvasElement, gl: WebGL2RenderingContext | null = null;
-    try { fresh = document.createElement('canvas'); gl = fresh.getContext('webgl2', GL_ATTRIBUTES) as WebGL2RenderingContext | null; } catch { /* below */ }
-    if (!gl || gl.isContextLost()) { fail(); return; }
-    sh.renderer = makeRenderer(fresh!, gl);
-    sh.canvas = fresh!;
-    sh.maxSize = maxSizeOf(gl);
     sh.lost = false; sh.bufW = sh.bufH = 0;
-    sh.env = null; // belonged to the old context
-    depthMat = null;
-    watch(sh, fresh!);
-    // release the old context's GPU memory now (its objects are re-created on the new context)
-    try { old.dispose(); old.forceContextLoss(); } catch { /* already gone */ }
+    sh.env = null; // contents were lost with the context
     if ([...sh.stages].some((s) => s.wantsEnv())) buildEnv(sh);
     fitBuffer(sh);
     for (const s of sh.stages) s.onRestored();
-  };
-  canvas.addEventListener('webglcontextlost', onLost);
-  canvas.addEventListener('webglcontextrestored', onRestored);
+  });
 }
 
 export interface Stage {
@@ -339,15 +324,11 @@ export function createStage(el: HTMLElement): Stage {
   let shadows = false;
 
   // the view's own visible canvas (2-D): receives a copy of the frame rendered by the shared renderer
-  const makeCanvas = () => {
-    const c = document.createElement('canvas');
-    c.className = 'qg3d-canvas';
-    Object.assign(c.style, { display: 'block', width: '100%', height: '100%', touchAction: 'none' });
-    return c;
-  };
-  let canvas = makeCanvas();
+  const canvas = document.createElement('canvas');
+  canvas.className = 'qg3d-canvas';
+  Object.assign(canvas.style, { display: 'block', width: '100%', height: '100%', touchAction: 'none' });
   el.appendChild(canvas);
-  let ctx2d = canvas.getContext('2d')!;
+  const ctx2d = canvas.getContext('2d')!;
 
   const labels = new CSS2DRenderer();
   Object.assign(labels.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none', overflow: 'hidden' });
@@ -451,20 +432,7 @@ export function createStage(el: HTMLElement): Stage {
     need: () => (visible && !disposed ? devSize() : { w: 0, h: 0 }),
     requestRender,
     onLost: () => { el.dataset.glLost = '1'; },
-    onRestored: () => {
-      // A 2-D canvas that copied from the WebGL canvas before the loss no longer receives its copies after the
-      // context is restored (seen on real GPUs: frames render, the copy stays blank). Give the view a fresh canvas.
-      const fresh = makeCanvas();
-      el.replaceChild(fresh, canvas);
-      canvas = fresh;
-      ctx2d = canvas.getContext('2d')!;
-      controls.disconnect();
-      controls.domElement = canvas;
-      controls.connect();
-      delete el.dataset.glLost;
-      if (useEnv && sh.env) scene.environment = sh.env.texture;
-      requestRender();
-    },
+    onRestored: () => { delete el.dataset.glLost; if (useEnv && sh.env) scene.environment = sh.env.texture; requestRender(); },
     onFailed: () => { el.dispatchEvent(new CustomEvent('qg3d-failed', { bubbles: false })); },
   };
   sh.stages.add(link);
