@@ -49,6 +49,8 @@ export function PerfTest() {
     const times: number[] = [];
     let raf = 0, t0 = 0, last = 0, f = 0;
     const step = (now: number) => {
+      // the clock starts only once the lazily loaded 3-D scene is on screen, so loading is never counted as a frame
+      if (!box.current?.querySelector('.view3d canvas')) { t0 = 0; raf = requestAnimationFrame(step); return; }
       if (!t0) { t0 = now; last = now; }
       const el = now - t0;
       if (el > WARMUP_MS) times.push(now - last);
