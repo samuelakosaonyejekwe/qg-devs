@@ -8,6 +8,7 @@ import { fmtTime, fmtDuration, fmtQ } from '../lib/format';
 import { webglAvailable } from '../three/detect';
 import { askServiceWorker } from './f5-shared';
 import { anchorVerdict, type AnchorsResp } from '../lib/evidence';
+import { PerfTest } from '../components/PerfTest';
 
 /** Short status of the external ledger anchors, linking to the full panel in Suite 18. */
 function AnchorStatus() {
@@ -136,6 +137,9 @@ export default function Page(_props: any) {
         </Card>
       </div>
       <p class="small muted">Health data fetched {h.cachedAt ? fmtTime(h.cachedAt) : '—'}.</p>
+      <Card title="Graphics performance on this device" id="graphics">
+        <PerfTest />
+      </Card>
     </div>
   );
 }

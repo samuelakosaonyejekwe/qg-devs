@@ -86,6 +86,7 @@ await step('flagship prediction from the cross-origin API; KaTeX; 3-D', async ()
 });
 
 await step('a computation job round-trips through the cross-origin API', async () => {
+  if (process.env.SKIP_JOB) return 'skipped (read-only run against production)';
   await page.goto(`${APP}suite/falsification`, { waitUntil: 'networkidle' });
   await page.getByRole('tab', { name: /Discrimination/ }).click();
   await page.locator('main [data-run]', { hasText: /discrimination/i }).first().click();
@@ -129,6 +130,7 @@ await step('installable: manifest under the base, service worker scoped to the b
 });
 
 await step('offline: shell and deep link from cache, flagship computes locally', async () => {
+  if (process.env.SKIP_OFFLINE) return 'skipped (would require taking the production API offline; verified locally)';
   if (process.env.QG_API_DOWN) execSync(process.env.QG_API_DOWN, { stdio: 'inherit' });
   await ctx.setOffline(true);
   await page.goto(`${APP}suite/entanglement`, { waitUntil: 'domcontentloaded' });
