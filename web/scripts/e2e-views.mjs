@@ -246,7 +246,9 @@ await step('3-D views release GPU resources on unmount (flagship, 5 remounts)', 
     await p.waitForSelector('.view3d canvas', { timeout: 30000 });
     // wait until every 3-D view on the page has mounted its renderer before reading GPU memory
     await p.waitForFunction(() => [...document.querySelectorAll('.view3d')].every((e) => e.__qgHandle?.memory), null, { timeout: 60000 });
-    await p.waitForTimeout(800);
+    // off-screen views upload nothing until they are first visible: render each one before reading memory
+    for (const v of await p.locator('.view3d').all()) { await v.scrollIntoViewIfNeeded(); await p.waitForTimeout(300); }
+    await p.waitForTimeout(500);
     mem.push(await p.evaluate(() => [...document.querySelectorAll('.view3d')].map((e) => e.__qgHandle?.memory?.() ?? null)));
     await p.click('nav.sidenav a[href="/suite/quantum"]');
     await p.waitForTimeout(400);
