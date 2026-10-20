@@ -26,24 +26,21 @@ _Last updated: 2026-10-19 21:10. If a session is interrupted, resume from "IN PR
 
 ## IN PROGRESS (resume here)
 
-**0.2.2 is LIVE** at https://63-186-135-183.sslip.io. Additions since:
-- `GET /api/auth/whoami`;
-- CORS restricted to https://samuelakosaonyejekwe.github.io and the server origin.
+**PUBLIC URL (LIVE): https://samuelakosaonyejekwe.github.io/qg-devs/**. API server: https://63-186-135-183.sslip.io (0.2.3). Latest main: a13713c (CI, Pages and deploy green).
 
-**PUBLIC URL (LIVE): https://samuelakosaonyejekwe.github.io/qg-devs/** — GitHub Pages, deployed by .github/workflows/pages.yml on every push touching web/. Version 0.2.3 is live on both the Pages site and the API server.
+Done since 0.2.3:
+- the on-device graphics test;
+- npm audit at 0 vulnerabilities;
+- workflows on Node 22 / current actions;
+- a gpu-perf workflow on macOS Apple-silicon runners (median ~60 fps);
+- the root-caused "reading 'trim'" fix (WebGL context loss from per-frame context creation, undisposed contexts and buffer leaks; null-safe info logs).
 
-Web agent round (in progress):
-- (1) Suite 18 "Signing as <identity>", no reviewer box, "acting as" on all evidence forms;
-- (2) an anchors panel with download and verify buttons;
-- (3) the Suite 8 Reset check waits for its default computation (data-state="ready");
-- (4) VITE_BASE support for GitHub Pages: router, service worker, manifest, KaTeX fonts, workers, 404.html deep links, meta CSP with connect-src to the API.
+Web agent (in progress): refactor the 3-D views to ONE shared WebGL context (decision: required for low-memory phones; macOS-14 runners still lost contexts in the rapid page-switching stress step). Acceptance:
+- 1 context per page;
+- all view features unchanged;
+- gpu-perf green on macos-14 and macos-15 across at least 3 manual runs.
 
-Then:
-- verify;
-- commit web + pages.yml and push; watch the Actions run (`gh run watch`);
-- check the live github.io URL in a headless browser;
-- bump to 0.2.3 with release notes;
-- redeploy the server.
+Then: redeploy the API server image so its served web build matches, and bump to 0.2.4 with release notes.
 
 ## Rules
 
