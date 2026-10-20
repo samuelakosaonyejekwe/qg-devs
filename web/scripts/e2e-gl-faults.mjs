@@ -233,7 +233,8 @@ for (const gfx of ['', 'high']) {
     const gl = window.__glAll[0];
     const d0 = window.__draws, c0 = window.__copies;
     await new Promise((r) => setTimeout(r, 1000));
-    const st = { lost: gl.isContextLost(), err: gl.getError(), w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, drawsPerSec: window.__draws - d0, copiesPerSec: window.__copies - c0, lastCopy: window.__lastCopy };
+    const views = [...document.querySelectorAll('.view3d')].map((v) => ({ frames: v.__qgFrames, skip: v.__qgSkip, w: v.querySelector('canvas')?.width, pending: v.__qgPending }));
+    const st = { views, lost: gl.isContextLost(), err: gl.getError(), w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, drawsPerSec: window.__draws - d0, copiesPerSec: window.__copies - c0, lastCopy: window.__lastCopy };
     if (repaintFailedProbe()) {
       // does a plain clear on the restored context reach a 2-D canvas through drawImage?
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.disable(gl.SCISSOR_TEST); gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);

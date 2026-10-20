@@ -370,10 +370,13 @@ export function createStage(el: HTMLElement): Stage {
     renderer.setScissorTest(false);
   };
 
+  // frame counters on the element (plain properties, no DOM writes) for automated checks of the render loop
+  const dbg = el as HTMLElement & { __qgFrames?: number; __qgSkip?: string };
+  dbg.__qgFrames = 0;
   const draw = (now: number) => {
     pending = false;
-    if (disposed || sh.lost || sh.failed) return;
-    if (!visible) { dirtyHidden = true; return; } // offscreen: costs nothing; rendered when scrolled back into view
+    if (disposed || sh.lost || sh.failed) { dbg.__qgSkip = disposed ? 'disposed' : sh.lost ? 'lost' : 'failed'; return; }
+    if (!visible) { dirtyHidden = true; dbg.__qgSkip = 'hidden'; return; } // offscreen: costs nothing; rendered when scrolled back into view
     if (controls.update()) requestRender();
     const { w, h } = devSize();
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -382,6 +385,7 @@ export function createStage(el: HTMLElement): Stage {
     ctx2d.globalCompositeOperation = 'copy';
     ctx2d.drawImage(sh.canvas, 0, sh.bufH - h, w, h, 0, 0, w, h);
     labels.render(scene, camera);
+    dbg.__qgFrames!++;
     // Adaptive resolution from the real frame interval during continuous animation: lower the pixel
     // ratio only while frames take > 33 ms, restore when they are fast again (values never change).
     const dt = now - lastDraw; lastDraw = now;
