@@ -106,3 +106,17 @@ def test_signoff_identity_bound_to_token(tmp_path, monkeypatch):
     assert a["verification"]["chain_valid"]
     assert c.post("/api/evidence/verify-anchors", json={"anchors": [{"bad": 1}]}).json()["valid"] is False
     importlib.reload(qgdevs.jobs); importlib.reload(qgdevs.api)
+
+
+def test_whoami_reports_identity_without_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("QGDEVS_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("QGDEVS_API_TOKENS", "tok-a:researcher:Dr A")
+    import qgdevs.jobs, qgdevs.api
+    importlib.reload(qgdevs.jobs); importlib.reload(qgdevs.api)
+    from fastapi.testclient import TestClient
+    c = TestClient(qgdevs.api.app)
+    assert c.get("/api/auth/whoami").json()["role"] == "public"
+    w = c.get("/api/auth/whoami", headers={"Authorization": "Bearer tok-a"}).json()
+    assert w["name"] == "Dr A" and w["can_write_evidence"] and "tok-a" not in json.dumps(w)
+    assert c.get("/api/auth/whoami", headers={"Authorization": "Bearer nope"}).status_code == 403
+    importlib.reload(qgdevs.jobs); importlib.reload(qgdevs.api)

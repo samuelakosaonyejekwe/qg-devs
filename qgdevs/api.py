@@ -869,6 +869,13 @@ class SignoffIn(BaseModel):
     reviewer: str | None = None     # ignored: the reviewer is the identity bound to the access token
 
 
+@app.get("/api/auth/whoami")
+def whoami(who: dict = Depends(principal)):
+    """Identity the server associates with the presented token (name, role, fingerprint) — never the token."""
+    return J({"role": who["role"], "name": who["name"], "token_id": who["token_id"], "verified": who["verified"],
+              "can_write_evidence": who["role"] in ("researcher", "admin")})
+
+
 @app.get("/api/evidence/anchors")
 def evidence_anchors():
     """External anchors of the ledger head (object store + OpenTimestamps) and verification against them.
