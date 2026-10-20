@@ -8,7 +8,7 @@
  * so everything that moves is driven by the data, not by a free-running clock.
  */
 import * as THREE from 'three';
-import { createStage, color, lineSegments, pbr, roundLength, sampleAt, scaleBar, siFormat, textSprite, SPHERE_SEG, type Handle } from './core';
+import { createStage, color, lineSegments, setLineSegments, pbr, roundLength, sampleAt, scaleBar, siFormat, textSprite, SPHERE_SEG, type Handle } from './core';
 import type { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 
 type V3 = [number, number, number];
@@ -199,7 +199,7 @@ const ARC_SEGMENTS = 96;
     if (dial) {
       const c: THREE.Vector3 = (dial as any).centre;
       const ang = dphi; // dial angle equals Δφ (radians, counter-clockwise)
-      dial.hand.geometry.setPositions([c.x, c.y, 0.001, c.x + dial.r * Math.cos(ang), c.y + dial.r * Math.sin(ang), 0.001]);
+      setLineSegments(dial.hand.geometry, [c.x, c.y, 0.001, c.x + dial.r * Math.cos(ang), c.y + dial.r * Math.sin(ang), 0.001]);
       // filled sector |Δφ| mod 2π: draw that fraction of the ring's segments (6 indices each), mirrored for Δφ < 0
       const sweep = ((Math.abs(dphi) % (2 * Math.PI)) || (dphi !== 0 ? 2 * Math.PI : 0));
       dial.arc.geometry.setDrawRange(0, 6 * Math.round((ARC_SEGMENTS * sweep) / (2 * Math.PI)));

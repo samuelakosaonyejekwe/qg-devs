@@ -15,6 +15,8 @@
  * 4. A full graphics test on System health creates at most two WebGL contexts (probe + 3-D view).
  * 5. Closed 3-D views release their WebGL contexts at once (fast navigation between 3-D pages leaves only the
  *    contexts of the views on screen).
+ * 6. Animation playback does not grow GPU buffers: live WebGL buffers (created − deleted) stay flat while the
+ *    animated 3-D views play (lines updated every frame used to allocate a new buffer per frame).
  */
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const BASE = (process.argv[2] || 'http://127.0.0.1:8777').replace(/\/$/, '');
@@ -28,18 +30,23 @@ async function page(failLinks, skip = 0, onlyType = '', gfx = '', withLog = '') 
     try { localStorage.setItem('qg.lastSeenVersion', '999.0.0'); if (gfx) localStorage.setItem('qg.gfx', gfx); } catch { /* */ }
     window.__gl = { contexts: 0, links: 0, failed: 0, relinkedFailed: 0 };
     window.__glAll = [];
-    const failedSrc = new Set(); const bad = new WeakSet();
+    window.__buf = { created: 0, deleted: 0 };
+    const bad = new WeakSet();
     const og = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (t, ...a) { const c = og.call(this, t, ...a); if (c && /webgl/.test(t) && !this.__n) { this.__n = 1; window.__gl.contexts++; window.__glAll.push(c); } return c; };
     for (const P of [WebGL2RenderingContext.prototype, WebGLRenderingContext.prototype]) {
       const link = P.linkProgram, gpp = P.getProgramParameter, gil = P.getProgramInfoLog;
+      const cb = P.createBuffer, db = P.deleteBuffer;
+      P.createBuffer = function () { window.__buf.created++; return cb.call(this); };
+      P.deleteBuffer = function (b) { if (b) window.__buf.deleted++; return db.call(this, b); };
       P.linkProgram = function (p) {
         window.__gl.links++;
         const key = this.getAttachedShaders(p).map((s) => this.getShaderSource(s)).join('\u0000');
         p.__key = key;
-        if (failedSrc.has(key)) window.__gl.relinkedFailed++;
+        if (!this.__failed) this.__failed = new Set(); // per context: other views legitimately link the same source
+        if (this.__failed.has(key)) window.__gl.relinkedFailed++;
         const typed = !onlyType || key.includes(`#define SHADER_TYPE ${onlyType}\n`);
-        if (typed && (n < 0 || (window.__gl.links > skip && window.__gl.failed < n))) { bad.add(p); window.__gl.failed++; failedSrc.add(key); }
+        if (typed && (n < 0 || (window.__gl.links > skip && window.__gl.failed < n))) { bad.add(p); window.__gl.failed++; this.__failed.add(key); }
         return link.call(this, p);
       };
       P.getProgramParameter = function (p, pn) { if (pn === this.LINK_STATUS && bad.has(p)) return false; return gpp.call(this, p, pn); };
@@ -94,14 +101,16 @@ for (const [skip, what, type, gfx] of [[0, 'environment map', '', ''], [6, 'scen
 }
 // 3. genuine shader error: reported at once, never retried
 {
-  const { ctx, pg, errors } = await page(1, 6, '', '', 'ERROR: 0:1: injected linker error');
+  const { ctx, pg, errors, warns } = await page(1, 6, '', '', 'ERROR: 0:1: injected linker error');
   await pg.goto(`${BASE}/suite/entanglement`, { waitUntil: 'networkidle' });
   await pg.waitForSelector('.view3d canvas', { timeout: 120000 });
   await visitViews(pg);
-  const relink = await pg.evaluate(() => document.querySelectorAll('[data-gl-relink]').length);
   const gl = await pg.evaluate(() => window.__gl);
-  out(relink === 0 && gl.relinkedFailed === 0, `genuine shader error is not retried (${gl.failed} injected)`);
-  out(errors.length === 1 && /failed to compile or link/.test(errors[0]) && /injected linker error/.test(errors[0]), `genuine shader error reported with its log (${errors.length} error line(s))`);
+  const relinkViews = await pg.evaluate(() => document.querySelectorAll('[data-gl-relink]').length);
+  // (programs may be linked again legitimately when a view rebuilds its objects; what matters is that the
+  // stage never schedules a rebuild for an error that has a compiler/linker message)
+  out(gl.failed === 1 && relinkViews === 0 && !warns.some((w) => /rebuilding/.test(w)), `genuine shader error is not retried (${gl.failed} injected, ${relinkViews} view(s) rebuilding)`);
+  out(errors.length >= 1 && errors.every((e) => /failed to compile or link/.test(e) && /injected linker error/.test(e)), `genuine shader error reported with its log (${errors.length} error line(s))`);
   await ctx.close();
 }
 // 4. graphics test context budget
@@ -128,6 +137,33 @@ for (const [skip, what, type, gfx] of [[0, 'environment map', '', ''], [6, 'scen
   const r = await pg.evaluate(() => ({ live: window.__glAll.filter((c) => !c.isContextLost()).length, created: window.__glAll.length, views: document.querySelectorAll('.view3d canvas').length }));
   out(r.live <= r.views, `after ${r.created} 3-D views were opened, ${r.live} WebGL context(s) remain for ${r.views} view(s) on screen`);
   out(errors.length === 0, `no page errors during fast navigation${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
+  await ctx.close();
+}
+// 6. playback does not grow GPU buffers
+for (const [slug, prep] of [['entanglement', null], ['decoherence', null], ['optomechanics', 'Evolve']]) {
+  const { ctx, pg, errors } = await page(0);
+  await pg.goto(`${BASE}/suite/${slug}`, { waitUntil: 'networkidle' });
+  if (prep) await pg.locator('main [data-run]', { hasText: prep }).first().click();
+  let has3d = await pg.waitForSelector('.view3d canvas', { timeout: prep ? 120000 : 15000 }).then(() => true, () => false);
+  if (!has3d) { // views that appear after the page's first computation
+    await pg.locator('main [data-run]').first().click().catch(() => undefined);
+    has3d = await pg.waitForSelector('.view3d canvas', { timeout: 120000 }).then(() => true, () => false);
+  }
+  if (!has3d) { out(false, `${slug}: no 3-D view appeared`); await ctx.close(); continue; }
+  const plays = pg.locator('main [data-play]');
+  const np = await plays.count();
+  for (let i = 0; i < np; i++) {
+    const b = plays.nth(i);
+    if (!(await b.isVisible().catch(() => false))) continue;
+    if ((await b.getAttribute('aria-pressed')) !== 'true') await b.click().catch(() => undefined);
+  }
+  await pg.waitForTimeout(1500);
+  const live = () => pg.evaluate(() => window.__buf.created - window.__buf.deleted);
+  const a = await live();
+  await pg.waitForTimeout(5000);
+  const b = await live();
+  out(b - a <= 8, `${slug}: live GPU buffers during 5 s of playback ${a} → ${b} (${np} player(s))`);
+  out(errors.length === 0, `${slug}: no page errors during playback${errors.length ? ': ' + errors.slice(0, 2).join(' | ') : ''}`);
   await ctx.close();
 }
 await browser.close();

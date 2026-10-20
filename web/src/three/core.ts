@@ -381,6 +381,7 @@ export function createStage(el: HTMLElement): Stage {
       scene.traverse((o) => {
         const m = o as THREE.Mesh;
         m.geometry?.dispose?.();
+        if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
         const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
         for (const mat of mats) {
           for (const v of Object.values(mat)) if (v && (v as THREE.Texture).isTexture) (v as THREE.Texture).dispose();
@@ -435,6 +436,32 @@ export function lineSegments(points: number[], css: string | THREE.Color, opacit
   const l = new LineSegments2(g, m);
   if (dashed) l.computeLineDistances();
   return l;
+}
+
+/**
+ * Replace the segments of an anti-aliased line in place (pairs of points, 6 numbers per segment).
+ *
+ * LineSegmentsGeometry.setPositions allocates a new GPU buffer on every call and three frees GPU buffers only for
+ * attributes still attached when the geometry is disposed, so calling it per animation frame leaked a buffer
+ * per frame in the browser's GPU process (≈60/s per animated line; the macOS GPU runner ran out of memory).
+ * Here the existing buffer is reused while it is large enough; otherwise the old buffers are released first and
+ * a buffer with room for `capacity` numbers is allocated, so growing trails reallocate at most once.
+ */
+export function setLineSegments(g: LineSegmentsGeometry, seg: ArrayLike<number>, capacity = 0): void {
+  const n = seg.length - (seg.length % 6);
+  const ib = (g.getAttribute('instanceStart') as THREE.InterleavedBufferAttribute | undefined)?.data;
+  if (ib && ib.array.length >= n && n > 0) {
+    const a = ib.array as Float32Array;
+    for (let i = 0; i < n; i++) a[i] = seg[i];
+    ib.needsUpdate = true;
+  } else {
+    const arr = new Float32Array(Math.max(n, capacity - (capacity % 6), 6));
+    for (let i = 0; i < n; i++) arr[i] = seg[i];
+    g.dispose(); // release the GPU buffers of the attributes being replaced
+    g.setPositions(arr);
+  }
+  g.instanceCount = n / 6;
+  g.computeBoundingSphere();
 }
 
 /** Polyline through points [x,y,z,…] as anti-aliased line. */

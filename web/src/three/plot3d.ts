@@ -6,7 +6,8 @@
  * module only normalises each axis into the box for display.
  */
 import * as THREE from 'three';
-import { createStage, color, colormap, lineSegments, pbr, polyline, textSprite, texLabel, SPHERE_SEG, lowEnd, highTier, type Handle } from './core';
+import { createStage, color, colormap, lineSegments, setLineSegments, pbr, polyline, textSprite, texLabel, SPHERE_SEG, lowEnd, highTier, type Handle } from './core';
+import type { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 
 export interface Axis3 { label: string; unit?: string; log?: boolean; min?: number; max?: number; cats?: string[]; /** LaTeX title (typeset) */ tex?: string; /** LaTeX category labels */ catsTex?: string[] }
 export interface Surface3 { name: string; xs: number[]; ys: number[]; z: (number | null)[][]; color?: string; colormap?: string; cmin?: number; cmax?: number; opacity?: number; wire?: boolean }
@@ -109,6 +110,7 @@ export function mountPlot3D(el: HTMLElement, spec0: Plot3Spec): Handle & { info:
     g.traverse((o) => {
       const m = o as THREE.Mesh;
       m.geometry?.dispose?.();
+      if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); // frees instance matrix/colour buffers
       const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
       mats.forEach((x) => x.dispose());
       if ((o as any).isCSS2DObject) (o as any).element.remove();
@@ -264,6 +266,8 @@ export function mountPlot3D(el: HTMLElement, spec0: Plot3Spec): Handle & { info:
       const o = surfs[k], d = surfaceData(sf);
       const g = o.mesh.geometry as THREE.BufferGeometry;
       if (o.nx !== d.nx || o.ny !== d.ny) {
+        g.dispose(); // release the GPU buffers of the attributes being replaced (three frees only attached ones)
+        g.deleteAttribute('normal'); // recomputed below at the new size
         g.setAttribute('position', new THREE.BufferAttribute(d.pos, 3));
         g.setAttribute('color', new THREE.BufferAttribute(d.col, 3));
         o.nx = d.nx; o.ny = d.ny;
@@ -272,13 +276,14 @@ export function mountPlot3D(el: HTMLElement, spec0: Plot3Spec): Handle & { info:
         (g.attributes.color as THREE.BufferAttribute).copyArray(d.col).needsUpdate = true;
       }
       if (d.mask !== o.mask) {
+        g.dispose(); // the replaced index buffer is released, not leaked
         g.setIndex(d.idx); o.mask = d.mask;
         if (o.marks) { dyn.remove(o.marks); disposeObj(o.marks); o.marks = null; }
         if (d.marks.length) { o.marks = lineSegments(d.marks, th.muted, 0.8, 1.2); dyn.add(o.marks); }
       }
       g.computeVertexNormals();
       if (sf.wire) {
-        if (o.wire) { (o.wire as any).geometry.setPositions(d.wire.length ? d.wire : [0, 0, 0, 0, 0, 0]); }
+        if (o.wire) { setLineSegments((o.wire as LineSegments2).geometry, d.wire.length ? d.wire : [0, 0, 0, 0, 0, 0]); }
         else if (d.wire.length) { o.wire = lineSegments(d.wire, th.fg, 0.25, 0.8); dyn.add(o.wire); }
       }
     });
@@ -303,7 +308,7 @@ export function mountPlot3D(el: HTMLElement, spec0: Plot3Spec): Handle & { info:
         const seg: number[] = [];
         for (let i = 0; i + 5 < scenePts.length; i += 3) seg.push(scenePts[i], scenePts[i + 1], scenePts[i + 2], scenePts[i + 3], scenePts[i + 4], scenePts[i + 5]);
         if (!o.trail && seg.length) { o.trail = polyline(scenePts, Array.isArray(p.color) ? p.color[0] : p.color, p.lineWidth ?? 1.6, 0.85); dyn.add(o.trail); }
-        else if (o.trail) { o.trail.geometry.setPositions(seg.length ? seg : [0, 0, 0, 0, 0, 0]); o.trail.visible = seg.length > 0; }
+        else if (o.trail) { setLineSegments(o.trail.geometry, seg.length ? seg : [0, 0, 0, 0, 0, 0], 6 * Math.max(1, o.cap - 1)); o.trail.visible = seg.length > 0; }
       }
     });
     if (bars.length) {
@@ -327,6 +332,7 @@ export function mountPlot3D(el: HTMLElement, spec0: Plot3Spec): Handle & { info:
     o.traverse((x) => {
       const m = x as THREE.Mesh;
       m.geometry?.dispose?.();
+      if ((x as THREE.InstancedMesh).isInstancedMesh) (x as THREE.InstancedMesh).dispose(); // frees instance matrix/colour buffers
       const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
       mats.forEach((q) => q.dispose());
     });
