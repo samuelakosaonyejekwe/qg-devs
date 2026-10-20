@@ -880,7 +880,8 @@ def evidence_anchors():
         remote, remote_err = remote_anchors(), None
     except Exception as e:  # object store unavailable: report, do not fail
         remote, remote_err = [], type(e).__name__
-    seen = {a["anchor_sha256"]: a for a in local + remote}
+    # bucket copies first, local records last: the local record also lists where the anchor was published
+    seen = {a["anchor_sha256"]: a for a in remote + local if isinstance(a, dict) and "anchor_sha256" in a}
     return J({"anchors": sorted(seen.values(), key=lambda a: a["ledger_index"])[-200:],
               "verification": verify(led, list(seen.values())),
               "remote_available": remote_err is None, "remote_error": remote_err,
