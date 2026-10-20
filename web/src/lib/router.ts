@@ -6,6 +6,7 @@
  * reloads within the tab.
  */
 import { createStore, useStore } from './store';
+import { toApp, toUrl } from './base';
 
 interface RouteState { path: string; search: string; idx: number; max: number }
 
@@ -22,7 +23,7 @@ if (typeof history !== 'undefined' && (!history.state || typeof history.state.qg
 }
 
 export const route = createStore<RouteState>({
-  path: typeof location !== 'undefined' ? location.pathname : '/',
+  path: typeof location !== 'undefined' ? toApp(location.pathname) : '/',
   search: typeof location !== 'undefined' ? location.search : '',
   idx: initialIdx,
   max: readMax(initialIdx),
@@ -42,23 +43,26 @@ export function scrollToHash(hash: string) {
 }
 
 export function navigate(to: string, opts: { replace?: boolean } = {}) {
-  const url = new URL(to, location.href);
+  // `to` is an app path ("/suite/lab?x#y") or a full URL; history entries carry the real URL under the base
+  const url = new URL(to.startsWith('/') && !to.startsWith('//') ? toUrl(to) : to, location.href);
   if (url.origin !== location.origin) { location.href = to; return; }
+  const appPath = toApp(url.pathname);
+  const real = url.pathname + url.search + url.hash;
   const cur = route.get();
-  if (url.pathname === cur.path && url.search === cur.search && !opts.replace) {
+  if (appPath === cur.path && url.search === cur.search && !opts.replace) {
     // same page: only the anchor changes
-    if (url.hash && url.hash !== location.hash) { history.replaceState(history.state, '', url.pathname + url.search + url.hash); }
+    if (url.hash && url.hash !== location.hash) { history.replaceState(history.state, '', real); }
     scrollToHash(url.hash);
     return;
   }
   if (opts.replace) {
-    history.replaceState({ qgIdx: cur.idx }, '', url.pathname + url.search + url.hash);
-    route.set({ path: url.pathname, search: url.search });
+    history.replaceState({ qgIdx: cur.idx }, '', real);
+    route.set({ path: appPath, search: url.search });
   } else {
     const idx = cur.idx + 1;
-    history.pushState({ qgIdx: idx }, '', url.pathname + url.search + url.hash);
+    history.pushState({ qgIdx: idx }, '', real);
     writeMax(idx);
-    route.set({ path: url.pathname, search: url.search, idx, max: idx });
+    route.set({ path: appPath, search: url.search, idx, max: idx });
   }
   if (url.hash) scrollToHash(url.hash); else window.scrollTo({ top: 0 });
 }
@@ -66,7 +70,7 @@ export function navigate(to: string, opts: { replace?: boolean } = {}) {
 if (typeof window !== 'undefined') {
   window.addEventListener('popstate', (e) => {
     const idx = e.state && typeof e.state.qgIdx === 'number' ? e.state.qgIdx : 0;
-    route.set((r) => ({ ...r, path: location.pathname, search: location.search, idx, max: Math.max(r.max, idx) }));
+    route.set((r) => ({ ...r, path: toApp(location.pathname), search: location.search, idx, max: Math.max(r.max, idx) }));
   });
   // Delegate same-origin <a href> clicks to the router (keeps deep links as real anchors).
   document.addEventListener('click', (e) => {
@@ -76,9 +80,9 @@ if (typeof window !== 'undefined') {
     const href = a.getAttribute('href');
     if (!href || href.startsWith('#') || /^[a-z]+:/i.test(href)) return;
     const url = new URL(href, location.href);
-    if (url.origin !== location.origin || url.pathname.startsWith('/api/')) return;
+    if (url.origin !== location.origin || toApp(url.pathname).startsWith('/api/') || /\.[a-z0-9]{2,5}$/i.test(url.pathname)) return; // API and static files load normally
     e.preventDefault();
-    navigate(url.pathname + url.search + url.hash);
+    navigate(toApp(url.pathname) + url.search + url.hash);
   });
 }
 

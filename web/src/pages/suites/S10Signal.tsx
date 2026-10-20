@@ -286,7 +286,7 @@ function Convergence({ model, shots, seed, settings: sel, valid }: { model: stri
 
 function FreqHeat({ fr, cur }: { fr: Frames; cur: Record<string, number[]> }) {
   return (
-    <HeatMap name="outcome-frequencies" title="Outcome frequencies (cell text: Born probability)" desc="Heat map of empirical outcome frequencies per setting and outcome"
+    <HeatMap animated name="outcome-frequencies" title="Outcome frequencies (cell text: Born probability)" desc="Heat map of empirical outcome frequencies per setting and outcome"
       z={OUTCOMES.map((_, o) => fr.settings.map((s) => cur[s][o]))} xCats={fr.settings} yCats={OUTCOMES} xLabel="Pauli setting" yLabel="Outcome" zLabel="Frequency" palette="viridis" zDomain={[0, 1]}
       annotate={fr.born ? (_v, o, j) => fmtNum(fr.born![fr.settings[j]][o], 2) : undefined} />
   );

@@ -18,6 +18,11 @@
 
 const SHELL = typeof __QG_SHELL__ !== 'undefined' ? __QG_SHELL__ : ['/', '/index.html'];
 const LAZY = typeof __QG_LAZY__ !== 'undefined' ? __QG_LAZY__ : [];
+// Precache lists are root-relative; resolve them under this worker's scope so the same sw.js works when the
+// app is served from a sub-path (e.g. GitHub Pages "/qg-devs/").
+const SCOPE_PATH = new URL(self.registration ? self.registration.scope : self.location.href).pathname.replace(/[^/]*$/, '');
+const P = (u) => SCOPE_PATH + String(u).replace(/^\//, '');
+const rel = (pathname) => (pathname.startsWith(SCOPE_PATH) ? '/' + pathname.slice(SCOPE_PATH.length) : pathname);
 const VERSION = typeof __QG_VERSION__ !== 'undefined' ? __QG_VERSION__ : 'dev';
 
 const SHELL_CACHE = `qg-shell-${VERSION}`;
@@ -34,7 +39,7 @@ const MATCH = { ignoreVary: true };
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(SHELL_CACHE);
-    await cache.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })));
+    await cache.addAll(SHELL.map((u) => new Request(P(u), { cache: 'reload' })));
     // First install (no active worker yet): activate immediately. Updates wait for SKIP_WAITING.
     if (!self.registration.active) await self.skipWaiting();
   })());
@@ -58,7 +63,8 @@ async function precacheLazy() {
     const cache = await caches.open(LAZY_CACHE);
     const shell = await caches.open(SHELL_CACHE);
     let n = 0;
-    for (const url of LAZY) {
+    for (const url0 of LAZY) {
+      const url = P(url0);
       if ((await cache.match(url, MATCH)) || (await shell.match(url, MATCH))) { n++; continue; }
       try {
         const res = await fetch(url, { cache: 'reload' });
@@ -86,8 +92,8 @@ function isApi(url) {
 }
 
 function isStatic(url) {
-  return url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') ||
-    url.pathname === '/manifest.webmanifest' || url.pathname === '/favicon.ico';
+  const p = rel(url.pathname);
+  return p.startsWith('/assets/') || p.startsWith('/icons/') || p === '/manifest.webmanifest' || p === '/favicon.ico' || p === '/theme-init.js';
 }
 
 self.addEventListener('fetch', (event) => {
@@ -104,7 +110,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (!sameOrigin || req.method !== 'GET') return;
-  if (url.pathname === '/sw.js') return;
+  if (rel(url.pathname) === '/sw.js') return;
 
   if (req.mode === 'navigate') {
     event.respondWith(navigationNetworkFirst(req));
@@ -123,11 +129,11 @@ async function navigationNetworkFirst(req) {
     ]);
     if (res && res.ok) {
       const cache = await caches.open(SHELL_CACHE);
-      cache.put('/index.html', res.clone()).catch(() => {});
+      cache.put(P('/index.html'), res.clone()).catch(() => {});
     }
     return res;
   } catch (_) {
-    const cached = (await caches.match('/index.html', MATCH)) || (await caches.match('/', MATCH));
+    const cached = (await caches.match(P('/index.html'), MATCH)) || (await caches.match(P('/'), MATCH));
     return cached || new Response('<!doctype html><meta charset="utf-8"><title>QG-DEVS</title><p>Offline and the application shell is not cached yet.</p>',
       { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } });
   }

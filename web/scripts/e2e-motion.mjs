@@ -30,7 +30,6 @@ const VIEWS = [
   ['signal', '/suite/signal', [run('Generate record ladder'), waitFor('.view3d canvas')]],
   ['inference', '/suite/inference', [run('Generate counts'), async (p) => { await p.waitForTimeout(2000); await p.locator('main [data-run]', { hasText: /inference/i }).first().click(); }, waitFor('.view3d canvas', 600000)]],
   ['design', '/suite/design', [tab('2-D sweep'), async (p) => { await p.locator('main [data-run]').first().click(); }, waitFor('.view3d canvas', 300000), waitFor('main .player', 300000)]],
-  ['discovery', '/suite/discovery', [run('Discover law'), waitFor('.view3d canvas')]],
 ];
 
 const browser = await chromium.launch();

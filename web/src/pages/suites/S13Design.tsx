@@ -243,10 +243,10 @@ function Sweep2DView() {
               change={n > 1 && mats ? { rel: maxChange(qty === 'witness' ? mats.map((m) => m.wit) : mats.map((m) => m.neg)) / (qty === 'witness' ? 2 * zr.w : zr.n), what: `${qty} between the first and last interaction time` } : undefined}
               onRecordStart={() => { p.setPos(0); p.setPlaying(true); }}
               frameData={() => ({ hypothesis: res.hypothesis, time_s: curT, x: res.x, y: res.y, quantity: qty, values: qty === 'witness' ? mats![disp.i].wit : mats![disp.i].neg })}
-              fallback={<Heat2D res={res} neg={neg} wit={wit} xi={xi} yi={yi} />} />
+              fallback={<Heat2D res={res} neg={neg} wit={wit} xi={xi} yi={yi} animated={n > 1} />} />
           )}
           {n > 1 && <PlayerControls p={p} n={n} t={frames!.map((f) => f.t ?? sc.design.time)} label="Interaction time" />}
-          {view === '2d' && <Heat2D res={res} neg={neg} wit={wit} xi={xi} yi={yi} />}
+          {view === '2d' && <Heat2D res={res} neg={neg} wit={wit} xi={xi} yi={yi} animated={n > 1} />}
           <p class="small muted">Axis ticks are cell centres{ax.log || ay.log ? ' (log-spaced grid)' : ''}. Blue (<Tex tex="\langle W\rangle < 0" />) certifies entanglement with three local settings in the preregistered protocol frame.</p>
         </>)}
       </div>
@@ -254,12 +254,12 @@ function Sweep2DView() {
   );
 }
 
-function Heat2D({ res, neg, wit, xi, yi }: { res: Sweep2D; neg: (number | null)[][]; wit: (number | null)[][]; xi: { label: string; unit: string }; yi: { label: string; unit: string } }) {
+function Heat2D({ res, neg, wit, xi, yi, animated }: { animated?: boolean; res: Sweep2D; neg: (number | null)[][]; wit: (number | null)[][]; xi: { label: string; unit: string }; yi: { label: string; unit: string } }) {
   return (
     <div class="grid-2">
-      <HeatMap name="sweep2d-negativity" title={`Negativity — ${res.hypothesis}`} desc={`negativity of ${res.hypothesis} over ${xi.label} and ${yi.label}`} z={neg} x={res.x.values} y={res.y.values}
+      <HeatMap animated={animated} name="sweep2d-negativity" title={`Negativity — ${res.hypothesis}`} desc={`negativity of ${res.hypothesis} over ${xi.label} and ${yi.label}`} z={neg} x={res.x.values} y={res.y.values}
         xLabel={xi.label} xUnit={xi.unit} yLabel={yi.label} yUnit={yi.unit} zLabel="negativity" palette="viridis" nullLabel="inadmissible geometry" />
-      <HeatMap name="sweep2d-witness" title={`CPK witness ⟨W⟩ — ${res.hypothesis}`} desc={`witness of ${res.hypothesis}; the outline marks W = 0`} z={wit} x={res.x.values} y={res.y.values}
+      <HeatMap animated={animated} name="sweep2d-witness" title={`CPK witness ⟨W⟩ — ${res.hypothesis}`} desc={`witness of ${res.hypothesis}; the outline marks W = 0`} z={wit} x={res.x.values} y={res.y.values}
         xLabel={xi.label} xUnit={xi.unit} yLabel={yi.label} yUnit={yi.unit} zLabel="⟨W⟩" palette="diverging" symmetric contour0 nullLabel="inadmissible geometry" />
     </div>
   );

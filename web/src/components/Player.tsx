@@ -96,6 +96,7 @@ export function PlayerControls({ p, n, t, label, tUnit = 's', autoplay = true, s
     if ((e.target as HTMLElement).tagName === 'INPUT' && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
     e.preventDefault(); m[e.key]();
   };
+  if (n < 2) return <p class="small muted" role="note">Static result: a single computed state, nothing to animate.</p>;
   const tNow = t ? (frac > 1e-3 && i + 1 < n ? t[i] + (t[i + 1] - t[i]) * frac : t[i]) : null;
   const sampleText = t
     ? frac > 1e-3 && i + 1 < n

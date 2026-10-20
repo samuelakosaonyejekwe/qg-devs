@@ -1,6 +1,8 @@
 import { render } from 'preact';
 import './styles.css';
 import { App } from './App';
+import { BASE, installBaseRewriter } from './lib/base';
+installBaseRewriter();
 import { applyTheme, settings } from './lib/store';
 import './components/Install';
 
@@ -55,7 +57,7 @@ window.addEventListener('unhandledrejection', (e) => { console.warn('QG-DEVS: un
 // Service worker: only in production builds (sw.js is emitted by the build).
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then((reg) => {
+    navigator.serviceWorker.register(`${BASE}sw.js`, { scope: BASE }).then((reg) => {
       const announce = (w: ServiceWorker | null) => { if (w) window.dispatchEvent(new CustomEvent('qg-sw-update', { detail: w })); };
       if (reg.waiting && navigator.serviceWorker.controller) announce(reg.waiting);
       reg.addEventListener('updatefound', () => {

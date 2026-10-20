@@ -1,6 +1,32 @@
 {
   "releases": [
     {
+      "version": "0.2.3",
+      "date": "2026-10-20",
+      "title": "Now on GitHub Pages; signing identity and anchor verification in the app",
+      "highlights": [
+        "The app is published at samuelakosaonyejekwe.github.io/qg-devs (installable, works offline)",
+        "Evidence forms show 'Signing as <identity>' from your access token; no typed reviewer names",
+        "New Anchors panel: see where the ledger is anchored, download anchors for archiving and verify archived copies",
+        "One synchronised player for all time-dependent views on the flagship page"
+      ],
+      "fixes": [
+        "Reset check waits for each page's default calculation (20/20 pages identical to first visit)"
+      ]
+    },
+    {
+      "version": "0.2.2",
+      "date": "2026-10-20",
+      "title": "Verifiable evidence gates, ledger anchoring, signed reviews",
+      "highlights": [
+        "Evidence gates G6 and G7 can now pass — only with REAL preregistered and unblinded data plus identity-verified sign-offs; replication must come from an independent identity and reviewer",
+        "Hourly external anchoring of the evidence ledger (off-site object store and public OpenTimestamps calendars): deleting recent entries is now detectable",
+        "Sign-offs, preregistrations, unblinding and dataset ingestion record the identity bound to the access token, never a typed name",
+        "Retention policy: old job results are removed after 30 days unless referenced by the evidence ledger"
+      ],
+      "fixes": []
+    },
+    {
       "version": "0.2.1",
       "date": "2026-10-20",
       "title": "Typeset equations, reliable Reset and playback, security audit",

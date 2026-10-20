@@ -26,9 +26,12 @@ function walk(dir, prefix = '') {
 
 const html = readFileSync(join(dist, 'index.html'), 'utf8');
 const initial = new Set();
-for (const m of html.matchAll(/<script[^>]*type="module"[^>]*src="([^"]+)"/g)) initial.add(m[1].replace(/^\//, ''));
-for (const m of html.matchAll(/<link[^>]*rel="modulepreload"[^>]*href="([^"]+)"/g)) initial.add(m[1].replace(/^\//, ''));
-for (const m of html.matchAll(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)) initial.add(m[1].replace(/^\//, ''));
+// strip the deployment base ("/" or e.g. "/qg-devs/" on GitHub Pages) so paths match files under dist/
+const BASE = (process.env.VITE_BASE || '/').replace(/\/?$/, '/');
+const rel = (u) => (u.startsWith(BASE) ? u.slice(BASE.length) : u.replace(/^\//, ''));
+for (const m of html.matchAll(/<script[^>]*type="module"[^>]*src="([^"]+)"/g)) initial.add(rel(m[1]));
+for (const m of html.matchAll(/<link[^>]*rel="modulepreload"[^>]*href="([^"]+)"/g)) initial.add(rel(m[1]));
+for (const m of html.matchAll(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)) initial.add(rel(m[1]));
 
 const files = walk(join(dist, 'assets'), 'assets/').filter((f) => /\.(js|css|json|wasm)$/.test(f));
 const rows = files.map((f) => {

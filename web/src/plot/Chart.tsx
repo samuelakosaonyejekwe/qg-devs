@@ -136,7 +136,8 @@ function useChartExtras(wrap: { current: HTMLElement | null }, size: { w: number
 
 // ----------------------------------------------------------------------------- line plot
 export function LinePlot(props: LineOpts & Frame) {
-  const { title, desc, name, aspect = 0.55, minH = 220, maxH = 460, toolbar, ...opts } = props;
+  const { title, desc, name, aspect = 0.55, minH = 220, maxH = 460, toolbar, animated, ...opts } = props as typeof props & { animated?: boolean };
+  const isAnimated = animated ?? opts.cursorX !== undefined;
   const wrap = useRef<HTMLDivElement>(null);
   const cv = useRef<HTMLCanvasElement>(null);
   const size = useSize(wrap, aspect, minH, maxH);
@@ -234,7 +235,7 @@ export function LinePlot(props: LineOpts & Frame) {
     <figure class="chart" ref={wrap}>
       <div class="chart-head">
         {title && <figcaption class="chart-title">{title}</figcaption>}
-        <Toolbar extra={toolbar} zoom={(k) => { const L = layout.current; if (L) zoomAt(L.plot.x + L.plot.w / 2, L.plot.y + L.plot.h / 2, k); }} onReset={() => setView(base)} {...ex}
+        <Toolbar extra={toolbar} zoom={(k) => { const L = layout.current; if (L) zoomAt(L.plot.x + L.plot.w / 2, L.plot.y + L.plot.h / 2, k); }} onReset={() => setView(base)} {...ex} onVideo={isAnimated ? ex.onVideo : undefined}
           onPNG={(k) => exportPNG(wrap.current!, size.w, size.h, k, drawAll, name)} onSVG={() => exportSVG(wrap.current!, size.w, size.h, drawAll, name)} />
       </div>
       <div class="chart-canvas-wrap">
@@ -254,8 +255,8 @@ export function LinePlot(props: LineOpts & Frame) {
 }
 
 // ----------------------------------------------------------------------------- heat map
-export function HeatMap(props: HeatOpts & Frame & { cellLabel?: (i: number, j: number, v: number | null) => string }) {
-  const { title, desc, name, aspect = 0.62, minH = 240, maxH = 520, toolbar, cellLabel, ...opts } = props;
+export function HeatMap(props: HeatOpts & Frame & { cellLabel?: (i: number, j: number, v: number | null) => string; animated?: boolean }) {
+  const { title, desc, name, aspect = 0.62, minH = 240, maxH = 520, toolbar, cellLabel, animated, ...opts } = props;
   const wrap = useRef<HTMLDivElement>(null);
   const cv = useRef<HTMLCanvasElement>(null);
   const size = useSize(wrap, aspect, minH, maxH);
@@ -278,7 +279,7 @@ export function HeatMap(props: HeatOpts & Frame & { cellLabel?: (i: number, j: n
     <figure class="chart" ref={wrap}>
       <div class="chart-head">
         {title && <figcaption class="chart-title">{title}</figcaption>}
-        <Toolbar extra={toolbar} {...ex} onPNG={(k) => exportPNG(wrap.current!, size.w, size.h, k, drawAll, name)} onSVG={() => exportSVG(wrap.current!, size.w, size.h, drawAll, name)} />
+        <Toolbar extra={toolbar} {...ex} onVideo={animated ? ex.onVideo : undefined} onPNG={(k) => exportPNG(wrap.current!, size.w, size.h, k, drawAll, name)} onSVG={() => exportSVG(wrap.current!, size.w, size.h, drawAll, name)} />
       </div>
       <div class="chart-canvas-wrap">
         <canvas ref={cv} tabIndex={0} role="img" aria-label={`${title ?? name}: ${desc}`}

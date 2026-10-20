@@ -165,7 +165,6 @@ function Results({ r, prov, mode }: { r: Result; prov: 'COMPUTED' | 'COMPUTED_LO
       <ApparatusCard d={d} p={p} prov={prov} />
 
       <Card title="Time evolution (coherent-interaction model with environmental decoherence)" actions={<ProvBadge kind={prov} />}>
-        <PlayerControls p={p} n={n} t={ts.t} label="Time series" />
         <div class="grid-2">
           <LinePlot name="delta-phi-t" title="Entangling phase Δφ(t)" desc="Entangling phase versus interaction time" xLabel="Time" xUnit="s" yLabel="Δφ" yUnit="rad" cursorX={interp(ts.t, p.pos)}
             series={[{ name: 'Δφ (total)', x: ts.t, y: ts.delta_phi, color: hypStyle('QG-COH').color }]} />
@@ -182,6 +181,11 @@ function Results({ r, prov, mode }: { r: Result; prov: 'COMPUTED' | 'COMPUTED_LO
 
       <ModelsCard r={r} frameT={interp(ts.t, p.pos)} />
       <CityCard r={r} p={p} />
+      {/* One player drives every time-dependent view on this page (apparatus, time series, hypothesis curves,
+          density matrices); it stays docked at the bottom of the window while the results are on screen. */}
+      <div class="player-dock" aria-label="Playback for all time-dependent views on this page">
+        <PlayerControls p={p} n={n} t={ts.t} label="All time-dependent views" syncNote="(apparatus, time series, density matrices — synchronised)" />
+      </div>
       <DecoherenceCard d={d} prov={prov} />
       <NongravCard d={d} prov={prov} />
 
@@ -239,7 +243,6 @@ function ApparatusCard({ d, p, prov }: { d: PredictResult; p: PlayerState; prov:
             </>
           )} />
       ) : <TopView d={d} frame={p.pos} />}
-      <PlayerControls p={p} n={ts.t.length} t={ts.t} label="Apparatus" />
     </Card>
   );
 }
@@ -543,9 +546,9 @@ function CityCard({ r, p }: { r: Result; p: PlayerState }) {
   );
   const heat = (m: Mat, id: string) => (
     <div class="grid-2">
-      <HeatMap name={`rho-abs-${id}`} title={`|ρ_ij| — ${id}`} desc={`Magnitude of the density matrix for ${id}`} z={[0, 1, 2, 3].map((ii) => [0, 1, 2, 3].map((jj) => Math.hypot(m.re[ii * 4 + jj], m.im[ii * 4 + jj])))}
+      <HeatMap animated name={`rho-abs-${id}`} title={`|ρ_ij| — ${id}`} desc={`Magnitude of the density matrix for ${id}`} z={[0, 1, 2, 3].map((ii) => [0, 1, 2, 3].map((jj) => Math.hypot(m.re[ii * 4 + jj], m.im[ii * 4 + jj])))}
         xCats={BASIS} yCats={BASIS} xLabel="column" yLabel="row" zLabel="|ρ_ij|" palette="cividis" zDomain={[0, zmax]} annotate={(v) => (v == null ? null : v.toFixed(3))} aspect={0.8} />
-      <HeatMap name={`rho-arg-${id}`} title={`arg ρ_ij — ${id}`} desc={`Phase of the density-matrix elements for ${id}`} z={[0, 1, 2, 3].map((ii) => [0, 1, 2, 3].map((jj) => Math.atan2(m.im[ii * 4 + jj], m.re[ii * 4 + jj])))}
+      <HeatMap animated name={`rho-arg-${id}`} title={`arg ρ_ij — ${id}`} desc={`Phase of the density-matrix elements for ${id}`} z={[0, 1, 2, 3].map((ii) => [0, 1, 2, 3].map((jj) => Math.atan2(m.im[ii * 4 + jj], m.re[ii * 4 + jj])))}
         xCats={BASIS} yCats={BASIS} xLabel="column" yLabel="row" zLabel="arg ρ_ij" zUnit="rad" palette="phase" zDomain={[-Math.PI, Math.PI]} annotate={(v) => (v == null ? null : v.toFixed(2))} aspect={0.8} />
     </div>
   );
@@ -565,7 +568,6 @@ function CityCard({ r, p }: { r: Result; p: PlayerState }) {
         <div>{panel(ma, specA, a)}</div>
         <div>{panel(mb, specB, b)}</div>
       </div>
-      <PlayerControls p={p} n={ts.t.length} t={ts.t} label="Density matrix" syncNote="both (synchronised)" />
       <p class="small muted">Cross-check at t = {fmtQ(r.inputs.design.time, 's')}: <Tex tex={F.rhoCheck} /> (QG-COH; reference: {r.source === 'local' ? 'local prediction' : 'server'}) = <b>{fmtNum(check, 2)}</b>{check < 1e-9 ? ' (agreement)' : ' (check)'}.</p>
     </Card>
   );

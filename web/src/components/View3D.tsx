@@ -179,7 +179,7 @@ export function View3D({ kind, opts, frame, fallback, label, overlay, onInfo, ti
           </select></label>
         <label class="small row" style={{ gap: '3px' }}><input type="checkbox" checked={transparent} onChange={(e: any) => setTransparent(e.currentTarget.checked)} />transparent</label>
         <button type="button" class="btn-sm" onClick={exportPNG}>PNG</button>
-        {videoSupported() && (
+        {videoSupported() && (frame !== undefined || playing !== undefined) && (
           <>
             <select class="input" style={{ padding: '2px 4px' }} value={fps} onChange={(e: any) => setFps(Number(e.currentTarget.value) as 30 | 60)} aria-label="Video frame rate"><option value={30}>30 fps</option><option value={60}>60 fps</option></select>
             {rec ? <button type="button" class="btn-sm" onClick={stopRec}>■ Stop video</button> : <button type="button" class="btn-sm" onClick={startRec}>● Video</button>}

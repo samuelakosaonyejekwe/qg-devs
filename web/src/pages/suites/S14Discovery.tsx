@@ -3,7 +3,6 @@ import { RunBar } from '../../components/Reset';
 import type { ComponentChildren } from 'preact';
 import { useMemo, useState } from 'preact/hooks';
 import { View3D } from '../../components/View3D';
-import { usePlayer, PlayerControls } from '../../components/Player';
 import { Seg, Out } from '../../components/ui';
 import { Tex, MathText } from '../../components/Tex';
 import { sobol, pointMassDeltaPhi } from '../../engine/index';
@@ -254,8 +253,9 @@ function SobolView({ res }: { res: Scaling }) {
   const maxRel = Math.max(...data.map((d) => Math.abs(d.rel)));
   const maxCheck = server ? Math.max(...data.map((d) => Math.abs(d.check))) : NaN;
   const n = data.length;
-  const p = usePlayer(n, 20);
-  const shown = Math.max(1, Math.min(n, Math.floor(p.pos) + 1));
+  // All sampled designs are shown at once: the sampling order carries no physical meaning, so there is
+  // nothing to animate (static view).
+  const shown = n;
   const [view, setView] = useState<'3d' | '2d'>('3d');
   const xr: [number, number] = [Math.min(...data.map((d) => d.x)), Math.max(...data.map((d) => d.x))];
   const ysAll = data.map((d) => d.y);
@@ -289,14 +289,12 @@ function SobolView({ res }: { res: Scaling }) {
       </div>
       <div class="row-between"><Seg label="View" value={view} onChange={setView} options={[{ v: '3d', label: '3-D' }, { v: '2d', label: '2-D collapse' }]} /></div>
       {view === '3d' ? (
-        <View3D kind="plot3d" opts={spec} name="sobol-law" title={`Discovered law and ${shown} sampled designs`} badge={server ? 'COMPUTED' : 'COMPUTED LOCALLY'} playing={p.playing}
+        <View3D kind="plot3d" opts={spec} name="sobol-law" title={`Discovered law and ${shown} sampled designs`} badge={server ? 'COMPUTED' : 'COMPUTED LOCALLY'}
           label="Three-dimensional scatter of sampled designs on the plane of the discovered power law"
           legend={[{ label: server ? 'designs (server samples)' : 'designs (local re-samples)', color: '#D55E00' }, { label: 'discovered law (server fit)', color: '#56B4E9' }]}
-          onRecordStart={() => { p.setPos(0); p.setPlaying(true); }}
           frameData={() => ({ source: who, law: { log10_prefactor: c10, exponents: e }, designs: data.slice(0, shown).map((d) => ({ ...d.q, delta_phi_rad: d.dphi, rel_residual: d.rel, local_delta_phi_rad: d.local })) })}
           fallback={<Collapse collapsed={collapsed} c10={c10} who={who} />} />
       ) : <Collapse collapsed={collapsed} c10={c10} shown={shown} who={who} />}
-      <PlayerControls p={p} n={n} label="Sampled designs" />
     </Card>
   );
 }

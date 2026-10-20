@@ -13,6 +13,9 @@ import { useStore, scenario } from '../../lib/store';
 import { fmtQ, fmtTime, shortHash } from '../../lib/format';
 import { hypStyle } from '../../lib/hyp';
 import type { Scenario } from '../../lib/types';
+import { ActingAs, canAct, useWhoami, type WhoamiState } from '../../components/Identity';
+import { MathText } from '../../components/Tex';
+import { anchorPlaces, anchorVerdict, datasetOptions, GATES_WITH_DATASET, parseAnchorFile, signoffBody, signoffErrors, unblindBody, type AnchorsResp, type AnchorVerification } from '../../lib/evidence';
 
 /** The nine rungs of the evidence ladder — verbatim from EVIDENCE_LADDER in qgdevs/evidence.py. */
 const EVIDENCE_LADDER = [
@@ -66,11 +69,21 @@ function LedgerView({ tick }: { tick: number }) {
       {r.data && r.data.entries.length === 0 && <p class="muted">No entries{kind ? ` of kind ${kind}` : ''} yet.</p>}
       {r.data && r.data.entries.length > 0 && (
         <DataTable caption="Ledger entries" head={['#', 'Time (UTC)', 'Kind', 'Actor', 'Payload hash', 'Entry hash', 'Previous hash', 'Payload']} numeric={[0]}
-          rows={[...r.data.entries].reverse().map((e) => [e.index, <span class="small">{fmtTime(e.timestamp_utc)}</span>, <code>{e.kind}</code>, e.actor,
+          rows={[...r.data.entries].reverse().map((e) => [e.index, <span class="small">{fmtTime(e.timestamp_utc)}</span>, <code>{e.kind}</code>, <ActorCell e={e} />,
             <code title={e.payload_sha256}>{shortHash(e.payload_sha256)}</code>, <code title={e.entry_hash}>{shortHash(e.entry_hash)}</code>, <code title={e.prev_hash}>{shortHash(e.prev_hash)}</code>,
             <details><summary class="small">{summary(e)}</summary><Json data={e.payload} max={300} /></details>])} />
       )}
     </Card>
+  );
+}
+/** Actor plus whether the server bound it to a verified token identity (recorded in the payload). */
+function ActorCell({ e }: { e: Entry }) {
+  const p = e.payload ?? {};
+  const verified = p.identity?.verified ?? p.identity_verified;
+  const tid = p.identity?.token_id ?? p.token_id;
+  return (
+    <span>{e.actor}{verified === true ? <> <span class="badge b-ok" title={tid ? `token fingerprint …${tid}` : undefined}>verified</span></> : verified === false ? <> <span class="badge b-neutral" title="Recorded without a verified token identity (development server or older entry)">unverified</span></> : null}
+      {p.claimed_reviewer_ignored ? <span class="small muted"> (claimed name “{String(p.claimed_reviewer_ignored)}” ignored)</span> : null}</span>
   );
 }
 function summary(e: Entry): string {
@@ -79,7 +92,7 @@ function summary(e: Entry): string {
 }
 
 // ----------------------------------------------------------------------------- preregistration
-function Preregister({ onDone }: { onDone: () => void }) {
+function Preregister({ onDone, id }: { onDone: () => void; id: WhoamiState }) {
   const HYP_IDS = useImplementedModels(); // live registry (server implements more models than the local engine)
   const sc = useStore(scenario);
   const val = useValidity();
@@ -89,18 +102,18 @@ function Preregister({ onDone }: { onDone: () => void }) {
   const [plan, setPlan] = useState('Blind analysis: compute the readout-corrected CPK witness <W> = 1 − <XX> ∓ (<YZ> + <ZY>) in the preregistered local frame, with bootstrap 95% CI; full 9-setting tomography with MLE reconstruction; decision by the rules above. Null controls (masses not superposed; swapped timing) analysed identically.');
   const [seeds, setSeeds] = useState('0, 1, 2');
   const [shots, setShots] = useState(100000);
-  const [actor, setActor] = useState('researcher');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
   const [res, setRes] = useState<Entry | null>(null);
   const [queued, setQueued] = useState(false);
+  const allowed = canAct(id.kind, id.w);
   const seedList = seeds.split(/[\s,;]+/).filter(Boolean).map(Number);
   const seedsErr = seedList.length === 0 || seedList.some((s) => !Number.isInteger(s) || s < 0) ? 'Enter one or more non-negative integers separated by commas.' : null;
   const ruleErr = rules.some(([k, t]) => !k.trim() || !t.trim()) ? 'Every rule needs a name and a text.' : null;
-  const ok = title.trim() && hyps.length > 0 && !seedsErr && !ruleErr && val.ok && actor.trim();
+  const ok = title.trim() && hyps.length > 0 && !seedsErr && !ruleErr && val.ok && allowed;
   const submit = async () => {
     setBusy(true); setErr(null); setRes(null); setQueued(false);
-    const body = { title: title.trim(), hypotheses: hyps, scenario: sc, decision_rules: Object.fromEntries(rules), analysis_plan: plan, seeds: seedList, sample_size: { shots_per_setting: shots, settings: 9 }, actor: actor.trim() };
+    const body = { title: title.trim(), hypotheses: hyps, scenario: sc, decision_rules: Object.fromEntries(rules), analysis_plan: plan, seeds: seedList, sample_size: { shots_per_setting: shots, settings: 9 } };
     try {
       const e = await apiPost<Entry>('/api/evidence/preregister', body);
       setRes(e); LSset('qg.lastPrereg', e.payload?.prereg_id ?? ''); onDone();
@@ -144,10 +157,10 @@ function Preregister({ onDone }: { onDone: () => void }) {
         </div>
         <NumberField name="shots" label="Shots per setting" unit="1" value={shots} min={10} max={1e9} integer onChange={setShots} report={val.report}
           help="Planned number of repetitions per Pauli setting (9 settings). Fixed in advance so optional stopping cannot inflate significance. Suite 9/13 report the shots needed for 5σ." />
-        <TextField label="Actor" value={actor} onChange={setActor} required help="Name recorded in the ledger as the author of this entry." />
       </div>
+      <ActingAs id={id} verb="Preregistering as" what="preregistration" />
       <RunBar label="Record preregistration" requiresToken scenario busy={busy} disabled={!ok} onRun={submit} />
-      {!ok && <span class="small muted"> Complete the required fields.</span>}
+      {!ok && allowed && <span class="small muted"> Complete the required fields.</span>}
       <ErrorBox error={err} what="recording the preregistration" />
       {queued && <InfoBanner>Offline: the preregistration was queued on this device and will be submitted when the server is reachable. It is <strong>not</strong> recorded in the ledger until then (see Jobs → Offline queue).</InfoBanner>}
       {res && (
@@ -159,7 +172,8 @@ function Preregister({ onDone }: { onDone: () => void }) {
 }
 
 // ----------------------------------------------------------------------------- datasets & unblinding
-function Datasets({ onDone }: { onDone: () => void }) {
+function Datasets({ onDone, id }: { onDone: () => void; id: WhoamiState }) {
+  const allowed = canAct(id.kind, id.w, ['researcher', 'operator']);
   const [file, setFile] = useState<File | null>(null);
   const [label, setLabel] = useState('SYNTHETIC');
   const [role, setRole] = useState('blind_test');
@@ -192,33 +206,34 @@ function Datasets({ onDone }: { onDone: () => void }) {
       <TextField label="Source" value={source} onChange={setSource} required placeholder="instrument / lab / generator and run id" help="Where the data came from (recorded in the ledger)." />
       <TextField label="Description" value={desc} onChange={setDesc} help="Optional free text." />
       <TextField label="Preregistration id (optional)" value={prereg} onChange={setPrereg} help="Link the dataset to an existing preregistration." />
-      <RunBar label="Ingest dataset" requiresToken scenario busy={busy} disabled={!file || !source.trim()} onRun={ingest} />
+      <ActingAs id={id} verb="Ingesting as" roles={['researcher', 'operator']} what="dataset ingestion" />
+      <RunBar label="Ingest dataset" requiresToken scenario busy={busy} disabled={!file || !source.trim() || !allowed} onRun={ingest} />
       <ErrorBox error={err} what="ingesting the dataset" />
       {rec && <div style={{ marginTop: '8px' }}><KV rows={[['Dataset id', <code>{rec.dataset_id}</code>], ['Label', rec.label], ['Role', rec.role], ['SHA-256', <code style={{ overflowWrap: 'anywhere' }}>{rec.sha256}</code>], ['Source', rec.source]]} /></div>}
     </Card>
   );
 }
 
-function Unblind({ onDone }: { onDone: () => void }) {
+function Unblind({ onDone, id }: { onDone: () => void; id: WhoamiState }) {
   const [ds, setDs] = useState(LS('qg.lastDataset'));
   const [pr, setPr] = useState(LS('qg.lastPrereg'));
-  const [actor, setActor] = useState('researcher');
+  const allowed = canAct(id.kind, id.w);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
   const [res, setRes] = useState<Entry | null>(null);
   const go = async () => {
     setBusy(true); setErr(null); setRes(null);
-    try { setRes(await apiPost<Entry>('/api/evidence/unblind', { dataset_id: ds.trim(), prereg_id: pr.trim(), actor: actor.trim() })); onDone(); } catch (e) { setErr(e); } finally { setBusy(false); }
+    try { setRes(await apiPost<Entry>('/api/evidence/unblind', unblindBody(ds, pr))); onDone(); } catch (e) { setErr(e); } finally { setBusy(false); }
   };
   return (
     <Card title="Unblinding">
       <p class="small muted">Records the decision to open a sealed dataset for the preregistered analysis. The server refuses if no matching preregistration exists, the dataset is unknown, or blind-test data were accessed before preregistration.</p>
       <TextField label="Dataset id" value={ds} onChange={setDs} required help="Id returned at ingestion." />
       <TextField label="Preregistration id" value={pr} onChange={setPr} required help="Id returned by the preregistration." />
-      <TextField label="Actor" value={actor} onChange={setActor} required help="Name recorded in the ledger." />
-      <RunBar label="Record unblinding" requiresToken scenario busy={busy} disabled={!ds.trim() || !pr.trim() || !actor.trim()} onRun={go} />
+      <ActingAs id={id} verb="Unblinding as" what="unblinding" />
+      <RunBar label="Record unblinding" requiresToken scenario busy={busy} disabled={!ds.trim() || !pr.trim() || !allowed} onRun={go} />
       {err ? <div style={{ marginTop: '8px' }}><ErrorBox error={err} what="unblinding (the server refused; reason above)" /></div> : null}
-      {res && <div class="banner ok" role="status"><div><strong>Unblinding recorded</strong> as ledger entry #{res.index} (<code>{shortHash(res.entry_hash, 16)}</code>).</div></div>}
+      {res && <div class="banner ok" role="status"><div><strong>Unblinding recorded</strong> as ledger entry #{res.index} (<code>{shortHash(res.entry_hash, 16)}</code>) by <strong>{res.actor}</strong>.</div></div>}
     </Card>
   );
 }
@@ -238,7 +253,7 @@ function Gates({ onClass }: { onClass: (c: Classification | null) => void }) {
   const c = res?.classification;
   return (
     <Card title="Seven acceptance gates and the evidence ladder">
-      <p class="small muted">Gates are evaluated from recorded evidence only: model registry, latest V&amp;V run, Lean proof status, ledger (preregistrations, sign-offs), the virtual-laboratory dossier and independent reproduction. Gates that need human review or physical data cannot be passed by software alone.</p>
+      <p class="small muted">Gates are evaluated from recorded evidence only: model registry, latest V&amp;V run, Lean proof status, ledger (preregistrations, sign-offs), the virtual-laboratory dossier and independent reproduction. Gates that need human review or physical data cannot be passed by software alone: G6 and G7 can pass only with <code>REAL</code> data that were preregistered and unblinded, together with identity-verified, independent sign-offs. Statuses, evidence and missing items below are exactly as returned by the server.</p>
       <div class="row">
         <SelectField label="Hypothesis" value={hyp} onChange={setHyp} options={HYP_IDS.map((h) => ({ v: h, label: h }))} help="Model whose G1 (theory) record is assessed." />
         <span class="small muted">Scenario: current shared design (m = {fmtQ(sc.design.mass_A, 'kg')}, d = {fmtQ(sc.design.separation, 'm')}).</span>
@@ -291,33 +306,115 @@ function Ladder3D({ gates, c }: { gates: Gate[]; c: Classification }) {
 }
 
 // ----------------------------------------------------------------------------- sign-off
-function Signoff({ onDone }: { onDone: () => void }) {
+function Signoff({ onDone, id }: { onDone: () => void; id: WhoamiState }) {
   const [gate, setGate] = useState('G1');
-  const [reviewer, setReviewer] = useState('');
   const [aff, setAff] = useState('');
   const [stmt, setStmt] = useState('');
+  const [ds, setDs] = useState('');
   const [confirm, setConfirm] = useState(false);
+  const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
   const [res, setRes] = useState<Entry | null>(null);
-  const ok = reviewer.trim() && aff.trim() && stmt.trim().length >= 10 && confirm;
+  const allowed = canAct(id.kind, id.w);
+  const needsDs = GATES_WITH_DATASET.includes(gate);
+  const led = useApiGet<LedgerResp>(needsDs ? '/api/evidence/ledger' : null, { kind: 'dataset_ingest', limit: 1000 });
+  const opts = led.data ? datasetOptions(led.data.entries) : [];
+  const fe = signoffErrors(aff, stmt);
+  const ok = !fe.affiliation && !fe.statement && confirm && allowed;
   const go = async () => {
     setBusy(true); setErr(null); setRes(null);
-    try { setRes(await apiPost<Entry>('/api/evidence/signoff', { gate, reviewer: reviewer.trim(), affiliation: aff.trim(), statement: stmt.trim() })); setConfirm(false); onDone(); } catch (e) { setErr(e); } finally { setBusy(false); }
+    try { setRes(await apiPost<Entry>('/api/evidence/signoff', signoffBody(gate, aff, stmt, needsDs ? ds : null))); setConfirm(false); onDone(); } catch (e) { setErr(e); } finally { setBusy(false); }
   };
+  const name = id.w && id.w.role !== 'public' ? id.w.name : null;
   return (
     <Card title="Human sign-off">
-      <div class="banner danger" role="note"><div><strong>This records a human attestation in the permanent ledger.</strong> A sign-off states that the named reviewer has independently checked the gate's criterion. It cannot be deleted and is used by the gate evaluation (e.g. G1 passes only with an independent review of the derivation). Do not sign on someone else's behalf.</div></div>
-      <div class="form-grid">
+      <div class="banner danger" role="note"><div><strong>This records a human attestation in the permanent ledger.</strong> The reviewer recorded is the identity bound to your access token — there is no name field to fill in. A sign-off states that you have independently checked the gate's criterion; it cannot be deleted and is used by the gate evaluation (e.g. G1 passes only with an independent review of the derivation; G6/G7 need identity-verified, independent sign-offs about REAL data).</div></div>
+      <ActingAs id={id} verb="Signing as" what="a sign-off" />
+      <div class="form-grid" style={{ marginTop: '8px' }}>
         <SelectField label="Gate" value={gate} onChange={setGate} options={['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7'].map((g) => ({ v: g, label: g }))} help="Gate being attested." />
-        <TextField label="Reviewer" value={reviewer} onChange={setReviewer} required help="Full name of the reviewer." />
-        <TextField label="Affiliation" value={aff} onChange={setAff} required help="Institution of the reviewer." />
+        <div class={`field ${touched && fe.affiliation ? 'invalid' : ''}`}>
+          <label class="field-label" for="s18-aff">Affiliation <Tip text="Your institution (at least 2 characters). Recorded with the sign-off." /></label>
+          <div class="field-input"><input id="s18-aff" value={aff} aria-invalid={touched && !!fe.affiliation} aria-describedby="s18-aff-msg" onInput={(e: any) => { setAff(e.currentTarget.value); setTouched(true); }} /></div>
+          <div id="s18-aff-msg" aria-live="polite">{touched && fe.affiliation && <div class="field-error">{fe.affiliation}</div>}</div>
+        </div>
+        {needsDs && (
+          <div class="field">
+            <label class="field-label" for="s18-ds">Dataset assessed (optional) <Tip text="For G6/G7: the dataset this assessment concerns. Only REAL data that were preregistered and unblinded can make these gates pass; the server checks this." /></label>
+            <div class="field-input"><select id="s18-ds" value={ds} onChange={(e: any) => setDs(e.currentTarget.value)}>
+              <option value="">— none —</option>
+              {opts.map((o) => <option value={o.id}>{o.id} · {o.label} · {o.role}{o.source ? ` · ${o.source.slice(0, 40)}` : ''}</option>)}
+            </select></div>
+            <div class="field-hint">{led.loading ? 'Loading datasets…' : opts.length ? `${opts.filter((o) => o.label === 'REAL').length} REAL of ${opts.length} ingested dataset(s); REAL listed first.` : 'No datasets have been ingested yet.'}</div>
+          </div>
+        )}
       </div>
-      <TextField label="Statement" value={stmt} onChange={setStmt} multiline required help="What was reviewed and the conclusion (at least 10 characters)." />
-      <label class="row small" style={{ marginBottom: '8px' }}><input type="checkbox" checked={confirm} onChange={(e: any) => setConfirm(e.currentTarget.checked)} /> I am the named reviewer and this statement reflects my own independent review.</label>
+      <div class={`field ${touched && fe.statement ? 'invalid' : ''}`}>
+        <label class="field-label" for="s18-stmt">Statement <Tip text="What you reviewed and your conclusion (at least 10 characters)." /></label>
+        <textarea id="s18-stmt" class="input" value={stmt} aria-invalid={touched && !!fe.statement} aria-describedby="s18-stmt-msg" onInput={(e: any) => { setStmt(e.currentTarget.value); setTouched(true); }} />
+        <div id="s18-stmt-msg" aria-live="polite">{touched && fe.statement && <div class="field-error">{fe.statement}</div>}</div>
+      </div>
+      <label class="row small" style={{ marginBottom: '8px' }}><input type="checkbox" checked={confirm} disabled={!allowed} onChange={(e: any) => setConfirm(e.currentTarget.checked)} /> I{name ? <>, <strong>{name}</strong>,</> : ''} performed this review myself and the statement reflects my own independent assessment.</label>
       <RunBar label="Record sign-off" requiresToken scenario busy={busy} disabled={!ok} onRun={go} />
+      {!allowed && <p class="small muted">Submitting is disabled until a researcher access token is set in <a href="/settings#api-token">Settings</a>.</p>}
       <ErrorBox error={err} what="recording the sign-off" />
-      {res && <div class="banner ok" role="status"><div><strong>Sign-off recorded</strong> for {gate} as ledger entry #{res.index}.</div></div>}
+      {res && <div class="banner ok" role="status"><div><strong>Sign-off recorded</strong> for {gate} as ledger entry #{res.index}, reviewer <strong>{res.payload?.reviewer ?? res.actor}</strong>{res.payload?.identity_verified ? ' (identity verified)' : ' (identity not verified)'}{res.payload?.dataset_id ? `, dataset ${res.payload.dataset_id}` : ''}.</div></div>}
+    </Card>
+  );
+}
+
+// ----------------------------------------------------------------------------- external anchors
+function VerdictBadge({ v }: { v: AnchorVerification | null | undefined }) {
+  const r = anchorVerdict(v);
+  return (
+    <div>
+      <span class={`badge ${r.ok ? 'b-ok' : 'b-bad'}`} data-anchor-verdict={r.ok ? 'valid' : 'problems'}>{r.text}</span>
+      {r.problems.length > 0 && <ul class="tight small">{r.problems.map((p) => <li>{p}</li>)}</ul>}
+    </div>
+  );
+}
+
+export function Anchors() {
+  const r = useApiGet<AnchorsResp>('/api/evidence/anchors');
+  const [vres, setVres] = useState<AnchorVerification | null>(null);
+  const [vErr, setVErr] = useState<unknown>(null);
+  const [vName, setVName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const d = r.data && typeof r.data === 'object' && Array.isArray(r.data.anchors) ? r.data : null;
+  const verifyFile = async (f: File) => {
+    setBusy(true); setVErr(null); setVres(null); setVName(f.name);
+    try { const anchors = parseAnchorFile(await f.text()); setVres(await apiPost<AnchorVerification>('/api/evidence/verify-anchors', { anchors })); }
+    catch (e) { setVErr(e); } finally { setBusy(false); }
+  };
+  return (
+    <Card id="anchors" title="External anchors of the ledger" actions={<><SourceChip source={r.source} cachedAt={r.cachedAt} /><Btn onClick={r.reload}>Refresh</Btn></>}>
+      <p class="small"><MathText text="Each anchor commits to one ledger position — the pair $(i, h_i)$ of entry index $i$ and that entry's hash $h_i$ — and is published outside this server (object store and OpenTimestamps calendars). Because every entry's hash also commits to all earlier entries, anyone holding an archived anchor can later detect if entry $i$ or anything before it was removed or rewritten." /></p>
+      <p class="small muted"><strong>What anchoring does not prove:</strong> that the recorded content is scientifically true; that entries added after the latest anchor are untouched (they are protected only once a later anchor covers them); or who a signer is beyond the binding of their access token to a registered name.</p>
+      {r.loading && !d && <Loading />}
+      <ErrorBox error={r.error} what="loading the anchors" />
+      {d && (
+        <>
+          <div class="row" style={{ margin: '6px 0' }}>
+            <span class="small">Server-side verification:</span> <VerdictBadge v={d.verification} />
+            <span class="small muted">chain {d.verification.chain_valid ? 'intact' : 'BROKEN'} · {d.verification.anchors_checked} checked{d.verification.latest_anchor && (d.verification.latest_anchor as any).ledger_index != null ? ` · latest anchor at entry #${(d.verification.latest_anchor as any).ledger_index}` : ''}</span>
+          </div>
+          <p class="small">{d.remote_available ? <span class="badge b-ok">object store reachable</span> : <span class="badge b-warn">object store not reachable{d.remote_error ? ` (${d.remote_error})` : ''}</span>} {!d.remote_available && <span class="muted">Only the anchors recorded on this server are listed; the published copies could not be read right now.</span>}</p>
+          {d.anchors.length === 0 ? <p class="muted">No anchors have been published yet (the server anchors the ledger head periodically once it changes).</p> : (
+            <DataTable caption="Ledger anchors" head={['Ledger entry', 'Anchored (UTC)', 'Entry hash', 'Anchor digest', 'Published at']} numeric={[0]}
+              rows={[...d.anchors].reverse().map((a) => [`#${a.ledger_index}`, <span class="small">{fmtTime(a.created_utc)}</span>,
+                <code title={a.entry_hash}>{shortHash(a.entry_hash, 12)}</code>, <code title={a.anchor_sha256}>{shortHash(a.anchor_sha256, 12)}</code>,
+                anchorPlaces(a).length ? <ul class="tight small">{anchorPlaces(a).map((x) => <li style={{ overflowWrap: 'anywhere' }}>{x}</li>)}</ul> : <span class="small muted">this server only (not yet published externally)</span>])} />
+          )}
+          <div class="row" style={{ marginTop: '10px' }}>
+            <Btn onClick={() => downloadBlob(new Blob([JSON.stringify({ anchors: d.anchors }, null, 2)], { type: 'application/json' }), 'qgdevs-ledger-anchors.json')} disabled={d.anchors.length === 0}>Download anchors (JSON)</Btn>
+            <label class="btn" aria-busy={busy}>Verify archived anchors…<input type="file" accept="application/json,.json" class="sr-only" onChange={(e: any) => { const f = e.currentTarget.files?.[0]; if (f) verifyFile(f); e.currentTarget.value = ''; }} /></label>
+            {busy && <span class="spinner" aria-hidden="true" />}
+          </div>
+          <p class="small muted">The download contains the exact anchor records returned by the server, for archiving by third parties. {d.how_to_verify}</p>
+        </>
+      )}
+      {vErr ? <ErrorBox error={vErr} what="verifying the archived anchors" /> : null}
+      {vres && <div style={{ marginTop: '8px' }} role="status"><span class="small">Verification of <code>{vName}</code> against the current ledger: </span><VerdictBadge v={vres} /></div>}
     </Card>
   );
 }
@@ -347,10 +444,17 @@ export default function Page(_props: any) {
   const [tick, setTick] = useState(0);
   const [cls, setCls] = useState<Classification | null>(null);
   useEffect(() => { if (location.hash.slice(1) !== tab) history.replaceState(history.state, '', `#${tab}`); }, [tab]);
+  // follow in-page links to a section (e.g. /suite/evidence#anchors) while this page is open
+  useEffect(() => {
+    const onHash = () => { const h = location.hash.slice(1); if (h && ['ledger', 'prereg', 'data', 'gates', 'signoff', 'anchors', 'package'].includes(h)) setTab(h); };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const bump = () => setTick((t) => t + 1);
+  const id = useWhoami();
   const tabs = [
     { id: 'ledger', label: 'Ledger' }, { id: 'prereg', label: 'Preregistration' }, { id: 'data', label: 'Datasets & unblinding' },
-    { id: 'gates', label: 'Gates & ladder' }, { id: 'signoff', label: 'Sign-off' }, { id: 'package', label: 'Reproduction' },
+    { id: 'gates', label: 'Gates & ladder' }, { id: 'signoff', label: 'Sign-off' }, { id: 'anchors', label: 'Anchors' }, { id: 'package', label: 'Reproduction' },
   ];
   return (
     <div>
@@ -359,10 +463,11 @@ export default function Page(_props: any) {
       <div class="tabs">
         <Tabs label="Evidence sections" tabs={tabs} active={tab} onChange={setTab} />
         <TabPanel id="ledger" active={tab}><LedgerView tick={tick} /></TabPanel>
-        <TabPanel id="prereg" active={tab}><Preregister onDone={bump} /></TabPanel>
-        <TabPanel id="data" active={tab}><div class="grid-2"><Datasets onDone={bump} /><Unblind onDone={bump} /></div></TabPanel>
+        <TabPanel id="prereg" active={tab}><Preregister onDone={bump} id={id} /></TabPanel>
+        <TabPanel id="data" active={tab}><div class="grid-2"><Datasets onDone={bump} id={id} /><Unblind onDone={bump} id={id} /></div></TabPanel>
         <TabPanel id="gates" active={tab}><Gates onClass={setCls} /></TabPanel>
-        <TabPanel id="signoff" active={tab}><Signoff onDone={bump} /></TabPanel>
+        <TabPanel id="signoff" active={tab}><Signoff onDone={bump} id={id} /></TabPanel>
+        <TabPanel id="anchors" active={tab}><Anchors /></TabPanel>
         <TabPanel id="package" active={tab}><Package /></TabPanel>
       </div>
     </div>

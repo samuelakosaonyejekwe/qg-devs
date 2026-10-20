@@ -7,7 +7,7 @@
  * show "cached at …" instead of pretending the data is fresh.
  */
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import { settings, net } from './store';
+import { settings, net, createStore } from './store';
 
 export type Source = 'network' | 'cache' | 'offline' | 'local';
 
@@ -63,10 +63,20 @@ async function parse(res: Response): Promise<unknown> {
 /** Thrown for requests cancelled because a newer one replaced them (callers ignore it). */
 export class AbortedError extends Error { constructor() { super('aborted'); } }
 
+/** Number of API requests in flight (used for the page-level data-state="busy|ready" marker). */
+export const activity = createStore<{ inflight: number }>({ inflight: 0 });
+
 async function doFetch(url: string, init: RequestInit): Promise<Response> {
+  activity.set((a) => ({ inflight: a.inflight + 1 }));
+  let counted = true;
+  const done = () => { if (counted) { counted = false; activity.set((a) => ({ inflight: Math.max(0, a.inflight - 1) })); } };
   try {
-    return await fetch(url, init);
+    const res = await fetch(url, init);
+    // the request counts as in flight until its body has arrived
+    res.clone().arrayBuffer().then(done, done);
+    return res;
   } catch (e) {
+    done();
     if ((e as Error)?.name === 'AbortError') throw new AbortedError();
     throw new ApiError(0, `network error: ${(e as Error).message || 'unreachable'}`, true);
   }

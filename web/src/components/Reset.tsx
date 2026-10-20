@@ -13,6 +13,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from 'preact/hoo
 import { scenario } from '../lib/store';
 import { DEFAULT_DESIGN, DEFAULT_ENV } from '../lib/types';
 import { WriteLock } from './ui';
+import { activity } from '../lib/api';
 
 export type ResetKind = 'page' | 'scenario';
 
@@ -79,9 +80,22 @@ export function ResetScope({ children }: { children: ComponentChildren }) {
       return !!root.current?.querySelector(RESULT_SELECTOR);
     },
   };
+  // data-state="ready" once no API request has been in flight for 500 ms (deterministic marker for tests and
+  // assistive tooling: the page's default computations have settled)
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const upd = (a: { inflight: number }) => {
+      if (t) clearTimeout(t);
+      if (a.inflight > 0) setReady(false); else t = setTimeout(() => setReady(true), 500);
+    };
+    upd(activity.get());
+    const un = activity.subscribe(upd);
+    return () => { un(); if (t) clearTimeout(t); };
+  }, [epoch]);
   return (
     <Ctx.Provider value={api}>
-      <div ref={root} key={epoch} data-reset-epoch={epoch}>{children}</div>
+      <div ref={root} key={epoch} data-reset-epoch={epoch} data-state={ready ? 'ready' : 'busy'}>{children}</div>
       <div class="sr-only" role="status" aria-live="polite" data-reset-announce>{msg}</div>
     </Ctx.Provider>
   );

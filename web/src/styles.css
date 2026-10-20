@@ -375,3 +375,7 @@ label.small, label.row { flex-wrap: wrap; min-width: 0; }
 }
 /* charts never exceed their container, even for the first paint before their ResizeObserver fires */
 .chart canvas, .chart-overlay { max-width: 100%; }
+
+/* single docked player for pages where one time cursor drives several views */
+.player-dock { position: sticky; bottom: 0; z-index: 15; background: color-mix(in srgb, var(--bg-elev) 94%, transparent); border: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; box-shadow: 0 -4px 14px rgba(20, 24, 50, 0.08); padding: 4px 10px; backdrop-filter: blur(4px); }
+.player-dock .player { padding: 4px 0; }

@@ -47,6 +47,8 @@ async function snap1(p) {
 /** Snapshot once the page has settled: network idle and two consecutive identical snapshots. */
 async function snapshot(p) {
   await p.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => undefined);
+  // deterministic: the page root reports data-state="ready" once its requests (incl. default computations) settled
+  await p.waitForSelector('[data-reset-epoch][data-state="ready"]', { timeout: 120000 }).catch(() => undefined);
   let prev = null;
   for (let k = 0; k < 20; k++) {
     await p.waitForTimeout(1000);

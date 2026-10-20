@@ -7,6 +7,30 @@ import { Card, ErrorBox, Loading, SourceChip, StatusBadge, KV, DataTable, PageHe
 import { fmtTime, fmtDuration, fmtQ } from '../lib/format';
 import { webglAvailable } from '../three/detect';
 import { askServiceWorker } from './f5-shared';
+import { anchorVerdict, type AnchorsResp } from '../lib/evidence';
+
+/** Short status of the external ledger anchors, linking to the full panel in Suite 18. */
+function AnchorStatus() {
+  const r = useApiGet<AnchorsResp>('/api/evidence/anchors');
+  const d = r.data && typeof r.data === 'object' && Array.isArray(r.data.anchors) ? r.data : null;
+  const v = anchorVerdict(d?.verification);
+  const last = d?.anchors.length ? d.anchors[d.anchors.length - 1] : null;
+  return (
+    <Card title="Evidence ledger anchors" actions={<SourceChip source={r.source} cachedAt={r.cachedAt} />}>
+      {r.loading && !d && <Loading />}
+      <ErrorBox error={r.error} what="reading the ledger anchors" />
+      {d && (
+        <KV rows={[
+          ['Verification', <span class={`badge ${v.ok ? 'b-ok' : 'b-bad'}`}>{v.text}</span>],
+          ['Anchors', d.anchors.length ? `${d.anchors.length} (latest: entry #${last!.ledger_index}, ${fmtTime(last!.created_utc)})` : 'none published yet'],
+          ['Object store', d.remote_available ? 'reachable' : `not reachable${d.remote_error ? ` (${d.remote_error})` : ''}`],
+        ]} />
+      )}
+      {v.problems.length > 0 && <ul class="tight small">{v.problems.map((x) => <li>{x}</li>)}</ul>}
+      <p class="small"><a href="/suite/evidence#anchors">Open the anchors panel (download, verify archived anchors) →</a></p>
+    </Card>
+  );
+}
 
 interface CacheInfo { version: string; shell: number; lazy: number; api: number; lazyTotal?: number; shellTotal?: number }
 
@@ -80,6 +104,7 @@ export default function Page(_props: any) {
           <div style={{ marginTop: '8px' }}><Latency /></div>
         </Card>
       </div>
+      <AnchorStatus />
       {d?.schedule_last_run && (
         <Card title="Scheduled ingestion and verification (last run)">
           <DataTable head={['Schedule', 'Last run (UTC → local)']} rows={Object.entries(d.schedule_last_run).map(([k, v]) => [k, fmtTime(v as string)])} />
