@@ -1,0 +1,41 @@
+# Measures QG-DEVS graphics performance on real GPU hardware: GitHub's macOS (Apple-silicon) runners render
+# WebGL through Metal on the GPU. Runs the in-app graphics test and per-page playback frame rates against the
+# published GitHub Pages site and reports them in the job summary (plus screenshots as an artifact).
+name: gpu-perf
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: App URL to measure
+        default: https://samuelakosaonyejekwe.github.io/qg-devs/
+  workflow_run:
+    workflows: [pages]
+    types: [completed]
+permissions:
+  contents: read
+jobs:
+  measure:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with: { node-version: "22" }
+      - name: Install Playwright (Chromium)
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.49.1
+          npx playwright install chromium
+      - name: Measure on the GPU
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/pw/node_modules/playwright/index.mjs
+        run: node web/scripts/gpu-perf.mjs "${{ github.event.inputs.url || 'https://samuelakosaonyejekwe.github.io/qg-devs/' }}" gpu-perf-out
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gpu-perf-${{ matrix.os }}
+          path: gpu-perf-out
