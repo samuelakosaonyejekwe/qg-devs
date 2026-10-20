@@ -11,7 +11,8 @@
  *    no errors.
  * 2. Every link failing permanently without a message: bounded retries, then one warning (no endless rebuild
  *    loop, no page error) and the page stays responsive.
- * 3. A genuine shader error (non-empty linker log) is reported as an error at once and never retried.
+ * 3. A genuine shader error (non-empty linker log) is reported as an error at once and never retried; info
+ *    logs that read null (WebGL's answer on a lost context) never raise "reading 'trim'" page errors.
  * 4. A full graphics test on System health creates at most two WebGL contexts (probe + 3-D view).
  * 5. Closed 3-D views release their WebGL contexts at once (fast navigation between 3-D pages leaves only the
  *    contexts of the views on screen).
@@ -111,6 +112,15 @@ for (const [skip, what, type, gfx] of [[0, 'environment map', '', ''], [6, 'scen
   // stage never schedules a rebuild for an error that has a compiler/linker message)
   out(gl.failed === 1 && relinkViews === 0 && !warns.some((w) => /rebuilding/.test(w)), `genuine shader error is not retried (${gl.failed} injected, ${relinkViews} view(s) rebuilding)`);
   out(errors.length >= 1 && errors.every((e) => /failed to compile or link/.test(e) && /injected linker error/.test(e)), `genuine shader error reported with its log (${errors.length} error line(s))`);
+  await ctx.close();
+}
+// 3b. null info logs (context lost while a program was being built)
+{
+  const { ctx, pg, errors } = await page(3, 6, '', '', null);
+  await pg.goto(`${BASE}/suite/entanglement`, { waitUntil: 'networkidle' });
+  await pg.waitForSelector('.view3d canvas', { timeout: 120000 });
+  await visitViews(pg);
+  out(errors.length === 0, `null info logs (lost context) raise no page errors${errors.length ? ': ' + errors.slice(0, 2).join(' | ') : ''}`);
   await ctx.close();
 }
 // 4. graphics test context budget

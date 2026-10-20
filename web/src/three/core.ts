@@ -109,6 +109,16 @@ export function createStage(el: HTMLElement): Stage {
   // (≈70 MB per 1085×518 view), which exhausted the GPU memory of smaller devices.
   const renderer = new THREE.WebGLRenderer({ antialias: (window.devicePixelRatio || 1) < 2, alpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
   detectTier(renderer.getContext());
+  // WebGL returns null for every info log once the context is lost, but three reads them without a null check
+  // (`getProgramInfoLog(p).trim()`), so a GPU reset that landed while a shader was being built threw
+  // "Cannot read properties of null (reading 'trim')". Lost-context logs read as empty here; the loss itself is
+  // handled by the webglcontextlost / restored listeners below.
+  {
+    const gl = renderer.getContext() as WebGL2RenderingContext;
+    const progLog = gl.getProgramInfoLog.bind(gl), shaderLog = gl.getShaderInfoLog.bind(gl);
+    gl.getProgramInfoLog = (p: WebGLProgram) => progLog(p) ?? '';
+    gl.getShaderInfoLog = (sh: WebGLShader) => shaderLog(sh) ?? '';
+  }
   const maxPR = tier === 'high' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
   let pr = maxPR;
   renderer.setPixelRatio(pr);
