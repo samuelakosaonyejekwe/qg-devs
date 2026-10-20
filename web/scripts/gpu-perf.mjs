@@ -45,7 +45,9 @@ for (const cfg of CONFIGS) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
   await ctx.addInitScript((gfx) => { try { localStorage.setItem('qg.lastSeenVersion', '999.0.0'); if (gfx) localStorage.setItem('qg.gfx', gfx); } catch { /* */ } }, cfg.gfx);
   const page = await ctx.newPage();
-  const row = { config: cfg.name, pages: {} };
+  const row = { config: cfg.name, pages: {}, pageErrors: [] };
+  page.on('pageerror', (e) => row.pageErrors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) row.pageErrors.push(m.text()); });
   try {
     await page.goto(APP, { waitUntil: 'networkidle', timeout: 120000 });
     row.userAgent = await page.evaluate(() => navigator.userAgent);
@@ -86,10 +88,11 @@ for (const r of results) {
   md.push(`- In-app graphics test: median **${pick('Median frame rate')}**, p95 frame ${pick('95th-percentile frame time')}, slowest ${pick('Slowest frame')}, tier ${pick('Quality tier')}, ${pick('Device pixel ratio · canvas')}`);
   md.push('', '| Page (playing) | Median fps | p95 frame (ms) | Slowest (ms) | 3-D views |', '|---|---|---|---|---|');
   for (const [k, v] of Object.entries(r.pages)) md.push(`| ${k} | ${v.fps.toFixed(1)} | ${v.p95.toFixed(1)} | ${v.worst.toFixed(0)} | ${v.views3d} |`);
+  md.push('', `- Page errors: ${r.pageErrors?.length ? r.pageErrors.slice(0, 5).join(' | ') : 'none'}`);
   if (r.error) md.push('', `Error: ${r.error}`);
   md.push('');
 }
 const text = md.join('\n');
 console.log(text);
 if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, text + '\n');
-process.exit(results.some((r) => r.renderer && !r.error) ? 0 : 1);
+process.exit(results.some((r) => r.renderer && !r.error) && !results.some((r) => r.pageErrors?.length) ? 0 : 1);
