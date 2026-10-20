@@ -13,9 +13,10 @@
  *    loop, no page error) and the page stays responsive.
  * 3. A genuine shader error (non-empty linker log) is reported as an error at once and never retried; info
  *    logs that read null (WebGL's answer on a lost context) never raise "reading 'trim'" page errors.
- * 4. A full graphics test on System health creates at most two WebGL contexts (probe + 3-D view).
- * 5. Closed 3-D views release their WebGL contexts at once (fast navigation between 3-D pages leaves only the
- *    contexts of the views on screen).
+ * 4. A full graphics test on System health uses exactly one WebGL context (the app-wide shared context).
+ * 5. Fast navigation through many 3-D pages creates exactly one WebGL context in total.
+ * 7. Context loss and restore (WEBGL_lose_context): every view pauses, then repaints after restoration with its
+ *    resources uploaded again; without restoration the views fall back to their 2-D view. No page errors.
  * 6. Animation playback does not grow GPU buffers: live WebGL buffers (created − deleted) stay flat while the
  *    animated 3-D views play (lines updated every frame used to allocate a new buffer per frame).
  */
@@ -130,7 +131,7 @@ for (const [skip, what, type, gfx] of [[0, 'environment map', '', ''], [6, 'scen
   await pg.locator('#graphics [data-run]').click();
   await pg.waitForSelector('#graphics >> text=Median frame rate', { timeout: 90000 });
   const n = await pg.evaluate(() => window.__gl.contexts);
-  out(n <= 2, `graphics test created ${n} WebGL context(s) (budget 2)`);
+  out(n === 1, `graphics test page used ${n} WebGL context(s) (must be 1: the shared context)`);
   out(errors.length === 0, `no page errors during graphics test${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
   await ctx.close();
 }
@@ -145,7 +146,7 @@ for (const [skip, what, type, gfx] of [[0, 'environment map', '', ''], [6, 'scen
   await pg.waitForSelector('.view3d canvas', { timeout: 120000 });
   await pg.waitForTimeout(1500);
   const r = await pg.evaluate(() => ({ live: window.__glAll.filter((c) => !c.isContextLost()).length, created: window.__glAll.length, views: document.querySelectorAll('.view3d canvas').length }));
-  out(r.live <= r.views, `after ${r.created} 3-D views were opened, ${r.live} WebGL context(s) remain for ${r.views} view(s) on screen`);
+  out(r.created === 1 && r.live === 1, `fast navigation through 15 3-D pages: ${r.created} WebGL context(s) created, ${r.live} live, for ${r.views} view(s) on screen (must be 1)`);
   out(errors.length === 0, `no page errors during fast navigation${errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''}`);
   await ctx.close();
 }
@@ -174,6 +175,45 @@ for (const [slug, prep] of [['entanglement', null], ['decoherence', null], ['opt
   const b = await live();
   out(b - a <= 8, `${slug}: live GPU buffers during 5 s of playback ${a} → ${b} (${np} player(s))`);
   out(errors.length === 0, `${slug}: no page errors during playback${errors.length ? ': ' + errors.slice(0, 2).join(' | ') : ''}`);
+  await ctx.close();
+}
+// 7. shared context lost and restored / lost for good (automatic tier and full-quality tier: environment map,
+//    shadows)
+for (const gfx of ['', 'high']) {
+  const painted = (pg) => pg.evaluate(() => [...document.querySelectorAll('.view3d canvas')].map((c) => {
+    const x = c.getContext('2d'); if (!x || c.width < 4) return -1;
+    const d = x.getImageData(0, 0, c.width, c.height).data; let n = 0;
+    for (let i = 3; i < d.length; i += 4 * 16) if (d[i] > 0) n++;
+    return n;
+  }));
+  const { ctx, pg, errors } = await page(0, 0, '', gfx);
+  await pg.goto(`${BASE}/suite/entanglement`, { waitUntil: 'networkidle' });
+  await pg.waitForSelector('.view3d canvas', { timeout: 120000 });
+  await visitViews(pg, 1);
+  const firstPainted = () => pg.waitForFunction(() => { const c = document.querySelector('.view3d canvas'); return c && c.width > 4; }, null, { timeout: 60000 }).catch(() => undefined);
+  await pg.locator('.view3d').first().scrollIntoViewIfNeeded(); await firstPainted(); await pg.waitForTimeout(500);
+  const tierName = gfx || 'automatic';
+  const before = await painted(pg);
+  await pg.evaluate(() => { window.__lc = window.__glAll[0].getExtension('WEBGL_lose_context'); window.__lc.loseContext(); });
+  await pg.waitForTimeout(800);
+  const lostFlags = await pg.evaluate(() => document.querySelectorAll('.view3d[data-gl-lost]').length);
+  // wipe the views' pixels: only a genuine re-render after restoration can paint them again
+  await pg.evaluate(() => { for (const c of document.querySelectorAll('.view3d canvas')) c.getContext('2d').clearRect(0, 0, c.width, c.height); });
+  await pg.evaluate(() => window.__lc.restoreContext());
+  await pg.waitForTimeout(1500);
+  await visitViews(pg, 1);
+  await pg.locator('.view3d').first().scrollIntoViewIfNeeded(); await firstPainted(); await pg.waitForTimeout(1000);
+  const after = await painted(pg);
+  const stillLost = await pg.evaluate(() => document.querySelectorAll('.view3d[data-gl-lost]').length);
+  out(lostFlags > 0 && stillLost === 0 && after[0] > 0 && after[0] >= before[0] * 0.5,
+    `[${tierName} tier] context lost → ${lostFlags} view(s) paused; restored → repainted (painted samples first view ${before[0]} → ${after[0]}), contexts ${await pg.evaluate(() => window.__glAll.length)}`);
+  out(errors.length === 0, `[${tierName} tier] no page errors across loss and restore${errors.length ? ': ' + errors.slice(0, 2).join(' | ') : ''}`);
+  // lost for good: the views fall back to their 2-D views
+  await pg.evaluate(() => window.__glAll[0].getExtension('WEBGL_lose_context').loseContext());
+  await pg.waitForTimeout(9500);
+  const fallback = await pg.evaluate(() => ({ views: document.querySelectorAll('.view3d').length, notes: [...document.querySelectorAll('[role="note"]')].filter((n) => /could not be restored/.test(n.textContent || '')).length }));
+  out(fallback.views === 0 && fallback.notes > 0, `[${tierName} tier] context not restored → 3-D views replaced by their 2-D views (${fallback.notes} note(s), ${fallback.views} 3-D view(s) left)`);
+  out(errors.length === 0, `[${tierName} tier] no page errors when the context is not restored${errors.length ? ': ' + errors.slice(0, 2).join(' | ') : ''}`);
   await ctx.close();
 }
 await browser.close();

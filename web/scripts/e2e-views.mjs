@@ -40,7 +40,13 @@ const consoleErrors = [];
 const newPage = async (opts = {}, gfx = 'auto') => {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, serviceWorkers: 'block', ...opts });
   // no "What's new" dialog during these checks; graphics tier forced for full-quality stills when requested
-  await ctx.addInitScript((g) => { try { localStorage.setItem('qg.lastSeenVersion', '999.0.0'); localStorage.setItem('qg.gfx', g); } catch { /* ignore */ } }, gfx);
+  await ctx.addInitScript((g) => {
+    try { localStorage.setItem('qg.lastSeenVersion', '999.0.0'); localStorage.setItem('qg.gfx', g); } catch { /* ignore */ }
+    // count the WebGL contexts the app creates on this page (the app shares one context across all 3-D views)
+    window.__qgCtx = 0;
+    const o = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (t, ...a) { const c = o.call(this, t, ...a); if (c && /webgl/.test(t) && !this.__qgCounted) { this.__qgCounted = 1; window.__qgCtx++; } return c; };
+  }, gfx);
   const p = await ctx.newPage();
   p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) consoleErrors.push(`${p.url()}: ${m.text()}`); });
   p.on('pageerror', (e) => consoleErrors.push(`${p.url()}: pageerror ${e.message} @ ${(e.stack || '').split('\n').slice(1, 6).join(' <- ')}`));
@@ -212,9 +218,10 @@ for (const scheme of ['light', 'dark']) {
   });
 }
 
-await step('playback frame rate per page (automatic quality tier)', async () => {
+const ctxReport = [];
+await step('playback frame rate per page (automatic quality tier); exactly one WebGL context per page', async () => {
   const { ctx, p } = await newPage({}, 'auto');
-  const tiers = new Set();
+  const badCtx = [];
   for (const s of VIEW_ROUTES) {
     await p.goto(BASE + (s === 'builder' ? '/builder' : `/suite/${s}`), { waitUntil: 'networkidle' });
     await p.waitForTimeout(1000);
@@ -232,10 +239,14 @@ await step('playback frame rate per page (automatic quality tier)', async () => 
     const m = await measureFps(p);
     fpsReport.push(`${s}: ${m.fps.toFixed(1)} fps while playing (worst frame ${m.worstMs.toFixed(0)} ms; ${await p.locator('.view3d canvas').count()} 3-D view(s) on page)`);
     if (await p.locator('main [data-play][aria-pressed="true"]').count()) await p.locator('main [data-play][aria-pressed="true"]').first().click();
-    tiers.add(await p.evaluate(() => { try { const c = document.createElement('canvas').getContext('webgl'); const e = c?.getExtension('WEBGL_debug_renderer_info'); return e ? c.getParameter(e.UNMASKED_RENDERER_WEBGL) : 'n/a'; } catch { return 'n/a'; } }));
+    const nViews = await p.locator('.view3d canvas').count();
+    const nCtx = await p.evaluate(() => window.__qgCtx);
+    ctxReport.push(`${s}: ${nCtx} WebGL context(s) for ${nViews} 3-D view(s)`);
+    if (nViews > 0 && nCtx !== 1) badCtx.push(`${s}: ${nCtx}`);
   }
   await ctx.close();
-  return `renderer: ${[...tiers].join(', ')}`;
+  if (badCtx.length) throw new Error(`pages with other than one WebGL context: ${badCtx.join(', ')}`);
+  return `${ctxReport.join('; ')}`;
 });
 
 await step('3-D views release GPU resources on unmount (flagship, 5 remounts)', async () => {

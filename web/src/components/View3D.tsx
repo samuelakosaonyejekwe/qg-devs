@@ -70,7 +70,11 @@ export function View3D({ kind, opts, frame, fallback, label, overlay, onInfo, ti
         setState('ready');
       } catch (e) { setErrMsg(String((e as Error).message)); setState('error'); }
     }).catch((e) => { if (alive) { setErrMsg(String(e?.message ?? e)); setState('error'); } });
-    return () => { alive = false; h.current?.dispose(); h.current = null; };
+    // the app's single graphics context was lost and the browser did not restore it: show the 2-D view
+    const node = el.current;
+    const onFailed = () => { if (!alive) return; h.current?.dispose(); h.current = null; setErrMsg('the graphics context was lost and could not be restored'); setState('error'); };
+    node?.addEventListener('qg3d-failed', onFailed);
+    return () => { alive = false; node?.removeEventListener('qg3d-failed', onFailed); h.current?.dispose(); h.current = null; };
   }, [kind]);
 
   useEffect(() => {

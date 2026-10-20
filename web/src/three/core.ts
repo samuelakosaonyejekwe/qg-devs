@@ -1,7 +1,8 @@
 /**
  * Shared high-fidelity three.js stage.
  *
- * Rendering: antialiased WebGL, ACES filmic tone mapping, sRGB output, physically based lighting from a
+ * One WebGL context for the whole app: every view renders through a single shared renderer (see createStage).
+ * Rendering: ACES filmic tone mapping, sRGB output, physically based lighting from a
  * procedural studio environment (RoomEnvironment through PMREM — nothing downloaded), key/fill/rim lights
  * and soft shadows. Text is rendered as crisp HTML (CSS2DRenderer); lines are anti-aliased screen-space
  * lines (Line2/LineMaterial). Pixel ratio is min(devicePixelRatio, 2) and is lowered only while the measured
@@ -19,6 +20,7 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { mapRgb } from '../lib/colormaps';
 import { loadKatex, renderTex } from '../components/Tex';
+import { sharedWebGL2, GL_ATTRIBUTES } from './detect';
 
 export interface Handle {
   update(opts: any): void;
@@ -77,12 +79,201 @@ export function color(css: string, fallback = '#888888'): THREE.Color {
   try { c.setStyle(css); return c; } catch { return c.set(fallback); }
 }
 
-// Line materials need the viewport resolution; the owning stage updates them on resize.
-const lineMaterials = new Set<LineMaterial>();
+// ----------------------------------------------------------------------------------------------------------
+// One WebGL context for the whole app.
+//
+// Every 3-D view renders through a single shared WebGLRenderer whose canvas is never in the page. A view keeps
+// its own scene, camera, controls, HTML labels and its own visible 2-D <canvas>: when (and only when) the view is
+// on screen, its scene is rendered into the bottom-left region of the shared drawing buffer (viewport + scissor)
+// and that region is copied 1:1 into the view's canvas with drawImage. Why this design rather than one
+// full-window overlay canvas with scissor regions: each view stays a real element of its own — fullscreen,
+// CSS2D labels, pointer controls, scrolling and clipping behave exactly as before; pixels stay crisp (the view
+// canvas is sized at CSS size × pixel ratio and receives an unscaled copy); exports and video composite from
+// the stage into their own 2-D canvases as before. Shader programs and the studio environment map are shared,
+// so a page holds one context and compiles each shader once, whatever the number of views.
+// ----------------------------------------------------------------------------------------------------------
+
+interface StageLink {
+  el: HTMLElement;
+  scene: THREE.Scene;
+  wantsEnv(): boolean;
+  /** device-pixel size the view needs while visible (0 when hidden) */
+  need(): { w: number; h: number };
+  requestRender(): void;
+  onLost(): void;
+  onRestored(): void;
+  onFailed(): void;
+}
+
+interface Shared {
+  renderer: THREE.WebGLRenderer;
+  canvas: HTMLCanvasElement;
+  stages: Set<StageLink>;
+  lost: boolean;
+  failed: boolean;
+  env: THREE.WebGLRenderTarget | null;
+  envFailed: boolean;
+  inEnv: boolean;
+  maxSize: number;
+  bufW: number;
+  bufH: number;
+}
+let shared: Shared | null = null;
+
+function buildEnv(sh: Shared) {
+  sh.env?.dispose();
+  sh.env = null;
+  sh.envFailed = false; sh.inEnv = true;
+  try {
+    const pmrem = new THREE.PMREMGenerator(sh.renderer);
+    sh.env = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    pmrem.dispose();
+  } finally { sh.inEnv = false; }
+  for (const s of sh.stages) if (s.wantsEnv()) s.scene.environment = sh.env.texture;
+}
+
+/** The studio environment texture (generated once, shared by every high-tier view). */
+function sharedEnv(sh: Shared): THREE.Texture {
+  if (!sh.env) buildEnv(sh);
+  return sh.env!.texture;
+}
+
+/** Size the shared drawing buffer to the largest visible view (grows and shrinks; never above the GPU limit). */
+function fitBuffer(sh: Shared, minW = 0, minH = 0) {
+  let w = Math.max(1, minW), h = Math.max(1, minH);
+  for (const s of sh.stages) { const n = s.need(); w = Math.max(w, n.w); h = Math.max(h, n.h); }
+  w = Math.min(w, sh.maxSize); h = Math.min(h, sh.maxSize);
+  if (w !== sh.bufW || h !== sh.bufH) { sh.renderer.setSize(w, h, false); sh.bufW = w; sh.bufH = h; }
+}
+
+// Shader programs whose link failed although both shaders compiled and the driver gave no diagnostic are
+// rebuilt (bounded retries). Seen on real GPUs (ANGLE/Metal) under memory pressure: the link fails with an
+// empty log and the object would otherwise never be drawn. A genuine shader error (compiler or linker message)
+// is reported, never retried.
+let relinkAttempts = 0, relinkTimer = 0, lastShaderFault = 0;
+const failedTypes = new Set<string>();
+let depthMat: THREE.MeshDepthMaterial | null = null;
+
+function relink() {
+  relinkTimer = 0;
+  const sh = shared;
+  if (!sh) return;
+  relinkAttempts++;
+  const seen = new Set<THREE.Material>();
+  for (const st of sh.stages) {
+    st.el.dataset.glRelink = String(relinkAttempts);
+    st.scene.traverse((o) => {
+      const mats = (o as THREE.Mesh).material;
+      for (const m of Array.isArray(mats) ? mats : mats ? [mats] : []) {
+        if (seen.has(m)) continue;
+        seen.add(m);
+        const prog = (sh.renderer.properties.get(m) as { currentProgram?: { diagnostics?: { runnable: boolean } } }).currentProgram;
+        if (prog?.diagnostics && !prog.diagnostics.runnable) m.dispose(); // releases the failed program; rebuilt on next draw
+      }
+    });
+  }
+  if (sh.envFailed) buildEnv(sh); // a generator program failed: regenerate the environment map
+  if (failedTypes.has('MeshDepthMaterial')) {
+    // The shadow map's own depth material is internal to three: give shadow casters a fresh one whose program
+    // cache key is new, so its program is linked again.
+    depthMat?.dispose();
+    const d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    const key = `qg-relink-${relinkAttempts}`;
+    d.customProgramCacheKey = () => key;
+    depthMat = d;
+    for (const st of sh.stages) st.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.castShadow) (o as THREE.Mesh).customDepthMaterial = d; });
+  }
+  failedTypes.clear();
+  for (const st of sh.stages) st.requestRender();
+}
+
+function onShaderError(gl: WebGLRenderingContext, program: WebGLProgram, vs: WebGLShader, fs: WebGLShader) {
+  const sh = shared!;
+  if (sh.inEnv) sh.envFailed = true;
+  const type = /#define SHADER_TYPE (\w+)/.exec(gl.getShaderSource(vs) ?? '')?.[1];
+  if (type) failedTypes.add(type);
+  const logs = { programLog: (gl.getProgramInfoLog(program) ?? '').trim(), vertexLog: (gl.getShaderInfoLog(vs) ?? '').trim(), fragmentLog: (gl.getShaderInfoLog(fs) ?? '').trim() };
+  if (logs.programLog || logs.vertexLog || logs.fragmentLog) {
+    // a genuine shader error always comes with a compiler or linker message: report it, never retry
+    console.error('QG-DEVS 3-D: shader program failed to compile or link', { type, ...logs });
+    return;
+  }
+  // No message at all: the GPU or driver failed (out of video memory, context being lost). Rebuild the failed
+  // programs a bounded number of times; a lost context is rebuilt when the browser restores it.
+  if (gl.isContextLost()) return;
+  const now = performance.now();
+  if (now - lastShaderFault > 10_000) relinkAttempts = 0; // a new, unrelated fault gets its own retries
+  lastShaderFault = now;
+  if (relinkAttempts < 3) {
+    if (!relinkTimer) {
+      console.warn(`QG-DEVS 3-D: the GPU failed to build a shader program without a message; rebuilding (attempt ${relinkAttempts + 1} of 3)`);
+      relinkTimer = window.setTimeout(relink, 50 * 2 ** relinkAttempts);
+    }
+    return;
+  }
+  for (const st of sh.stages) {
+    if (st.el.dataset.glFault) continue;
+    st.el.dataset.glFault = '1';
+    console.warn('QG-DEVS 3-D: the GPU could not build some shader programs after 3 attempts; parts of this view may be missing');
+  }
+}
+
+/** The shared renderer, created on first use from the page's single WebGL 2 context. Throws without WebGL 2. */
+function getShared(): Shared {
+  if (shared && !shared.failed) return shared;
+  if (shared?.failed) throw new Error('the graphics context was lost and could not be restored');
+  const ctx = sharedWebGL2();
+  if (!ctx) throw new Error('WebGL 2 is not available');
+  const { canvas, gl } = ctx;
+  if (gl.isContextLost()) throw new Error('the graphics context is not available');
+  // WebGL returns null for every info log once the context is lost, but three reads them without a null check
+  // (`getProgramInfoLog(p).trim()`), so a GPU reset that landed while a shader was being built threw
+  // "Cannot read properties of null (reading 'trim')". Lost-context logs read as empty here.
+  const progLog = gl.getProgramInfoLog.bind(gl), shaderLog = gl.getShaderInfoLog.bind(gl);
+  gl.getProgramInfoLog = (p: WebGLProgram) => progLog(p) ?? '';
+  gl.getShaderInfoLog = (s: WebGLShader) => shaderLog(s) ?? '';
+  const renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: GL_ATTRIBUTES.antialias, alpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+  detectTier(gl);
+  renderer.setPixelRatio(1); // sizes below are device pixels
+  renderer.setClearColor(0x000000, 0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.debug.onShaderError = onShaderError;
+  const dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array;
+  const maxSize = Math.max(256, Math.min(dims?.[0] ?? 4096, dims?.[1] ?? 4096, gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number || 4096, 8192));
+  const sh: Shared = { renderer, canvas, stages: new Set(), lost: false, failed: false, env: null, envFailed: false, inEnv: false, maxSize, bufW: 0, bufH: 0 };
+  shared = sh;
+  // One handler for the whole app: on loss every view pauses; on restore three re-creates its GL state and every
+  // live view's geometry, materials and textures are uploaded again on its next draw (the environment map, a
+  // render target, is regenerated). If the browser does not restore the context, the views fall back to 2-D.
+  let failTimer = 0;
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    sh.lost = true;
+    for (const s of sh.stages) s.onLost();
+    failTimer = window.setTimeout(() => {
+      if (!sh.lost) return;
+      sh.failed = true;
+      for (const s of [...sh.stages]) s.onFailed();
+    }, 8000);
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    clearTimeout(failTimer);
+    sh.lost = false; sh.bufW = sh.bufH = 0;
+    sh.env = null; // contents were lost with the context
+    if ([...sh.stages].some((s) => s.wantsEnv())) buildEnv(sh);
+    fitBuffer(sh);
+    for (const s of sh.stages) s.onRestored();
+  });
+  return sh;
+}
 
 export interface Stage {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
+  /** the app-wide shared renderer (do not dispose) */
   renderer: THREE.WebGLRenderer;
   controls: OrbitControls;
   theme: Theme;
@@ -95,41 +286,36 @@ export interface Stage {
   toPNG(scale?: number, transparent?: boolean): string;
   composite(ctx: CanvasRenderingContext2D, scale: number, transparent: boolean): void;
   canvasSize(): { w: number; h: number };
+  /** GPU objects held by the shared renderer (whole page): stable across remounts and playback when nothing leaks */
   memory(): { geometries: number; textures: number };
   /** Enable soft shadows from the key light onto meshes with castShadow/receiveShadow. */
   enableShadows(radius: number): void;
   dispose(): void;
 }
 
+/** Set every line material in the scene to the resolution of the frame being drawn (CSS pixels). */
+function setLineResolution(scene: THREE.Scene, w: number, h: number) {
+  scene.traverse((o) => {
+    const m = (o as THREE.Mesh).material;
+    if (m && (m as LineMaterial).isLineMaterial) (m as LineMaterial).resolution.set(w, h);
+  });
+}
+
 export function createStage(el: HTMLElement): Stage {
+  const sh = getShared();
+  const renderer = sh.renderer;
   const theme = readTheme(el);
   if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
-  // Multisampling (MSAA) only below 2× pixel density: on high-density screens the pixels are already small
-  // enough, and 4× multisampled colour + depth buffers at 2× resolution cost ~4× the view's video memory
-  // (≈70 MB per 1085×518 view), which exhausted the GPU memory of smaller devices.
-  const renderer = new THREE.WebGLRenderer({ antialias: (window.devicePixelRatio || 1) < 2, alpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
-  detectTier(renderer.getContext());
-  // WebGL returns null for every info log once the context is lost, but three reads them without a null check
-  // (`getProgramInfoLog(p).trim()`), so a GPU reset that landed while a shader was being built threw
-  // "Cannot read properties of null (reading 'trim')". Lost-context logs read as empty here; the loss itself is
-  // handled by the webglcontextlost / restored listeners below.
-  {
-    const gl = renderer.getContext() as WebGL2RenderingContext;
-    const progLog = gl.getProgramInfoLog.bind(gl), shaderLog = gl.getShaderInfoLog.bind(gl);
-    gl.getProgramInfoLog = (p: WebGLProgram) => progLog(p) ?? '';
-    gl.getShaderInfoLog = (sh: WebGLShader) => shaderLog(sh) ?? '';
-  }
   const maxPR = tier === 'high' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
   let pr = maxPR;
-  renderer.setPixelRatio(pr);
-  renderer.setClearColor(0x000000, 0);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  const canvas = renderer.domElement;
+  let shadows = false;
+
+  // the view's own visible canvas (2-D): receives a copy of the frame rendered by the shared renderer
+  const canvas = document.createElement('canvas');
+  canvas.className = 'qg3d-canvas';
   Object.assign(canvas.style, { display: 'block', width: '100%', height: '100%', touchAction: 'none' });
   el.appendChild(canvas);
+  const ctx2d = canvas.getContext('2d')!;
 
   const labels = new CSS2DRenderer();
   Object.assign(labels.domElement.style, { position: 'absolute', inset: '0', pointerEvents: 'none', overflow: 'hidden' });
@@ -137,20 +323,8 @@ export function createStage(el: HTMLElement): Stage {
   el.appendChild(labels.domElement);
 
   const scene = new THREE.Scene();
-  let envRT: THREE.WebGLRenderTarget | null = null;
-  // Studio environment map (generated after the shader-error handler below is installed, so a failed link
-  // inside the generator is detected and the map rebuilt).
-  let envFailed = false, inEnv = false;
-  const buildEnv = () => {
-    envRT?.dispose();
-    envFailed = false; inEnv = true;
-    try {
-      const pmrem = new THREE.PMREMGenerator(renderer);
-      envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
-      scene.environment = envRT.texture;
-      pmrem.dispose();
-    } finally { inEnv = false; }
-  };
+  let useEnv = tier === 'high';
+  if (useEnv) scene.environment = sharedEnv(sh);
   // Key / fill / rim plus hemisphere and ambient light: bright enough that mid-lightness colours read
   // clearly on both the light and the dark theme background.
   scene.add(new THREE.HemisphereLight(0xffffff, 0xb4bcd4, 0.9));
@@ -178,38 +352,52 @@ export function createStage(el: HTMLElement): Stage {
     home.target.copy(fitSpec.c);
     camera.near = d / 100; camera.far = d * 10; camera.updateProjectionMatrix();
   };
-  let pending = false, disposed = false, lost = false, visible = true, dirtyHidden = false;
+  let pending = false, disposed = false, visible = true, dirtyHidden = false;
   let ema = 16, slowFrames = 0, fastFrames = 0, lastDraw = 0;
+  let cssW = 1, cssH = 1;
 
-  const size = () => renderer.getSize(new THREE.Vector2());
-  const syncLines = () => { const s = size(); for (const m of lineMaterials) m.resolution.set(s.x, s.y); };
+  const devSize = () => ({ w: Math.max(1, Math.min(sh.maxSize, Math.round(cssW * pr))), h: Math.max(1, Math.min(sh.maxSize, Math.round(cssH * pr))) });
+
+  /** Render this view's scene into the shared buffer's bottom-left w×h region (device pixels). */
+  const renderRegion = (w: number, h: number, lineW: number, lineH: number) => {
+    if (w > sh.bufW || h > sh.bufH) fitBuffer(sh, w, h);
+    renderer.shadowMap.enabled = shadows;
+    renderer.setViewport(0, 0, w, h);
+    renderer.setScissor(0, 0, w, h);
+    renderer.setScissorTest(true);
+    setLineResolution(scene, lineW, lineH);
+    renderer.render(scene, camera);
+    renderer.setScissorTest(false);
+  };
 
   const draw = (now: number) => {
     pending = false;
-    if (disposed || lost) return;
-    if (!visible) { dirtyHidden = true; return; } // offscreen: render when scrolled back into view
-    // Shaders compile synchronously on first use. (three's compileAsync is deliberately not used: it polls
-    // programs across frames, and a scene disposed meanwhile — fast navigation, Reset, data refresh — leaves
-    // it reading deleted programs: 'VALIDATE_STATUS false', null info logs, undefined 'isReady'.)
+    if (disposed || sh.lost || sh.failed) return;
+    if (!visible) { dirtyHidden = true; return; } // offscreen: costs nothing; rendered when scrolled back into view
     if (controls.update()) requestRender();
-    renderer.render(scene, camera);
+    const { w, h } = devSize();
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    renderRegion(w, h, cssW, cssH);
+    // copy the region (WebGL's origin is bottom-left) into the view's canvas within the same task
+    ctx2d.globalCompositeOperation = 'copy';
+    ctx2d.drawImage(sh.canvas, 0, sh.bufH - h, w, h, 0, 0, w, h);
     labels.render(scene, camera);
     // Adaptive resolution from the real frame interval during continuous animation: lower the pixel
     // ratio only while frames take > 33 ms, restore when they are fast again (values never change).
     const dt = now - lastDraw; lastDraw = now;
     if (dt > 0 && dt < 1000) {
       ema = 0.8 * ema + 0.2 * dt;
-      if (ema > 33 && pr > 1) { if (++slowFrames > 3) { pr = Math.max(1, pr * 0.75); renderer.setPixelRatio(pr); syncLines(); slowFrames = 0; } }
+      if (ema > 33 && pr > 1) { if (++slowFrames > 3) { pr = Math.max(1, pr * 0.75); slowFrames = 0; fitBuffer(sh); } }
       else if (ema > 40 && pr <= 1 && tier === 'high') {
         // Still too slow at 1× pixels on a GPU we classed as capable: drop the costly effects now and use the
         // lighter tier for the rest of this session (rendering cost only — positions and values are unchanged).
         if (++slowFrames > 90) {
-          renderer.shadowMap.enabled = false; scene.environment = null; tier = 'low'; slowFrames = 0;
+          shadows = false; useEnv = false; scene.environment = null; tier = 'low'; slowFrames = 0;
           try { sessionStorage.setItem('qg.gfx.auto', 'low'); } catch { /* ignore */ }
           el.dataset.gfxDowngraded = '1';
         }
       }
-      else if (ema < 18 && pr < maxPR) { if (++fastFrames > 120) { pr = Math.min(maxPR, pr / 0.75); renderer.setPixelRatio(pr); syncLines(); fastFrames = 0; } }
+      else if (ema < 18 && pr < maxPR) { if (++fastFrames > 120) { pr = Math.min(maxPR, pr / 0.75); fastFrames = 0; } }
       else slowFrames = 0;
     }
   };
@@ -220,78 +408,25 @@ export function createStage(el: HTMLElement): Stage {
   }
   controls.addEventListener('change', requestRender);
 
-  // Shader programs whose link failed although both shaders compiled and the driver gave no diagnostic are
-  // rebuilt (bounded retries). Seen on real GPUs (ANGLE/Metal) during the first burst of program links after a
-  // page load: the link fails with an empty log and the object would otherwise never be drawn. A genuine
-  // shader error (compile failure or a non-empty link log) is reported, never retried.
-  let relinkAttempts = 0, relinkTimer = 0;
-  const failedTypes = new Set<string>();
-  let depthMat: THREE.MeshDepthMaterial | null = null;
-  const relink = () => {
-    relinkTimer = 0;
-    if (disposed) return;
-    relinkAttempts++;
-    el.dataset.glRelink = String(relinkAttempts);
-    const seen = new Set<THREE.Material>();
-    scene.traverse((o) => {
-      const mats = (o as THREE.Mesh).material;
-      for (const m of Array.isArray(mats) ? mats : mats ? [mats] : []) {
-        if (seen.has(m)) continue;
-        seen.add(m);
-        const prog = (renderer.properties.get(m) as { currentProgram?: { diagnostics?: { runnable: boolean } } }).currentProgram;
-        if (prog?.diagnostics && !prog.diagnostics.runnable) m.dispose(); // releases the failed program; rebuilt on next draw
-      }
-    });
-    if (envFailed && tier === 'high') buildEnv(); // a generator program failed: regenerate the environment map
-    if (failedTypes.has('MeshDepthMaterial')) {
-      // The shadow map's own depth material is internal to three: give shadow casters a fresh one whose
-      // program cache key is new, so its program is linked again.
-      depthMat?.dispose();
-      const d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
-      const key = `qg-relink-${relinkAttempts}`;
-      d.customProgramCacheKey = () => key;
-      depthMat = d;
-      scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.castShadow) (o as THREE.Mesh).customDepthMaterial = d; });
-    }
-    failedTypes.clear();
-    requestRender();
+  const link: StageLink = {
+    el, scene,
+    wantsEnv: () => useEnv,
+    need: () => (visible && !disposed ? devSize() : { w: 0, h: 0 }),
+    requestRender,
+    onLost: () => { el.dataset.glLost = '1'; },
+    onRestored: () => { delete el.dataset.glLost; if (useEnv && sh.env) scene.environment = sh.env.texture; requestRender(); },
+    onFailed: () => { el.dispatchEvent(new CustomEvent('qg3d-failed', { bubbles: false })); },
   };
-  renderer.debug.onShaderError = (gl, program, vs, fs) => {
-    if (inEnv) envFailed = true;
-    const type = /#define SHADER_TYPE (\w+)/.exec(gl.getShaderSource(vs) ?? '')?.[1];
-    if (type) failedTypes.add(type);
-    const logs = { programLog: (gl.getProgramInfoLog(program) ?? '').trim(), vertexLog: (gl.getShaderInfoLog(vs) ?? '').trim(), fragmentLog: (gl.getShaderInfoLog(fs) ?? '').trim() };
-    if (logs.programLog || logs.vertexLog || logs.fragmentLog) {
-      // a genuine shader error always comes with a compiler or linker message: report it, never retry
-      console.error('QG-DEVS 3-D: shader program failed to compile or link', { type, ...logs });
-      return;
-    }
-    // No message at all: the GPU or driver failed (out of video memory, context being lost). Rebuild the failed
-    // programs a bounded number of times; a lost context is rebuilt by three when the browser restores it.
-    if (gl.isContextLost()) return;
-    if (relinkAttempts < 3) {
-      if (!relinkTimer) {
-        console.warn(`QG-DEVS 3-D: the GPU failed to build a shader program without a message; rebuilding (attempt ${relinkAttempts + 1} of 3)`);
-        relinkTimer = window.setTimeout(relink, 50 * 2 ** relinkAttempts);
-      }
-      return;
-    }
-    if (!el.dataset.glFault) {
-      el.dataset.glFault = '1';
-      console.warn('QG-DEVS 3-D: the GPU could not build some shader programs after 3 attempts; parts of this view may be missing');
-    }
-  };
-  if (tier === 'high') buildEnv();
+  sh.stages.add(link);
 
   const resize = () => {
-    const w = Math.max(1, el.clientWidth);
-    const h = Math.max(1, el.clientHeight || Math.round(w * 0.6));
-    renderer.setSize(w, h, false);
-    labels.setSize(w, h);
-    camera.aspect = w / h;
+    cssW = Math.max(1, el.clientWidth);
+    cssH = Math.max(1, el.clientHeight || Math.round(cssW * 0.6));
+    labels.setSize(cssW, cssH);
+    camera.aspect = cssW / cssH;
     camera.updateProjectionMatrix();
     if (fitSpec && !userMoved) { applyFit(); camera.position.copy(home.pos); controls.target.copy(home.target); controls.update(); }
-    syncLines();
+    fitBuffer(sh);
     requestRender();
   };
   const ro = new ResizeObserver(resize);
@@ -299,26 +434,30 @@ export function createStage(el: HTMLElement): Stage {
   resize();
   const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver((es) => {
     visible = es.some((e) => e.isIntersecting);
-    if (visible && dirtyHidden) { dirtyHidden = false; requestRender(); }
+    if (!visible) { canvas.width = canvas.height = 1; fitBuffer(sh); } // release the hidden view's pixels
+    else if (dirtyHidden || canvas.width <= 1) { dirtyHidden = false; requestRender(); }
   }, { rootMargin: '150px' }) : null;
   io?.observe(el);
 
-  // WebGL context loss (GPU reset, tab backgrounding on mobile): pause and resume on restore.
-  const onLost = (e: Event) => { e.preventDefault(); lost = true; el.dataset.glLost = '1'; };
-  const onRestored = () => { lost = false; delete el.dataset.glLost; requestRender(); };
-  canvas.addEventListener('webglcontextlost', onLost);
-  canvas.addEventListener('webglcontextrestored', onRestored);
-
-  /** Draw the current frame (WebGL + HTML labels) into a 2-D context at `scale` × CSS size. */
+  /**
+   * Draw the current frame (WebGL + HTML labels) into a 2-D context at `scale` × CSS size. Large exports are
+   * rendered in tiles (camera view offset) through the normal screen path, so tone mapping, colour space and
+   * line widths are identical to the on-screen view at any size up to 8K.
+   */
   function composite(ctx: CanvasRenderingContext2D, scale: number, transparent: boolean) {
-    const s = size();
-    const prevPR = renderer.getPixelRatio();
-    renderer.setPixelRatio(scale);
-    renderer.setSize(s.x, s.y, false);
-    syncLines();
-    renderer.render(scene, camera);
-    if (!transparent) { ctx.fillStyle = readTheme(el).bg; ctx.fillRect(0, 0, s.x * scale, s.y * scale); }
-    ctx.drawImage(canvas, 0, 0, s.x * scale, s.y * scale);
+    if (sh.lost || sh.failed) return;
+    const W = Math.round(cssW * scale), H = Math.round(cssH * scale);
+    if (!transparent) { ctx.fillStyle = readTheme(el).bg; ctx.fillRect(0, 0, W, H); }
+    const T = Math.min(2048, sh.maxSize);
+    for (let ty = 0; ty < H; ty += T) {
+      for (let tx = 0; tx < W; tx += T) {
+        const tw = Math.min(T, W - tx), th = Math.min(T, H - ty);
+        camera.setViewOffset(W, H, tx, ty, tw, th);
+        renderRegion(tw, th, tw / scale, th / scale);
+        ctx.drawImage(sh.canvas, 0, sh.bufH - th, tw, th, tx, ty, tw, th);
+      }
+    }
+    camera.clearViewOffset();
     // labels: project every CSS2DObject and draw its text
     scene.updateMatrixWorld();
     const v = new THREE.Vector3();
@@ -327,15 +466,13 @@ export function createStage(el: HTMLElement): Stage {
       const div = (o as CSS2DObject).element as HTMLElement;
       v.setFromMatrixPosition(o.matrixWorld).project(camera);
       if (v.z < -1 || v.z > 1) return;
-      const x = ((v.x + 1) / 2) * s.x * scale, y = ((1 - v.y) / 2) * s.y * scale;
+      const x = ((v.x + 1) / 2) * W, y = ((1 - v.y) / 2) * H;
       const cs = getComputedStyle(div);
       ctx.font = `${cs.fontWeight} ${parseFloat(cs.fontSize) * scale}px ${cs.fontFamily}`;
       ctx.fillStyle = cs.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(div.textContent ?? '', x, y);
     });
-    renderer.setPixelRatio(prevPR);
-    renderer.setSize(s.x, s.y, false);
-    syncLines();
+    fitBuffer(sh);
     requestRender();
   }
 
@@ -359,19 +496,18 @@ export function createStage(el: HTMLElement): Stage {
       requestRender();
     },
     composite,
-    canvasSize() { const s = size(); return { w: s.x, h: s.y }; },
+    canvasSize() { return { w: cssW, h: cssH }; },
     toPNG(scale = 2, transparent = false) {
-      const s = size();
-      const k = Math.min(scale, 8192 / Math.max(s.x, s.y)); // cap at 8K on the long side
+      const k = Math.min(scale, 8192 / Math.max(cssW, cssH)); // cap at 8K on the long side
       const c = document.createElement('canvas');
-      c.width = Math.round(s.x * k); c.height = Math.round(s.y * k);
+      c.width = Math.round(cssW * k); c.height = Math.round(cssH * k);
       composite(c.getContext('2d')!, k, transparent);
       return c.toDataURL('image/png');
     },
     memory() { return { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures }; },
     enableShadows(radius: number) {
       if (tier !== 'high') return; // soft shadows only on capable GPUs
-      renderer.shadowMap.enabled = true;
+      shadows = true;
       key.castShadow = true;
       key.shadow.mapSize.set(lowEnd ? 1024 : 2048, lowEnd ? 1024 : 2048);
       const c = key.shadow.camera as THREE.OrthographicCamera;
@@ -380,35 +516,30 @@ export function createStage(el: HTMLElement): Stage {
       key.shadow.bias = -0.0005;
     },
     dispose() {
+      // Frees this view's GPU resources (geometries, materials, textures, shadow map); the shared context persists.
       disposed = true;
-      if (relinkTimer) clearTimeout(relinkTimer);
-      depthMat?.dispose();
+      sh.stages.delete(link);
       ro.disconnect();
       io?.disconnect();
       controls.dispose();
-      canvas.removeEventListener('webglcontextlost', onLost);
-      canvas.removeEventListener('webglcontextrestored', onRestored);
+      const env = sh.env?.texture;
       scene.traverse((o) => {
         const m = o as THREE.Mesh;
         m.geometry?.dispose?.();
         if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
         const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
         for (const mat of mats) {
-          for (const v of Object.values(mat)) if (v && (v as THREE.Texture).isTexture) (v as THREE.Texture).dispose();
-          if (mat instanceof LineMaterial) lineMaterials.delete(mat);
+          for (const v of Object.values(mat)) if (v && (v as THREE.Texture).isTexture && v !== env) (v as THREE.Texture).dispose();
           mat.dispose();
         }
         if ((o as any).isCSS2DObject) (o as CSS2DObject).element.remove();
       });
-      envRT?.dispose();
+      scene.environment = null;
       key.shadow.dispose();
-      renderer.dispose();
-      // Release the WebGL context (drawing buffers, shadow map, environment map) now rather than whenever the
-      // canvas is garbage-collected: on GPUs with little memory, contexts left behind by closed views
-      // exhausted video memory (Metal GL_OUT_OF_MEMORY), after which shader links failed and contexts were lost.
-      renderer.forceContextLoss();
       canvas.remove();
       labels.domElement.remove();
+      if (sh.stages.size === 0) { depthMat?.dispose(); depthMat = null; }
+      fitBuffer(sh);
     },
   };
 }
@@ -441,8 +572,7 @@ export function lineSegments(points: number[], css: string | THREE.Color, opacit
   const g = new LineSegmentsGeometry();
   g.setPositions(points);
   const m = new LineMaterial({ color: (css instanceof THREE.Color ? css : color(css)).getHex(), linewidth: widthPx, transparent: opacity < 1, opacity, dashed, dashSize: 0.03, gapSize: 0.02 });
-  m.resolution.set(window.innerWidth, window.innerHeight);
-  lineMaterials.add(m);
+  m.resolution.set(window.innerWidth, window.innerHeight); // set per frame to the drawing view's size
   const l = new LineSegments2(g, m);
   if (dashed) l.computeLineDistances();
   return l;

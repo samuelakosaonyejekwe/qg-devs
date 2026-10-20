@@ -20,6 +20,6 @@ describe('3-D stage on a lost WebGL context', () => {
   const src = readFileSync(fileURLToPath(new URL('../three/core.ts', import.meta.url)), 'utf8');
   it('reads shader/program info logs null-safely (three calls .trim() on them; WebGL returns null when lost)', () => {
     expect(src).toMatch(/gl\.getProgramInfoLog = \(p: WebGLProgram\) => progLog\(p\) \?\? ''/);
-    expect(src).toMatch(/gl\.getShaderInfoLog = \(sh: WebGLShader\) => shaderLog\(sh\) \?\? ''/);
+    expect(src).toMatch(/gl\.getShaderInfoLog = \(s: WebGLShader\) => shaderLog\(s\) \?\? ''/);
   });
 });

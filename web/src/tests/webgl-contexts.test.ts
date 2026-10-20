@@ -10,18 +10,32 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('WebGL capability probe', () => {
-  it('creates at most one context per page load and releases it', async () => {
+  it('creates exactly one WebGL 2 context per page load and hands that same context to the shared renderer', async () => {
     let created = 0, released = 0;
     const gl = {
       RENDERER: 0x1f01,
       getExtension: (n: string) => (n === 'WEBGL_lose_context' ? { loseContext: () => { released++; } } : n === 'WEBGL_debug_renderer_info' ? { UNMASKED_RENDERER_WEBGL: 0x9246 } : null),
       getParameter: (p: number) => (p === 0x9246 ? 'Test GPU' : 'generic'),
     };
-    vi.stubGlobal('document', { createElement: () => ({ getContext: (t: string) => (/webgl/.test(t) ? (created++, gl) : null) }) });
+    const canvas = { getContext: (t: string) => (t === 'webgl2' ? (created++, gl) : null) };
+    vi.stubGlobal('document', { createElement: () => canvas });
     vi.resetModules();
-    const { webglAvailable, webglRenderer } = await import('../three/detect');
+    const { webglAvailable, webglRenderer, sharedWebGL2 } = await import('../three/detect');
     for (let i = 0; i < 500; i++) { expect(webglAvailable()).toBe(true); expect(webglRenderer()).toBe('Test GPU'); }
+    for (let i = 0; i < 50; i++) expect(sharedWebGL2()?.gl).toBe(gl);
     expect(created).toBe(1);
+    expect(released).toBe(0); // kept: it is the page's one context
+    vi.unstubAllGlobals();
+  });
+
+  it('a WebGL 1-only browser: reported available, context released at once, no shared context', async () => {
+    let released = 0;
+    const gl1 = { RENDERER: 0x1f01, getExtension: (n: string) => (n === 'WEBGL_lose_context' ? { loseContext: () => { released++; } } : null), getParameter: () => 'GL1' };
+    vi.stubGlobal('document', { createElement: () => ({ getContext: (t: string) => (t === 'webgl' ? gl1 : null) }) });
+    vi.resetModules();
+    const { webglAvailable, sharedWebGL2 } = await import('../three/detect');
+    expect(webglAvailable()).toBe(true);
+    expect(sharedWebGL2()).toBeNull();
     expect(released).toBe(1);
     vi.unstubAllGlobals();
   });

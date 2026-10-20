@@ -54,11 +54,13 @@ for (let rep = 1; rep <= REPEAT; rep++) for (const cfg0 of CONFIGS) {
   await ctx.addInitScript((gfx) => { try { localStorage.setItem('qg.lastSeenVersion', '999.0.0'); if (gfx) localStorage.setItem('qg.gfx', gfx); } catch { /* */ } }, cfg.gfx);
   // timeline of WebGL context creation/loss on every canvas (to tell GPU resets apart from application errors)
   await ctx.addInitScript(() => {
+    window.__qgCtx = 0; // WebGL contexts created on this page (the app shares one across all 3-D views)
     const orig = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (type, ...a) {
       const c = orig.call(this, type, ...a);
       if (c && /webgl/.test(type) && !this.__qgLog) {
         this.__qgLog = 1;
+        window.__qgCtx++;
         const canvas = this, ge = c.getExtension.bind(c);
         // releases requested by the page itself (WEBGL_lose_context) are not losses
         c.getExtension = (n) => { const x = ge(n); if (x && n === 'WEBGL_lose_context') { const lc = x.loseContext.bind(x); x.loseContext = () => { canvas.__qgReleased = 1; lc(); }; } return x; };
@@ -78,9 +80,9 @@ for (let rep = 1; rep <= REPEAT; rep++) for (const cfg0 of CONFIGS) {
   try {
     await page.goto(APP, { waitUntil: 'networkidle', timeout: 120000 });
     row.userAgent = await page.evaluate(() => navigator.userAgent);
-    row.renderer = await page.evaluate(() => { const c = document.createElement('canvas').getContext('webgl2'); if (!c) return 'no WebGL2'; const e = c.getExtension('WEBGL_debug_renderer_info'); return String(e ? c.getParameter(e.UNMASKED_RENDERER_WEBGL) : c.getParameter(c.RENDERER)); });
-    // 1. the in-app graphics test (System health)
+    // 1. the in-app graphics test (System health); the GPU name is the one the app's own context reports
     await page.click(`nav.sidenav a[href="${base}health"]`);
+    row.renderer = ((await page.locator('#graphics').innerText()).match(/GPU: (.+)/) || [])[1]?.trim() || 'unknown';
     await page.locator('#graphics [data-run]').click();
     await page.waitForSelector('#graphics >> text=Median frame rate', { timeout: 90000 });
     row.graphicsTest = await page.locator('#graphics').innerText();
@@ -96,7 +98,7 @@ for (let rep = 1; rep <= REPEAT; rep++) for (const cfg0 of CONFIGS) {
       await page.waitForTimeout(1500);
       const m = await fps(page);
       const tier = await page.evaluate(() => { try { return localStorage.getItem('qg.gfx') || sessionStorage.getItem('qg.gfx.auto') || 'auto'; } catch { return '?'; } });
-      row.pages[slug] = { ...m, views3d: await page.locator('.view3d canvas').count(), tierPref: tier };
+      row.pages[slug] = { ...m, views3d: await page.locator('.view3d canvas').count(), tierPref: tier, contexts: await page.evaluate(() => window.__qgCtx) };
       await page.screenshot({ path: path.join(OUT, `${cfg.name.replace(/\W+/g, '-')}-${slug}.png`) });
     }
     // 3. stress check: 3-D scenes created and disposed in quick succession (fast navigation between 3-D pages).
@@ -110,6 +112,7 @@ for (let rep = 1; rep <= REPEAT; rep++) for (const cfg0 of CONFIGS) {
     await page.waitForSelector('.view3d canvas', { timeout: 120000 });
     await page.waitForTimeout(1500);
     row.churn = 'done';
+    row.churnContexts = await page.evaluate(() => window.__qgCtx);
   } catch (e) { row.error = String(e.message).split('\n')[0].slice(0, 300); }
   results.push(row);
   await browser.close();
@@ -125,9 +128,9 @@ for (const r of results) {
   const gt = (r.graphicsTest || '').split('\n');
   const pick = (label) => { const i = gt.findIndex((l) => l.startsWith(label)); return i >= 0 ? gt[i + 1] : '—'; };
   md.push(`- In-app graphics test: median **${pick('Median frame rate')}**, p95 frame ${pick('95th-percentile frame time')}, slowest ${pick('Slowest frame')}, tier ${pick('Quality tier')}, ${pick('Device pixel ratio · canvas')}`);
-  md.push('', '| Page (playing) | Median fps | p95 frame (ms) | Slowest (ms) | 3-D views |', '|---|---|---|---|---|');
-  for (const [k, v] of Object.entries(r.pages)) md.push(`| ${k} | ${v.fps.toFixed(1)} | ${v.p95.toFixed(1)} | ${v.worst.toFixed(0)} | ${v.views3d} |`);
-  md.push('', `- Rapid 3-D page switching (24 switches): ${r.churn || 'not reached'}`);
+  md.push('', '| Page (playing) | Median fps | p95 frame (ms) | Slowest (ms) | 3-D views | WebGL contexts |', '|---|---|---|---|---|---|');
+  for (const [k, v] of Object.entries(r.pages)) md.push(`| ${k} | ${v.fps.toFixed(1)} | ${v.p95.toFixed(1)} | ${v.worst.toFixed(0)} | ${v.views3d} | ${v.contexts} |`);
+  md.push('', `- Rapid 3-D page switching (24 switches): ${r.churn || 'not reached'}${r.churn ? ` — ${r.churnContexts} WebGL context(s) in total` : ''}`);
   md.push('', `- Page errors: ${r.pageErrors?.length ? r.pageErrors.length : 'none'}`);
   for (const e of (r.pageErrors || []).slice(0, 5)) md.push('', '```', e, '```');
   if (r.glEvents?.length) md.push('', 'WebGL context events:', '', '```', ...r.glEvents.slice(0, 20), '```');
@@ -140,4 +143,5 @@ if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_S
 // Regression gate: no page errors and no lost WebGL contexts (a burst of context creation once forced the live
 // 3-D view's context to be lost and made the browser reset the GPU).
 const lostCtx = (r) => (r.glEvents || []).some((e) => /context lost|Too many active WebGL contexts|could not be created/i.test(e));
-process.exit(results.some((r) => r.renderer && !r.error) && !results.some((r) => r.pageErrors?.length || lostCtx(r)) ? 0 : 1);
+const extraCtx = (r) => Object.values(r.pages || {}).some((v) => v.contexts > 1) || (r.churnContexts ?? 1) > 1;
+process.exit(results.some((r) => r.renderer && !r.error) && !results.some((r) => r.error || r.pageErrors?.length || lostCtx(r) || extraCtx(r)) ? 0 : 1);
