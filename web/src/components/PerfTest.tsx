@@ -6,6 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { View3D } from './View3D';
+import { webglRenderer } from '../three/detect';
 import { KV } from './ui';
 import { RunBar, useResultFlag } from './Reset';
 import type { PredictResult } from '../lib/types';
@@ -14,15 +15,6 @@ import { DEFAULT_DESIGN, DEFAULT_ENV } from '../lib/types';
 interface Result { medianFps: number; p95Ms: number; worstMs: number; frames: number; seconds: number; renderer: string; tier: string; dpr: number; size: string }
 
 const DURATION_MS = 8000, WARMUP_MS = 1000;
-
-function rendererName(): string {
-  try {
-    const c = document.createElement('canvas').getContext('webgl2') ?? document.createElement('canvas').getContext('webgl');
-    if (!c) return 'WebGL unavailable';
-    const e = c.getExtension('WEBGL_debug_renderer_info');
-    return String(e ? c.getParameter(e.UNMASKED_RENDERER_WEBGL) : c.getParameter(c.RENDERER));
-  } catch { return 'unknown'; }
-}
 
 export function PerfTest() {
   const [d, setD] = useState<PredictResult | null>(null);
@@ -63,7 +55,7 @@ export function PerfTest() {
         const c = box.current?.querySelector('canvas');
         setRes({
           medianFps: med ? 1000 / med : 0, p95Ms: s[Math.floor(s.length * 0.95)] || 0, worstMs: s[s.length - 1] || 0,
-          frames: s.length, seconds: DURATION_MS / 1000, renderer: rendererName(), tier: core.tier,
+          frames: s.length, seconds: DURATION_MS / 1000, renderer: webglRenderer(), tier: core.tier,
           dpr: window.devicePixelRatio || 1, size: c ? `${c.width}×${c.height} px` : '—',
         });
         setRunning(false);
@@ -79,7 +71,7 @@ export function PerfTest() {
   return (
     <div>
       <p class="small muted">Animates the flagship apparatus view (phases from the reference design, computed in this browser) for {DURATION_MS / 1000} s after a {WARMUP_MS / 1000} s warm-up and measures every frame. Use it on any phone or computer to see how smoothly the 3-D views run there.</p>
-      <RunBar label={running ? 'Measuring…' : 'Run 8-second graphics test'} busy={running} onRun={start}><span class="small muted">GPU: {rendererName()}</span></RunBar>
+      <RunBar label={running ? 'Measuring…' : 'Run 8-second graphics test'} busy={running} onRun={start}><span class="small muted">GPU: {webglRenderer()}</span></RunBar>
       {err && <p class="field-error">{err}</p>}
       {d && ts && (running || res) && (
         <div ref={box} style={{ marginTop: '8px' }}>
