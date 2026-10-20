@@ -257,7 +257,7 @@ function getShared(): Shared {
       if (!sh.lost) return;
       sh.failed = true;
       for (const s of [...sh.stages]) s.onFailed();
-    }, 8000);
+    }, 30_000); // real GPUs can take several seconds to restore a context
   });
   canvas.addEventListener('webglcontextrestored', () => {
     clearTimeout(failTimer);

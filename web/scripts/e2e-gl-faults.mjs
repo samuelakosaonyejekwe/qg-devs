@@ -33,6 +33,11 @@ async function page(failLinks, skip = 0, onlyType = '', gfx = '', withLog = '') 
     window.__gl = { contexts: 0, links: 0, failed: 0, relinkedFailed: 0 };
     window.__glAll = [];
     window.__buf = { created: 0, deleted: 0 };
+    window.__draws = 0; window.__copies = 0;
+    for (const P2 of [WebGL2RenderingContext.prototype]) {
+      for (const fn of ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced']) { const o = P2[fn]; P2[fn] = function (...a) { window.__draws++; return o.apply(this, a); }; }
+    }
+    { const di = CanvasRenderingContext2D.prototype.drawImage; CanvasRenderingContext2D.prototype.drawImage = function (src, ...a) { if (src && src.getContext && window.__glAll?.length && src === window.__glAll[0].canvas) window.__copies++; return di.call(this, src, ...a); }; }
     const bad = new WeakSet();
     const og = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (t, ...a) { const c = og.call(this, t, ...a); if (c && /webgl/.test(t) && !this.__n) { this.__n = 1; window.__gl.contexts++; window.__glAll.push(c); } return c; };
@@ -202,7 +207,7 @@ for (const gfx of ['', 'high']) {
   const tR = Date.now();
   await pg.evaluate(() => window.__lc.restoreContext());
   // wait for the browser to restore the context (asynchronous on real GPUs), then for the first view to repaint
-  const restored = await pg.waitForFunction(() => document.querySelectorAll('.view3d[data-gl-lost]').length === 0, null, { timeout: 20000 }).then(() => Date.now() - tR, () => -1);
+  const restored = await pg.waitForFunction(() => document.querySelectorAll('.view3d[data-gl-lost]').length === 0, null, { timeout: 40000 }).then(() => Date.now() - tR, () => -1);
   await visitViews(pg, 1);
   await pg.locator('.view3d').first().scrollIntoViewIfNeeded();
   const repaint = await pg.waitForFunction(() => {
@@ -212,13 +217,28 @@ for (const gfx of ['', 'high']) {
   await pg.waitForTimeout(500);
   const after = await painted(pg);
   const stillLost = await pg.evaluate(() => document.querySelectorAll('.view3d[data-gl-lost]').length);
-  const glState = await pg.evaluate(() => ({ lost: window.__glAll[0].isContextLost(), err: window.__glAll[0].getError(), w: window.__glAll[0].drawingBufferWidth, h: window.__glAll[0].drawingBufferHeight }));
+  const glState = await pg.evaluate(async () => {
+    const gl = window.__glAll[0];
+    const d0 = window.__draws, c0 = window.__copies;
+    await new Promise((r) => setTimeout(r, 1000));
+    const st = { lost: gl.isContextLost(), err: gl.getError(), w: gl.drawingBufferWidth, h: gl.drawingBufferHeight, drawsPerSec: window.__draws - d0, copiesPerSec: window.__copies - c0 };
+    if (repaintFailedProbe()) {
+      // does a plain clear on the restored context reach a 2-D canvas through drawImage?
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.disable(gl.SCISSOR_TEST); gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.clearColor(1, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+      const px = new Uint8Array(4); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      const c = document.createElement('canvas'); c.width = c.height = 4; const x = c.getContext('2d'); x.drawImage(gl.canvas, 0, 0, 4, 4);
+      st.readPixels = [...px].join(','); st.drawImage = [...x.getImageData(1, 1, 1, 1).data].join(',');
+    }
+    return st;
+    function repaintFailedProbe() { const c = document.querySelector('.view3d canvas'); if (!c) return true; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 64) if (d[i] > 0) return false; return true; }
+  });
   out(lostFlags > 0 && stillLost === 0 && after[0] > 0 && after[0] >= before[0] * 0.5,
     `[${tierName} tier] context lost → ${lostFlags} view(s) paused; restored after ${restored} ms (views still paused: ${stillLost}), repainted after ${repaint} ms (painted samples first view ${before[0]} → ${after[0]}; context ${JSON.stringify(glState)}), contexts ${await pg.evaluate(() => window.__glAll.length)}`);
   out(errors.length === 0, `[${tierName} tier] no page errors across loss and restore${errors.length ? ': ' + errors.slice(0, 2).join(' | ') : ''}`);
   // lost for good: the views fall back to their 2-D views
   await pg.evaluate(() => window.__glAll[0].getExtension('WEBGL_lose_context').loseContext());
-  await pg.waitForTimeout(9500);
+  await pg.waitForTimeout(32000); // the app waits 30 s for the browser to restore the context
   const fallback = await pg.evaluate(() => ({ views: document.querySelectorAll('.view3d').length, notes: [...document.querySelectorAll('[role="note"]')].filter((n) => /could not be restored/.test(n.textContent || '')).length }));
   out(fallback.views === 0 && fallback.notes > 0, `[${tierName} tier] context not restored → 3-D views replaced by their 2-D views (${fallback.notes} note(s), ${fallback.views} 3-D view(s) left)`);
   out(errors.length === 0, `[${tierName} tier] no page errors when the context is not restored${errors.length ? ': ' + errors.slice(0, 2).join(' | ') : ''}`);
