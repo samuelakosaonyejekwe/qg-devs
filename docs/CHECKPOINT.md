@@ -26,24 +26,20 @@ _Last updated: 2026-10-19 21:10. If a session is interrupted, resume from "IN PR
 
 ## IN PROGRESS (resume here)
 
-**0.2.1 is LIVE** (commits c24875a and the CSP enforcement, 2026-10-20). It contains:
-- LaTeX everywhere, Reset that restores the exact first-visit state, visible playback, readable 3-D, and friendly errors;
-- the backend and web audits;
-- an enforced CSP.
+**0.2.2 is LIVE** (2026-10-20). Changes in this release:
+- G6/G7 can pass, with safeguards (REAL preregistered and unblinded data, identity-verified and independent sign-offs);
+- hourly ledger anchoring to the S3 bucket and 3 OpenTimestamps calendars (verified live);
+- token-bound identities (`QGDEVS_API_TOKENS=token:role:Name`; the server token is named "Project owner");
+- a 30-day result retention policy that never touches ledger-referenced results.
 
-Verified:
-- pytest: 194 passed;
-- web: 637 unit tests; axe: 0 violations; CSP: 0 violations; motion: 12/12; 3-D captures: 34/34;
-- live: 43 Lean theorems, 8 hypotheses, KaTeX rendering with no console errors.
+pytest: 198 passed.
 
-Open items:
-- The Suite 8 Reset check failed once under load (its default computation was still running); it passed 3/3 when run alone. Make the test wait for the default computation to finish.
-- Policy decisions for the owner:
-  - G6/G7 cannot be passed even with sign-off;
-  - external anchoring of the ledger head hash;
-  - tying reviewer identity to tokens;
-  - a retention policy for job results.
-- Optional: publish the static mirror to Cloudflare Pages (wrangler is logged in) for redundancy.
+Small follow-ups for the web app (not started):
+- the Suite 18 sign-off form should show "signing as <token identity>" and drop the reviewer text field;
+- show the external anchors on Suite 18 (`GET /api/evidence/anchors`) with a "download anchors for archiving" button;
+- make the Suite 8 Reset check wait for its default computation to finish.
+
+Optional: a Cloudflare Pages static mirror.
 
 ## Rules
 
