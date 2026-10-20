@@ -70,7 +70,7 @@ for (let rep = 1; rep <= REPEAT; rep++) for (const cfg0 of CONFIGS) {
   const page = await ctx.newPage();
   const row = { config: cfg.name, pages: {}, pageErrors: [], glEvents: [] };
   const t0 = Date.now();
-  page.on('console', (m) => { if (/^\[gl\]|WebGL|GPU/i.test(m.text())) row.glEvents.push(`+${((Date.now() - t0) / 1000).toFixed(1)}s ${m.type()}: ${m.text().slice(0, 240)}`); });
+  page.on('console', (m) => { if (/^\[gl\]|WebGL|GPU|QG-DEVS 3-D/i.test(m.text())) row.glEvents.push(`+${((Date.now() - t0) / 1000).toFixed(1)}s ${m.type()}: ${m.text().slice(0, 240)}`); });
   // full stack traces (the source location matters for intermittent errors)
   page.on('pageerror', (e) => row.pageErrors.push(`[${page.url()}] ${e.message}\n${(e.stack || '').split('\n').slice(0, 14).join('\n')}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) row.pageErrors.push(`[${page.url()}] ${m.text()}`); });

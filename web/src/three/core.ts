@@ -125,12 +125,19 @@ export function createStage(el: HTMLElement): Stage {
 
   const scene = new THREE.Scene();
   let envRT: THREE.WebGLRenderTarget | null = null;
-  if (tier === 'high') {
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
-    scene.environment = envRT.texture;
-    pmrem.dispose();
-  }
+  // Studio environment map (generated after the shader-error handler below is installed, so a failed link
+  // inside the generator is detected and the map rebuilt).
+  let envFailed = false, inEnv = false;
+  const buildEnv = () => {
+    envRT?.dispose();
+    envFailed = false; inEnv = true;
+    try {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
+      scene.environment = envRT.texture;
+      pmrem.dispose();
+    } finally { inEnv = false; }
+  };
   // Key / fill / rim plus hemisphere and ambient light: bright enough that mid-lightness colours read
   // clearly on both the light and the dark theme background.
   scene.add(new THREE.HemisphereLight(0xffffff, 0xb4bcd4, 0.9));
@@ -199,6 +206,60 @@ export function createStage(el: HTMLElement): Stage {
     requestAnimationFrame(draw);
   }
   controls.addEventListener('change', requestRender);
+
+  // Shader programs whose link failed although both shaders compiled and the driver gave no diagnostic are
+  // rebuilt (bounded retries). Seen on real GPUs (ANGLE/Metal) during the first burst of program links after a
+  // page load: the link fails with an empty log and the object would otherwise never be drawn. A genuine
+  // shader error (compile failure or a non-empty link log) is reported, never retried.
+  let relinkAttempts = 0, relinkTimer = 0;
+  const failedTypes = new Set<string>();
+  let depthMat: THREE.MeshDepthMaterial | null = null;
+  const relink = () => {
+    relinkTimer = 0;
+    if (disposed) return;
+    relinkAttempts++;
+    el.dataset.glRelink = String(relinkAttempts);
+    const seen = new Set<THREE.Material>();
+    scene.traverse((o) => {
+      const mats = (o as THREE.Mesh).material;
+      for (const m of Array.isArray(mats) ? mats : mats ? [mats] : []) {
+        if (seen.has(m)) continue;
+        seen.add(m);
+        const prog = (renderer.properties.get(m) as { currentProgram?: { diagnostics?: { runnable: boolean } } }).currentProgram;
+        if (prog?.diagnostics && !prog.diagnostics.runnable) m.dispose(); // releases the failed program; rebuilt on next draw
+      }
+    });
+    if (envFailed && tier === 'high') buildEnv(); // a generator program failed: regenerate the environment map
+    if (failedTypes.has('MeshDepthMaterial')) {
+      // The shadow map's own depth material is internal to three: give shadow casters a fresh one whose
+      // program cache key is new, so its program is linked again.
+      depthMat?.dispose();
+      const d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+      const key = `qg-relink-${relinkAttempts}`;
+      d.customProgramCacheKey = () => key;
+      depthMat = d;
+      scene.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.castShadow) (o as THREE.Mesh).customDepthMaterial = d; });
+    }
+    failedTypes.clear();
+    requestRender();
+  };
+  renderer.debug.onShaderError = (gl, program, vs, fs) => {
+    const log = (gl.getProgramInfoLog(program) ?? '').trim();
+    const compiled = !!gl.getShaderParameter(vs, gl.COMPILE_STATUS) && !!gl.getShaderParameter(fs, gl.COMPILE_STATUS);
+    if (inEnv) envFailed = true;
+    const type = /#define SHADER_TYPE (\w+)/.exec(gl.getShaderSource(vs) ?? '')?.[1];
+    if (type) failedTypes.add(type);
+    if (!gl.isContextLost() && compiled && !log && relinkAttempts < 3) {
+      console.warn(`QG-DEVS 3-D: the graphics driver failed to link a shader program without a diagnostic; rebuilding it (attempt ${relinkAttempts + 1} of 3)`);
+      if (!relinkTimer) relinkTimer = window.setTimeout(relink, 50 * 2 ** relinkAttempts);
+      return;
+    }
+    if (gl.isContextLost()) return; // context loss is handled by the webglcontextlost / restored listeners
+    console.error('QG-DEVS 3-D: shader program failed to link', {
+      programLog: log, vertexLog: (gl.getShaderInfoLog(vs) ?? '').trim(), fragmentLog: (gl.getShaderInfoLog(fs) ?? '').trim(), attempts: relinkAttempts,
+    });
+  };
+  if (tier === 'high') buildEnv();
 
   const resize = () => {
     const w = Math.max(1, el.clientWidth);
@@ -298,6 +359,8 @@ export function createStage(el: HTMLElement): Stage {
     },
     dispose() {
       disposed = true;
+      if (relinkTimer) clearTimeout(relinkTimer);
+      depthMat?.dispose();
       ro.disconnect();
       io?.disconnect();
       controls.dispose();

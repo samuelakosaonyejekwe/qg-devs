@@ -62,6 +62,15 @@ jobs:
           URL="${{ github.event.inputs.url || 'https://samuelakosaonyejekwe.github.io/qg-devs/' }}"
           if [ "${{ github.event.inputs.local_build }}" = "true" ]; then URL="http://127.0.0.1:8790/"; fi
           node web/scripts/gpu-perf.mjs "$URL" gpu-perf-out
+      - name: WebGL fault recovery on the GPU
+        if: always()
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/pw/node_modules/playwright/index.mjs
+        run: |
+          URL="${{ github.event.inputs.url || 'https://samuelakosaonyejekwe.github.io/qg-devs/' }}"
+          if [ "${{ github.event.inputs.local_build }}" = "true" ]; then URL="http://127.0.0.1:8790/"; fi
+          set -o pipefail
+          node web/scripts/e2e-gl-faults.mjs "${URL%/}" | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
