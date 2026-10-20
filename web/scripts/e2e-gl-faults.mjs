@@ -198,8 +198,13 @@ for (const [slug, prep] of [['entanglement', null], ['decoherence', null], ['opt
 // 7. shared context lost and restored / lost for good (automatic tier and full-quality tier: environment map,
 //    shadows)
 for (const gfx of ['', 'high']) {
+  // Pixels are read through a temporary copy: calling getImageData on a view's own canvas makes the browser move
+  // that canvas off the GPU (frequent read-back heuristic), which changes how it receives frames — the app never
+  // reads its view canvases back.
   const painted = (pg) => pg.evaluate(() => [...document.querySelectorAll('.view3d canvas')].map((c) => {
-    const x = c.getContext('2d'); if (!x || c.width < 4) return -1;
+    if (c.width < 4) return -1;
+    const t = document.createElement('canvas'); t.width = c.width; t.height = c.height;
+    const x = t.getContext('2d'); x.drawImage(c, 0, 0);
     const d = x.getImageData(0, 0, c.width, c.height).data; let n = 0;
     for (let i = 3; i < d.length; i += 4 * 16) if (d[i] > 0) n++;
     return n;
@@ -244,7 +249,7 @@ for (const gfx of ['', 'high']) {
       st.readPixels = [...px].join(','); st.drawImage = [...x.getImageData(1, 1, 1, 1).data].join(',');
     }
     return st;
-    function repaintFailedProbe() { const c = document.querySelector('.view3d canvas'); if (!c) return true; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 64) if (d[i] > 0) return false; return true; }
+    function repaintFailedProbe() { const c = document.querySelector('.view3d canvas'); if (!c || c.width < 4) return true; const t = document.createElement('canvas'); t.width = c.width; t.height = c.height; const x = t.getContext('2d'); x.drawImage(c, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 64) if (d[i] > 0) return false; return true; }
   });
   out(lostFlags > 0 && stillLost === 0 && after[0] > 0 && after[0] >= before[0] * 0.5,
     `[${tierName} tier] context lost → ${lostFlags} view(s) paused; restored after ${restored} ms (views still paused: ${stillLost}), repainted after ${repaint} ms (painted samples first view ${before[0]} → ${after[0]}; context ${JSON.stringify(glState)}; copy before loss ${copyBefore}), contexts created ${await pg.evaluate(() => window.__glAll.length)}, live ${await pg.evaluate(() => window.__glAll.filter((c) => !c.isContextLost()).length)}`);
