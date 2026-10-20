@@ -12,6 +12,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const APP = (process.argv[2] || 'https://samuelakosaonyejekwe.github.io/qg-devs/').replace(/\/?$/, '/');
@@ -68,7 +69,7 @@ for (let rep = 1; rep <= REPEAT; rep++) for (const cfg0 of CONFIGS) {
     };
   });
   const page = await ctx.newPage();
-  const row = { config: cfg.name, pages: {}, pageErrors: [], glEvents: [] };
+  const row = { config: cfg.name, pages: {}, pageErrors: [], glEvents: [], freeMemMB: Math.round(os.freemem() / 1048576), totalMemMB: Math.round(os.totalmem() / 1048576) };
   const t0 = Date.now();
   page.on('console', (m) => { if (/^\[gl\]|WebGL|GPU|QG-DEVS 3-D/i.test(m.text())) row.glEvents.push(`+${((Date.now() - t0) / 1000).toFixed(1)}s ${m.type()}: ${m.text().slice(0, 240)}`); });
   // full stack traces (the source location matters for intermittent errors)
@@ -120,7 +121,7 @@ const md = ['## QG-DEVS graphics performance on real GPU hardware', '', `App: ${
 for (const r of results) {
   md.push(`### ${r.config}`, '');
   if (r.error && !r.renderer) { md.push(`Error: ${r.error}`, ''); continue; }
-  md.push(`- Renderer (GPU): **${r.renderer}**`, `- User agent: ${r.userAgent}`);
+  md.push(`- Renderer (GPU): **${r.renderer}**`, `- User agent: ${r.userAgent}`, `- Runner memory free at start: ${r.freeMemMB} of ${r.totalMemMB} MB`);
   const gt = (r.graphicsTest || '').split('\n');
   const pick = (label) => { const i = gt.findIndex((l) => l.startsWith(label)); return i >= 0 ? gt[i + 1] : '—'; };
   md.push(`- In-app graphics test: median **${pick('Median frame rate')}**, p95 frame ${pick('95th-percentile frame time')}, slowest ${pick('Slowest frame')}, tier ${pick('Quality tier')}, ${pick('Device pixel ratio · canvas')}`);
